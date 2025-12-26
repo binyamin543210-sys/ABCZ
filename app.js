@@ -521,8 +521,31 @@ function openDayModal(date) {
   if (!modal) return;
   modal.classList.remove("hidden");
 
-  el("dayModalGreg").textContent = String(date.getDate());
-  el("dayModalHeb").textContent = formatHebrewDate(date);
+ // יום בשבוע + תאריך לועזי מלא
+el("dayModalGreg").textContent =
+  date.toLocaleDateString("he-IL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
+
+// תאריך עברי מלא (יום + חודש + שנה)
+try {
+  if (hasHebcal()) {
+    const hd = new window.Hebcal.HDate(date);
+    el("dayModalHeb").textContent = hd.renderGematriya();
+  } else {
+    el("dayModalHeb").textContent =
+      new Intl.DateTimeFormat("he-u-ca-hebrew", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      }).format(date);
+  }
+} catch {
+  el("dayModalHeb").textContent = "";
+}
 
   const dateKey = dateKeyFromDate(date);
   renderDayEvents(dateKey);
