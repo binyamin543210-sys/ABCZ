@@ -28,6 +28,9 @@ const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 function getHebcal() {
   return window.Hebcal || null; // global מהסקריפט
 }
+function hasHebcal() {
+  return !!window.Hebcal;
+}
 function toHebrewNumeral(num) {
   const ones = ["", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט"];
   const tens = ["", "י", "כ", "ל", "מ", "נ", "ס", "ע", "פ", "צ"];
