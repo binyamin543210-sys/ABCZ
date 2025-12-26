@@ -735,140 +735,124 @@ body.dark .day-cell {
 .settings-group {
   margin-bottom: 12px;
 }
-
 @media (max-width: 480px) {
 
+  /* ===== APP LAYOUT ===== */
   #app {
-    padding: 0 8px;
+    padding: 0 4px;
   }
 
-  .calendar-grid {
-    gap: 6px;
+  main {
+    padding: 4px 2px 76px;
   }
 
-  .day-cell {
-    min-height: 54px;
-    padding: 6px 4px;
-    border-radius: 14px;
+  /* ===== HEADER ===== */
+  .app-header {
+    padding: 8px 10px 6px;
   }
 
-  .day-num {
+  .header-top,
+  .header-bottom {
+    margin-bottom: 4px;
+  }
+
+  .month-label span:first-child {
     font-size: 1.05rem;
   }
 
-  .day-hebrew {
+  .sub-label {
     font-size: 0.75rem;
   }
 
+  .header-row {
+    gap: 6px;
+    padding-bottom: 2px;
+  }
+
+  /* ===== WEEKDAY ROW ===== */
+  .weekday-row {
+    font-size: 0.72rem;
+    padding: 4px 0;
+  }
+
+  /* ===== CALENDAR GRID ===== */
+  .calendar-grid {
+    gap: 4px;
+  }
+
+  .day-cell {
+    min-height: 52px;
+    padding: 5px 4px;
+    border-radius: 12px;
+  }
+
+  .day-cell.outside {
+    opacity: 0.3;
+  }
+
+  /* ===== DAY CONTENT ===== */
+  .day-num {
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+
+  .day-hebrew {
+    font-size: 0.72rem;
+    line-height: 1.1;
+  }
+
+  .day-holiday {
+    font-size: 0.62rem;
+    line-height: 1.1;
+  }
+
+  .day-points {
+    margin-top: 2px;
+  }
+
+  .event-dot {
+    width: 5px;
+    height: 5px;
+  }
+
+  /* ===== TODAY / SELECTED ===== */
+  .day-cell-today {
+    box-shadow:
+      0 0 0 2px rgba(56,189,248,0.85),
+      0 0 18px rgba(56,189,248,0.65);
+  }
+
+  /* ===== SHABBAT BLOCK ===== */
+  .day-shabbat-block {
+    margin-top: 2px;
+    padding-top: 2px;
+  }
+
+  .day-shabbat-title {
+    font-size: 0.65rem;
+  }
+
+  .day-shabbat-time {
+    font-size: 0.6rem;
+  }
+
+  /* ===== BOTTOM NAV ===== */
   .bottom-nav {
     height: 64px;
     padding-bottom: env(safe-area-inset-bottom);
   }
 
   .nav-btn {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
   }
 
+  /* ===== FAB BUTTON ===== */
   .fab-btn {
     width: 56px;
     height: 56px;
     font-size: 1.6rem;
-    bottom: calc(var(--bottom-nav-height) + 10px);
-  }
-  /* ===== CALENDAR MOBILE FIX ===== */
-  main {
-    padding-top: 6px;
+    bottom: calc(var(--bottom-nav-height) + 8px);
   }
 
-  .app-header {
-    padding-bottom: 4px;
-  }
-
-  .calendar-grid {
-    gap: 5px;
-  }
-
-  .day-cell {
-    min-height: 52px;
-    padding: 5px 4px;
-  }
-
-  .weekday-row {
-    font-size: 0.75rem;
-  }
-}
-/* Owner colors */
-.event-dot.owner-binyamin { background: #38bdf8; }
-.event-dot.owner-nana { background: #ec4899; }
-.event-dot.owner-shared { background: linear-gradient(90deg,#38bdf8,#ec4899); }
-
-.card.owner-binyamin { border-color: rgba(56,189,248,0.6); }
-.card.owner-nana { border-color: rgba(236,72,153,0.6); }
-.card.owner-shared { border-image: linear-gradient(90deg,#38bdf8,#ec4899) 1; }
-
-/* day today glow */
-.day-cell-today {
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 2px rgba(56,189,248,0.8), 0 0 24px rgba(56,189,248,0.75);
 }
 
-.day-cell-today.day-border-glow {
-  border-color: #f97316;
-  box-shadow: 0 0 0 2px rgba(249,115,22,0.95), 0 0 28px rgba(249,115,22,0.9);
-}
-
-/* shabbat block */
-.day-shabbat-block {
-  margin-top: 2px;
-  padding-top: 2px;
-  border-top: 1px dashed rgba(148,163,184,0.6);
-}
-
-.day-shabbat-title {
-  font-size: 0.7rem;
-  font-weight: 600;
-}
-
-.day-shabbat-time {
-  font-size: 0.65rem;
-  color: #4b5563;
-}
-
-body.dark .day-shabbat-time {
-  color: #e5e7eb;
-}
-
-.toast {
-  position: fixed;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #222;
-  color: #fff;
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 14px;
-  z-index: 9999;
-  opacity: 0.95;
-}
-
-.toast.hidden { display: none; }
-/* ===== SMOOTH TRANSITIONS ===== */
-* {
-  transition:
-    background-color 0.25s ease,
-    color 0.25s ease,
-    box-shadow 0.25s ease,
-    border-color 0.25s ease,
-    transform 0.2s ease;
-}
-
-.day-cell:active {
-  transform: scale(0.96);
-}
-
-.nav-btn:active,
-.icon-btn:active,
-.primary-pill:active {
-  transform: scale(0.95);
-}
