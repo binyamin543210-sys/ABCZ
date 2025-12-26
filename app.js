@@ -28,7 +28,44 @@ const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 function getHebcal() {
   return window.Hebcal || null; // global מהסקריפט
 }
+function toHebrewNumeral(num) {
+  const ones = ["", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט"];
+  const tens = ["", "י", "כ", "ל", "מ", "נ", "ס", "ע", "פ", "צ"];
+  const hundreds = ["", "ק", "ר", "ש", "ת"];
 
+  if (num <= 0) return "";
+
+  // חריגים הלכתיים
+  if (num === 15) return "ט״ו";
+  if (num === 16) return "ט״ז";
+
+  let result = "";
+
+  if (num >= 100) {
+    const h = Math.floor(num / 100);
+    result += hundreds[h] || "";
+    num %= 100;
+  }
+
+  if (num >= 10) {
+    const t = Math.floor(num / 10);
+    result += tens[t] || "";
+    num %= 10;
+  }
+
+  if (num > 0) {
+    result += ones[num];
+  }
+
+  // גרש / גרשיים
+  if (result.length === 1) {
+    result += "׳";
+  } else if (result.length > 1) {
+    result = result.slice(0, -1) + "״" + result.slice(-1);
+  }
+
+  return result;
+}
 function dateKeyFromDate(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -284,7 +321,7 @@ function renderCalendar() {
 
     const dayNumEl = document.createElement("div");
     dayNumEl.className = "day-num";
-    dayNumEl.textContent = dayNum;
+dayNumEl.textContent = toHebrewNumeral(dayNum);
 
     const hebEl = document.createElement("div");
     hebEl.className = "day-hebrew";
