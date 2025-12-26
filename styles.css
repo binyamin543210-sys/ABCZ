@@ -544,9 +544,20 @@ body.dark .day-cell {
   margin-bottom: 8px;
 }
 
-.modal-title {
-  font-size: 1rem;
+/* ===== DAY MODAL HEADER FIX ===== */
+.day-modal .modal-title {
+  font-size: 0.88rem;     /* היה גדול מדי */
   font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.day-modal .modal-subtitle {
+  font-size: 0.7rem;      /* עברי קטן יותר */
+  line-height: 1.15;
+  margin-top: 2px;
+  text-align: center;
+  opacity: 0.85;
 }
 
 .modal-subtitle {
