@@ -291,7 +291,8 @@ function renderCalendar() {
   el("gregMonthLabel").textContent = firstDayOfMonth.toLocaleDateString("he-IL", { month: "long", year: "numeric" });
   el("hebrewMonthLabel").textContent = getHebrewMonthYearLabel(firstDayOfMonth) || "";
 
-  const totalCells = 42;
+// חישוב כמה תאים באמת צריך (4–6 שבועות)
+const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
   for (let cellIndex = 0; cellIndex < totalCells; cellIndex++) {
     const cell = document.createElement("button");
     cell.type = "button";
