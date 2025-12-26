@@ -321,11 +321,15 @@ function renderCalendar() {
 
     const dayNumEl = document.createElement("div");
     dayNumEl.className = "day-num";
-dayNumEl.textContent = toHebrewNumeral(dayNum);
+dayNumEl.textContent = dayNum;
 
     const hebEl = document.createElement("div");
     hebEl.className = "day-hebrew";
-    hebEl.textContent = heb;
+   const hebDay = hasHebcal()
+  ? new window.Hebcal.HDate(cellDate).getDate()
+  : null;
+
+hebEl.textContent = hebDay ? toHebrewNumeral(hebDay) : "";
 
     header.appendChild(dayNumEl);
     header.appendChild(hebEl);
