@@ -855,4 +855,14 @@ body.dark .day-cell {
   }
 
 }
+/* ===== FIX EMPTY LAST ROW IN CALENDAR ===== */
+.calendar-grid {
+  align-content: start;
+}
 
+/* prevent outside days from stretching grid */
+.day-cell.outside {
+  min-height: 38px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
