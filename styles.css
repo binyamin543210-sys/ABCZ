@@ -30,6 +30,25 @@ html, body {
   --header-height: 140px;
   --bottom-nav-height: 64px;
 }
+/* ===== FULL DARK MODE ===== */
+body.dark {
+  --bg: #0b0e11;
+  --bg-elevated: #141922;
+  --bg-elevated-soft: #0f131a;
+
+  --text: #f8fafc;
+  --text-soft: #cbd5e1;
+
+  --accent: #22c55e;
+  --accent-soft: rgba(34,197,94,0.18);
+
+  --danger: #ef4444;
+  --success: #22c55e;
+
+  --border-subtle: #1f2630;
+  --shadow-soft: 0 12px 30px rgba(0,0,0,0.7);
+}
+
 
 /* ===== MOBILE DARK CONTRAST FIX ===== */
 body.dark {
@@ -37,18 +56,15 @@ body.dark {
   --text-soft: #cbd5e1;  /* אפור בהיר */
 }
 
-/* מספר לועזי */
-body.dark .day .day-num {
-  color: #ffffff;
+.day-num {
+  font-size: 1rem;
   font-weight: 700;
-  font-size: 1.1rem;
+  color: var(--text);
 }
 
-/* מספר עברי קטן */
-body.dark .day .day-hebrew {
-  color: #e5e7eb;
-  font-size: 0.8rem;
-  opacity: 0.95;
+.day-hebrew {
+  font-size: 0.75rem;
+  color: var(--text-soft);
 }
 
 /* כרטיס יום */
@@ -671,51 +687,44 @@ body.dark .day-cell {
   margin-bottom: 12px;
 }
 
-@media (max-width: 360px) {
+@media (max-width: 480px) {
 
-  /* יום בלוח */
-  .day-cell {
-    min-height: 56px;
-    padding: 6px 4px;
-    border-radius: 12px;
+  #app {
+    padding: 0 8px;
   }
 
-  /* מספר לועזי */
-  .day-num {
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: #ffffff;
-  }
-
-  /* מספר עברי קטן */
-  .day-hebrew {
-    font-size: 0.78rem;
-    color: #e5e7eb;
-    opacity: 0.95;
-  }
-
-  /* גריד */
   .calendar-grid {
     gap: 6px;
   }
 
-  /* כפתור + */
-  .fab,
-  .add-btn {
-    width: 54px;
-    height: 54px;
-    font-size: 28px;
-    bottom: 72px;
+  .day-cell {
+    min-height: 54px;
+    padding: 6px 4px;
+    border-radius: 14px;
   }
 
-  /* סרגל תחתון */
+  .day-num {
+    font-size: 1.05rem;
+  }
+
+  .day-hebrew {
+    font-size: 0.75rem;
+  }
+
   .bottom-nav {
     height: 64px;
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  .bottom-nav button {
-    font-size: 0.75rem;
+  .nav-btn {
+    font-size: 0.72rem;
+  }
+
+  .fab-btn {
+    width: 56px;
+    height: 56px;
+    font-size: 1.6rem;
+    bottom: calc(var(--bottom-nav-height) + 10px);
   }
 }
 /* Owner colors */
@@ -774,3 +783,22 @@ body.dark .day-shabbat-time {
 }
 
 .toast.hidden { display: none; }
+/* ===== SMOOTH TRANSITIONS ===== */
+* {
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease,
+    transform 0.2s ease;
+}
+
+.day-cell:active {
+  transform: scale(0.96);
+}
+
+.nav-btn:active,
+.icon-btn:active,
+.primary-pill:active {
+  transform: scale(0.95);
+}
