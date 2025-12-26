@@ -266,20 +266,21 @@ main {
 .screen.active {
   display: block;
 }
-
+/* ===== WEEKDAY ALIGN FIX ===== */
 .weekday-row {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
-  padding: 6px 2px;
-  font-size: 0.8rem;
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
   color: var(--text-soft);
+  text-align: center;
 }
-
 .calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
 }
 
 .day-cell {
