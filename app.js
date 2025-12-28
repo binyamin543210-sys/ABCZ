@@ -414,12 +414,27 @@ function renderTasks(filter = "undated") {
   list.innerHTML = "";
   const allTasks = [];
 
-  Object.entries(state.cache.events).forEach(([dateKey, items]) => {
-    Object.entries(items || {}).forEach(([id, ev]) => {
-      if (ev.type !== "task") return;
+Object.entries(state.cache.events).forEach(([dateKey, items]) => {
+  Object.entries(items || {}).forEach(([id, ev]) => {
+
+    // משימות רגילות
+    if (ev.type === "task") {
       allTasks.push({ id, dateKey, ...ev });
-    });
+      return;
+    }
+
+    // אירועים חוזרים בלבד
+    if (ev.type === "event" && ev.recurring && ev.recurring !== "none") {
+      allTasks.push({
+        id,
+        dateKey,
+        ...ev,
+        __recurringEvent: true
+      });
+    }
+
   });
+});
 
   allTasks.sort((a, b) => (a.dateKey || "").localeCompare(b.dateKey || ""));
 
@@ -428,8 +443,12 @@ function renderTasks(filter = "undated") {
     const isRecurringParent = task.isRecurringParent === true;
     if (filter === "undated") return !hasDate;
     if (filter === "dated") return hasDate && !task.recurring;
- if (filter === "recurring") return task.isRecurringParent === true;
-    return true;
+if (filter === "recurring") {
+  return (
+    task.isRecurringParent === true ||
+    task.__recurringEvent === true
+  );
+}
   });
 
   filtered.forEach((task) => {
@@ -442,6 +461,9 @@ function renderTasks(filter = "undated") {
     const title = document.createElement("div");
     title.className = "task-title";
     title.textContent = task.title || "(ללא כותרת)";
+    if (task.__recurringEvent) {
+  title.textContent += " (אירוע חוזר)";
+}
 
     const ownerBadge = document.createElement("span");
     ownerBadge.className = "badge";
