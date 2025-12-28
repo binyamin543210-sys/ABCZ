@@ -478,13 +478,37 @@ if (ev.type === "task" && !ev.isRecurringInstance) {
   });
 });
 
-  allTasks.sort((a, b) => (a.dateKey || "").localeCompare(b.dateKey || ""));
+ const urgencyRank = {
+  today: 0,
+  week: 1,
+  month: 2,
+  none: 3
+};
+
+allTasks.sort((a, b) => {
+  const aHasDate = a.dateKey && a.dateKey !== "undated";
+  const bHasDate = b.dateKey && b.dateKey !== "undated";
+
+  // קודם מתוארכות
+  if (aHasDate && bHasDate) {
+    return a.dateKey.localeCompare(b.dateKey);
+  }
+
+  // מתוארכת לפני לא מתוארכת
+  if (aHasDate && !bHasDate) return -1;
+  if (!aHasDate && bHasDate) return 1;
+
+  // שתיהן ללא תאריך → לפי דחיפות
+  const ua = urgencyRank[a.urgency || "none"];
+  const ub = urgencyRank[b.urgency || "none"];
+  return ua - ub;
+});
 
   const filtered = allTasks.filter((task) => {
     const hasDate = !!task.dateKey && task.dateKey !== "undated";
     const isRecurringParent = task.isRecurringParent === true;
     if (filter === "undated") return !hasDate;
-    if (filter === "dated") return hasDate && !task.recurring;
+   if (filter === "dated") return hasDate;
 if (filter === "recurring") {
   return task.isRecurringParent === true;
 }
