@@ -194,7 +194,7 @@ const m2 = String(saturday.getMonth() + 1).padStart(2, "0");
 const d2 = String(saturday.getDate()).padStart(2, "0");
 
 const url =
-  "https://www.hebcal.com/shabbat?cfg=json" +
+  "https://www.hebcal.com/hebcal?v=1&cfg=json&c=on&M=on&i=on" +
   `&latitude=${encodeURIComponent(state.settings.cityLat)}` +
   `&longitude=${encodeURIComponent(state.settings.cityLon)}` +
   `&tzid=${encodeURIComponent(state.settings.cityTz)}` +
@@ -205,8 +205,13 @@ const url =
   try {
     const resp = await fetch(url);
     const data = await resp.json();
-    const itemCandles  = (data.items || []).find((it) => it.category === "candles");
-    const itemHavdalah = (data.items || []).find((it) => it.category === "havdalah");
+  const itemCandles = (data.items || []).find(
+  (it) => it.category === "candles" && it.date.startsWith(`${y}-${m}-${d}`)
+);
+
+const itemHavdalah = (data.items || []).find(
+  (it) => it.category === "havdalah" && it.date.startsWith(`${y2}-${m2}-${d2}`)
+);
     const result = {
       candle: itemCandles ? new Date(itemCandles.date) : null,
       havdalah: itemHavdalah ? new Date(itemHavdalah.date) : null
