@@ -185,13 +185,21 @@ async function ensureShabbatForWeek(fridayDate) {
   const m = String(fridayDate.getMonth() + 1).padStart(2, "0");
   const d = String(fridayDate.getDate()).padStart(2, "0");
 
-  const url =
-    "https://www.hebcal.com/shabbat?cfg=json" +
-    `&latitude=${encodeURIComponent(state.settings.cityLat)}` +
-    `&longitude=${encodeURIComponent(state.settings.cityLon)}` +
-    `&tzid=${encodeURIComponent(state.settings.cityTz)}` +
-    `&start=${y}-${m}-${d}&end=${y}-${m}-${d}`;
+// שבת = יום אחרי שישי
+const saturday = new Date(fridayDate);
+saturday.setDate(saturday.getDate() + 1);
 
+const y2 = saturday.getFullYear();
+const m2 = String(saturday.getMonth() + 1).padStart(2, "0");
+const d2 = String(saturday.getDate()).padStart(2, "0");
+
+const url =
+  "https://www.hebcal.com/shabbat?cfg=json" +
+  `&latitude=${encodeURIComponent(state.settings.cityLat)}` +
+  `&longitude=${encodeURIComponent(state.settings.cityLon)}` +
+  `&tzid=${encodeURIComponent(state.settings.cityTz)}` +
+  `&start=${y}-${m}-${d}` +
+  `&end=${y2}-${m2}-${d2}`;
   
 
   try {
