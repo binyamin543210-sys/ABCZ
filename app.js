@@ -417,6 +417,11 @@ function renderTasks(filter = "undated") {
 Object.entries(state.cache.events).forEach(([dateKey, items]) => {
   Object.entries(items || {}).forEach(([id, ev]) => {
 
+    // ⛔ חסימה מוחלטת של מופעי חזרות (משימות + אירועים)
+if (ev.isRecurringInstance === true) {
+  return;
+}
+
   // משימות רגילות – רק אם זה לא מופע
 if (ev.type === "task" && !ev.isRecurringInstance) {
   allTasks.push({ id, dateKey, ...ev });
