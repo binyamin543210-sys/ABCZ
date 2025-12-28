@@ -460,6 +460,15 @@ if (ev.type === "task" && !ev.isRecurringInstance) {
   return;
 }
 
+    // אירועים רגילים (לא חוזרים)
+if (
+  ev.type === "event" &&
+  (!ev.recurring || ev.recurring === "none")
+) {
+  allTasks.push({ id, dateKey, ...ev });
+  return;
+}
+
     // אירועים חוזרים בלבד
     if (
   ev.type === "event" &&
@@ -1291,6 +1300,8 @@ function gihariPlaceUndatedTasks() {
   Object.entries(state.cache.events).forEach(([dk, items]) => {
     Object.entries(items || {}).forEach(([id, ev]) => {
       if (ev.type !== "task") return;
+
+      
       if (ev.dateKey && ev.dateKey !== "undated") return;
       undatedTasks.push({ id, dateKey: dk, ...ev });
     });
