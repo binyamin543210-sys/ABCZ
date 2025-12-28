@@ -265,7 +265,7 @@ function showToast(text = "בוצע") {
   if (!t) return;
   t.textContent = text;
   t.classList.remove("hidden");
-  setTimeout(() => t.classList.add("hidden"), 650);
+setTimeout(() => t.classList.add("hidden"), 500);
 }
 
 // =========================
@@ -758,23 +758,21 @@ async function handleEditFormSubmit(ev) {
   const dateKey = eventObj.dateKey || "undated";
   const existingId = form.dataset.editId || null;
 
-  if (existingId) {
-    await update(ref(db, `events/${dateKey}/${existingId}`), eventObj);
-    showToast("עודכן");
-  } else {
-    const newRef = push(ref(db, `events/${dateKey}`));
-    await set(newRef, { ...eventObj, _id: newRef.key });
+if (existingId) {
+  await update(ref(db, `events/${dateKey}/${existingId}`), eventObj);
+  showToast("עודכן");
+  el("editModal").classList.add("hidden");
+} else {
+  const newRef = push(ref(db, `events/${dateKey}`));
+  await set(newRef, { ...eventObj, _id: newRef.key });
 
-    // אם חוזר - נייצר מופעים
-    if (eventObj.recurring && eventObj.recurring !== "none") {
-      const parentTask = { ...eventObj, _id: newRef.key, parentId: null, isRecurringParent: true };
-      await update(newRef, parentTask);
-      await materializeRecurringTask(parentTask);
-    }
-    showToast("נשמר");
+  if (eventObj.recurring && eventObj.recurring !== "none") {
+    const parentTask = { ...eventObj, _id: newRef.key, parentId: null, isRecurringParent: true };
+    await update(newRef, parentTask);
+    await materializeRecurringTask(parentTask);
   }
 
-  scheduleLocalReminder(eventObj);
+  showToast("נשמר");
   el("editModal").classList.add("hidden");
 }
 
@@ -1352,6 +1350,8 @@ async function deleteTaskSmart(task) {
     await remove(ref(db, `events/${task.dateKey}/${id}`));
   }
   showToast("נמחק");
+  el("editModal")?.classList.add("hidden");
+el("dayModal")?.classList.add("hidden");
 }
 
 // ===============================
