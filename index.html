@@ -65,14 +65,19 @@
 
       <section id="tasksSection" class="screen">
         <div class="section-header">
-          <h2>משימות</h2>
-          <button id="btnAddTask" class="primary-pill">+ משימה</button>
+         <h2>משימות / אירועים</h2>
+        <button id="btnAddTask" class="primary-pill">+ משימה / אירוע</button>
         </div>
-        <div class="segmented">
-          <button data-filter="undated" class="segmented-btn active">ללא תאריך</button>
-          <button data-filter="dated" class="segmented-btn">מתוארכות</button>
-          <button data-filter="recurring" class="segmented-btn">חוזרות</button>
-        </div>
+      <div class="segmented">
+  <!-- משימות -->
+  <button data-filter="undated" class="segmented-btn active">משימות ללא תאריך</button>
+  <button data-filter="dated" class="segmented-btn">משימות מתוארכות</button>
+  <button data-filter="recurring" class="segmented-btn">משימות חוזרות</button>
+
+  <!-- אירועים -->
+  <button data-filter="dated-events" class="segmented-btn">אירועים מתוארכים</button>
+  <button data-filter="recurring-events" class="segmented-btn">אירועים חוזרים</button>
+</div>
         <div id="tasksList" class="list-container"></div>
       </section>
 
@@ -124,7 +129,7 @@
 
     <nav class="bottom-nav">
       <button data-target="calendarSection" class="nav-btn active">לוח שנה</button>
-      <button data-target="tasksSection" class="nav-btn">משימות</button>
+    <button data-target="tasksSection" class="nav-btn">משימות / אירועים</button>
       <button data-target="shoppingSection" class="nav-btn">קניות</button>
       <button data-target="statsSection" class="nav-btn">סטטיסטיקות</button>
       <button data-target="settingsSection" class="nav-btn">הגדרות</button>
