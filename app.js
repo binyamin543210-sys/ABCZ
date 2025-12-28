@@ -504,15 +504,33 @@ allTasks.sort((a, b) => {
   return ua - ub;
 });
 
-  const filtered = allTasks.filter((task) => {
-    const hasDate = !!task.dateKey && task.dateKey !== "undated";
-    const isRecurringParent = task.isRecurringParent === true;
-    if (filter === "undated") return !hasDate;
-   if (filter === "dated") return hasDate;
-if (filter === "recurring") {
-  return task.isRecurringParent === true;
-}
-  });
+ const filtered = allTasks.filter((task) => {
+  const hasDate = task.dateKey && task.dateKey !== "undated";
+  const isRecurringParent = task.isRecurringParent === true;
+
+  switch (filter) {
+
+    // משימות
+    case "undated":
+      return task.type === "task" && !hasDate;
+
+    case "dated":
+      return task.type === "task" && hasDate && !isRecurringParent;
+
+    case "recurring":
+      return task.type === "task" && isRecurringParent;
+
+    // אירועים
+    case "dated-events":
+      return task.type === "event" && hasDate && !isRecurringParent;
+
+    case "recurring-events":
+      return task.type === "event" && isRecurringParent;
+
+    default:
+      return false;
+  }
+});
 
   filtered.forEach((task) => {
     const item = document.createElement("div");
