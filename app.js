@@ -1356,18 +1356,22 @@ async function deleteTaskSmart(task) {
 
 // ===============================
 // Recurring materializer
-// ===============================
 async function materializeRecurringTask(task) {
   if (!task || !task.dateKey || !task._id) return;
-  const start = parseDateKey(task.dateKey);
-  const year = start.getFullYear();
 
-  for (let d = new Date(year, 0, 1); d.getFullYear() === year; d.setDate(d.getDate() + 1)) {
+  const start = parseDateKey(task.dateKey);
+  const end = new Date(start);
+  end.setFullYear(end.getFullYear() + 1);
+
+  for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
     const dk = dateKeyFromDate(d);
 
     if (task.recurring === "weekly" && d.getDay() !== start.getDay()) continue;
     if (task.recurring === "monthly_greg" && d.getDate() !== start.getDate()) continue;
-    if (task.recurring === "yearly_greg" && (d.getDate() !== start.getDate() || d.getMonth() !== start.getMonth())) continue;
+    if (
+      task.recurring === "yearly_greg" &&
+      (d.getDate() !== start.getDate() || d.getMonth() !== start.getMonth())
+    ) continue;
 
     const id = `${task._id}_${dk}`;
     await set(ref(db, `events/${dk}/${id}`), {
@@ -1379,7 +1383,7 @@ async function materializeRecurringTask(task) {
     });
   }
 }
-
+// ===============================
 // =========================
 // Stats
 // =========================
