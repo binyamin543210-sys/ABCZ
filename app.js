@@ -556,6 +556,8 @@ if (filter === "recurring") {
     actions.className = "task-actions";
 
     if (filter === "recurring") {
+
+      
       const delAllBtn = document.createElement("button");
       delAllBtn.className = "ghost-pill small";
       delAllBtn.textContent = "🗑 מחק הכל";
@@ -563,6 +565,14 @@ if (filter === "recurring") {
       actions.appendChild(delAllBtn);
     }
 
+    // מחיקה רגילה (ללא תאריך / עם תאריך)
+if (filter !== "recurring") {
+  const delBtn = document.createElement("button");
+  delBtn.className = "ghost-pill small";
+  delBtn.textContent = "🗑 מחיקה";
+  delBtn.onclick = () => deleteTaskSmart(task);
+  actions.appendChild(delBtn);
+}
     const doneBtn = document.createElement("button");
     doneBtn.className = "ghost-pill small";
     doneBtn.textContent = "✔ בוצע";
