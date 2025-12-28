@@ -172,7 +172,6 @@ function isSameDay(d1, d2) {
 }
 const isShabbat = (date) => date.getDay() === 6;
 const isFriday  = (date) => date.getDay() === 5;
-
 // ===============================
 // Shabbat times – smart monthly cache
 // ===============================
@@ -209,6 +208,20 @@ async function ensureShabbatForWeek(fridayDate) {
   } catch (e) {
     console.error("Failed loading shabbat times", e);
     return null;
+  }
+}
+// --- טעינה חכמה של זמני שבת לחודש המוצג בלבד ---
+function preloadShabbatForVisibleMonth() {
+  const year = state.currentDate.getFullYear();
+  const month = state.currentDate.getMonth();
+
+  const firstDay = new Date(year, month, 1);
+  const lastDay  = new Date(year, month + 1, 0);
+
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    if (d.getDay() === 5) { // 5 = יום שישי
+      ensureShabbatForWeek(new Date(d));
+    }
   }
 }
 
@@ -285,6 +298,8 @@ function renderCalendar() {
   const month = currentMonthDate.getMonth();
 
   ensureYearHolidays(year);
+
+  preloadShabbatForVisibleMonth();
 
   const firstDayOfMonth = new Date(year, month, 1);
   const startDay = firstDayOfMonth.getDay();
