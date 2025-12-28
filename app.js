@@ -1325,29 +1325,39 @@ function openPostponeModal(task) {
     el("postponeModal").classList.add("hidden");
   };
 }
-
-async function moveTaskToDate(task, newDateKey) {
-  const id = task._id || task.id;
-  if (!id) return;
-
-  await set(ref(db, `events/${newDateKey}/${id}`), { ...task, dateKey: newDateKey });
-  if (task.dateKey) await remove(ref(db, `events/${task.dateKey}/${id}`));
-  showToast("הועבר");
-}
-
 async function deleteTaskSmart(task) {
   const id = task._id || task.id;
   if (!id || !task.dateKey) return;
 
-  async function deleteTaskSmart(task) {
-  } else {
-    await remove(ref(db, `events/${task.dateKey}/${id}`));
-  }
-  showToast("נמחק");
-  el("editModal")?.classList.add("hidden");
-el("dayModal")?.classList.add("hidden");
-}
+  // אם זה אב של חזרה – מוחקים רק מופעים עתידיים
+  if (task.isRecurringParent) {
+    const now = new Date();
 
+    Object.entries(state.cache.events).forEach(([dk, items]) => {
+      const d = parseDateKey(dk);
+      if (d < now) return; // ⛔ לא מוחקים עבר
+
+      Object.entries(items || {}).forEach(([cid, ev]) => {
+        if (ev.parentId === id) {
+          remove(ref(db, `events/${dk}/${cid}`));
+        }
+      });
+    });
+
+    // מוחקים את האב עצמו
+    await remove(ref(db, `events/${task.dateKey}/${id}`));
+
+    showToast("נמחקו מופעים עתידיים");
+  } else {
+    // מחיקה רגילה
+    await remove(ref(db, `events/${task.dateKey}/${id}`));
+    showToast("נמחק");
+  }
+
+  // סגירת חלוניות
+  el("editModal")?.classList.add("hidden");
+  el("dayModal")?.classList.add("hidden");
+}
 // ===============================
 // Recurring materializer
 async function materializeRecurringTask(task) {
