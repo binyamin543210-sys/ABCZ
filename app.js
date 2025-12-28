@@ -179,26 +179,43 @@ async function ensureShabbatForWeek(fridayDate) {
   if (state.cache.shabbat[fridayKey]) return state.cache.shabbat[fridayKey];
   if (!state.settings.cityLat || !state.settings.cityLon || !state.settings.cityTz) return null;
 
+  // יום שישי
   const y = fridayDate.getFullYear();
   const m = String(fridayDate.getMonth() + 1).padStart(2, "0");
   const d = String(fridayDate.getDate()).padStart(2, "0");
+
+  // יום שבת (שישי + 1)
+  const saturday = new Date(fridayDate);
+  saturday.setDate(saturday.getDate() + 1);
+
+  const y2 = saturday.getFullYear();
+  const m2 = String(saturday.getMonth() + 1).padStart(2, "0");
+  const d2 = String(saturday.getDate()).padStart(2, "0");
 
   const url =
     "https://www.hebcal.com/shabbat?cfg=json" +
     `&latitude=${encodeURIComponent(state.settings.cityLat)}` +
     `&longitude=${encodeURIComponent(state.settings.cityLon)}` +
     `&tzid=${encodeURIComponent(state.settings.cityTz)}` +
-    `&start=${y}-${m}-${d}&end=${y}-${m}-${d}`;
+    `&start=${y}-${m}-${d}` +
+    `&end=${y2}-${m2}-${d2}`;
 
   try {
     const resp = await fetch(url);
     const data = await resp.json();
-    const itemCandles  = (data.items || []).find((it) => it.category === "candles");
-    const itemHavdalah = (data.items || []).find((it) => it.category === "havdalah");
+
+    const itemCandles = (data.items || []).find(
+      (it) => it.category === "candles"
+    );
+    const itemHavdalah = (data.items || []).find(
+      (it) => it.category === "havdalah"
+    );
+
     const result = {
       candle: itemCandles ? new Date(itemCandles.date) : null,
       havdalah: itemHavdalah ? new Date(itemHavdalah.date) : null
     };
+
     state.cache.shabbat[fridayKey] = result;
     return result;
   } catch (e) {
@@ -206,25 +223,6 @@ async function ensureShabbatForWeek(fridayDate) {
     return null;
   }
 }
-
-function formatTimeHM(date) {
-  if (!date) return "";
-  const h = String(date.getHours()).padStart(2, "0");
-  const m = String(date.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
-}
-
-function ensureYearHolidays(year) {
-  if (state.cache.holidaysLoadedYear === year) return;
-  state.cache.holidaysLoadedYear = year;
-  state.cache.holidays = {}; // reset for year
-  for (let d = new Date(year, 0, 1); d.getFullYear() === year; d.setDate(d.getDate() + 1)) {
-    const key = dateKeyFromDate(d);
-    const name = hebrewHolidayForDate(new Date(d));
-    if (name) state.cache.holidays[key] = { name };
-  }
-}
-
 // ---------- דיבור + הומור של ג'יחרי ----------
 let gihariVoice = null;
 function loadVoices() {
