@@ -428,7 +428,7 @@ function renderTasks(filter = "undated") {
     const isRecurringParent = task.isRecurringParent === true;
     if (filter === "undated") return !hasDate;
     if (filter === "dated") return hasDate && !task.recurring;
-    if (filter === "recurring") return isRecurringParent;
+ if (filter === "recurring") return task.isRecurringParent === true;
     return true;
   });
 
@@ -1339,13 +1339,7 @@ async function deleteTaskSmart(task) {
   const id = task._id || task.id;
   if (!id || !task.dateKey) return;
 
-  if (task.isRecurringParent) {
-    await remove(ref(db, `events/${task.dateKey}/${id}`));
-    Object.entries(state.cache.events).forEach(([dk, items]) => {
-      Object.entries(items || {}).forEach(([cid, ev]) => {
-        if (ev.parentId === id) remove(ref(db, `events/${dk}/${cid}`));
-      });
-    });
+  async function deleteTaskSmart(task) {
   } else {
     await remove(ref(db, `events/${task.dateKey}/${id}`));
   }
