@@ -417,14 +417,19 @@ function renderTasks(filter = "undated") {
 Object.entries(state.cache.events).forEach(([dateKey, items]) => {
   Object.entries(items || {}).forEach(([id, ev]) => {
 
-    // משימות רגילות
-    if (ev.type === "task") {
-      allTasks.push({ id, dateKey, ...ev });
-      return;
-    }
+  // משימות רגילות – רק אם זה לא מופע
+if (ev.type === "task" && !ev.isRecurringInstance) {
+  allTasks.push({ id, dateKey, ...ev });
+  return;
+}
 
     // אירועים חוזרים בלבד
-    if (ev.type === "event" && ev.recurring && ev.recurring !== "none") {
+    if (
+  ev.type === "event" &&
+  ev.recurring &&
+  ev.recurring !== "none" &&
+  ev.isRecurringParent === true
+) {
       allTasks.push({
         id,
         dateKey,
@@ -444,10 +449,7 @@ Object.entries(state.cache.events).forEach(([dateKey, items]) => {
     if (filter === "undated") return !hasDate;
     if (filter === "dated") return hasDate && !task.recurring;
 if (filter === "recurring") {
-  return (
-    task.isRecurringParent === true ||
-    task.__recurringEvent === true
-  );
+  return task.isRecurringParent === true;
 }
   });
 
