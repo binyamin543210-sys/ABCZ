@@ -775,7 +775,7 @@ if (existingId) {
   showToast("נשמר");
   el("editModal").classList.add("hidden");
 }
-
+}
 function openWazeFromForm() {
   const form = el("editForm");
   if (!form) return;
@@ -1478,4 +1478,3 @@ function initApp() {
 }
 
 document.addEventListener("DOMContentLoaded", initApp);
-}
