@@ -173,19 +173,34 @@ function isSameDay(d1, d2) {
 const isShabbat = (date) => date.getDay() === 6;
 const isFriday  = (date) => date.getDay() === 5;
 
-// --- זמני שבת – cache לפי יום שישי ---
-async function ensureShabbatForWeek(fridayDate) {
-  const fridayKey = dateKeyFromDate(fridayDate);
-  if (state.cache.shabbat[fridayKey]) return state.cache.shabbat[fridayKey];
-  if (!state.settings.cityLat || !state.settings.cityLon || !state.settings.cityTz) return null;
+// ===============================
+// Shabbat times – smart monthly cache
+// ===============================
+async function ensureShabbatForWeek(fridayDateInput) {
+  if (!(fridayDateInput instanceof Date)) return null;
 
-  // יום שישי
+  // 🔒 clone מוחלט – חובה
+  const fridayDate = new Date(fridayDateInput.getTime());
+  fridayDate.setHours(12, 0, 0, 0);
+
+  const fridayKey = dateKeyFromDate(fridayDate);
+
+  // cache
+  if (state.cache.shabbat[fridayKey]) {
+    return state.cache.shabbat[fridayKey];
+  }
+
+  if (!state.settings.cityLat || !state.settings.cityLon || !state.settings.cityTz) {
+    return null;
+  }
+
+  // Friday
   const y = fridayDate.getFullYear();
   const m = String(fridayDate.getMonth() + 1).padStart(2, "0");
   const d = String(fridayDate.getDate()).padStart(2, "0");
 
-  // יום שבת (שישי + 1)
-  const saturday = new Date(fridayDate);
+  // Saturday
+  const saturday = new Date(fridayDate.getTime());
   saturday.setDate(saturday.getDate() + 1);
 
   const y2 = saturday.getFullYear();
@@ -204,22 +219,18 @@ async function ensureShabbatForWeek(fridayDate) {
     const resp = await fetch(url);
     const data = await resp.json();
 
-    const itemCandles = (data.items || []).find(
-      (it) => it.category === "candles"
-    );
-    const itemHavdalah = (data.items || []).find(
-      (it) => it.category === "havdalah"
-    );
+    const candles = (data.items || []).find(it => it.category === "candles");
+    const havdalah = (data.items || []).find(it => it.category === "havdalah");
 
     const result = {
-      candle: itemCandles ? new Date(itemCandles.date) : null,
-      havdalah: itemHavdalah ? new Date(itemHavdalah.date) : null
+      candle: candles ? new Date(candles.date) : null,
+      havdalah: havdalah ? new Date(havdalah.date) : null
     };
 
     state.cache.shabbat[fridayKey] = result;
     return result;
   } catch (e) {
-    console.error("Failed loading shabbat times", e);
+    console.error("Shabbat load failed", e);
     return null;
   }
 }
