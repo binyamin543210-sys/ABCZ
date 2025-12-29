@@ -694,14 +694,25 @@ function renderDayEvents(dateKey) {
   container.innerHTML = "";
 
   const events = state.cache.events[dateKey] || {};
-  const list = Object.entries(events)
-    .map(([id, ev]) => ({ id, ...ev }))
-    .sort((a, b) => {
-      if (!a.startTime && b.startTime) return 1;
-      if (a.startTime && !b.startTime) return -1;
-      if (!a.startTime && !b.startTime) return 0;
-      return a.startTime.localeCompare(b.startTime);
-    });
+
+  const date = parseDateKey(dateKey);
+const autoBlocks = getDefaultDayBlocks(date);
+  
+const list = [
+  ...autoBlocks.map(b => ({
+    ...b,
+    isAuto: true
+  })),
+  ...Object.entries(events).map(([id, ev]) => ({
+    id,
+    ...ev,
+    isAuto: false
+  }))
+].sort((a, b) => {
+  const aTime = a.startTime || "00:00";
+  const bTime = b.startTime || "00:00";
+  return aTime.localeCompare(bTime);
+});
 
   list.forEach((ev) => {
     const card = document.createElement("div");
@@ -745,7 +756,19 @@ function renderDayEvents(dateKey) {
     const editBtn = document.createElement("button");
     editBtn.className = "ghost-pill small";
     editBtn.textContent = "עריכה";
-    editBtn.onclick = () => openEditModal({ dateKey, id: ev._id || ev.id || ev.id });
+   editBtn.onclick = () => {
+  if (ev.isAuto) {
+    openEditModal({
+      type: "task",
+      title: ev.title,
+      startTime: ev.startTime,
+      endTime: ev.endTime,
+      dateKey
+    });
+  } else {
+    openEditModal({ dateKey, id: ev._id || ev.id });
+  }
+};
 
     const delBtn = document.createElement("button");
     delBtn.className = "ghost-pill small";
@@ -814,6 +837,40 @@ function renderAutoBlocks(date) {
       container.appendChild(row);
     });
   }, { onlyOnce: true });
+}
+
+function getDefaultDayBlocks(date) {
+  const day = date.getDay();
+  const blocks = [];
+
+  // שינה
+  blocks.push({
+    type: "auto",
+    title: "שינה",
+    startTime: "00:00",
+    endTime: "08:00",
+    editable: true
+  });
+
+  if (day >= 0 && day <= 4) {
+    blocks.push({
+      type: "auto",
+      title: "עבודה",
+      startTime: "08:00",
+      endTime: "17:00",
+      editable: true
+    });
+
+    blocks.push({
+      type: "auto",
+      title: "אוכל + מקלחת",
+      startTime: "17:00",
+      endTime: "18:30",
+      editable: true
+    });
+  }
+
+  return blocks;
 }
 
 // =========================
