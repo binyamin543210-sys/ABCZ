@@ -699,10 +699,11 @@ function renderDayEvents(dateKey) {
 const autoBlocks = getDefaultDayBlocks(date);
   
 const list = [
-  ...autoBlocks.map(b => ({
-    ...b,
-    isAuto: true
-  })),
+autoBlocks.map(b => ({
+  ...b,
+  isAuto: true,
+  owner: "shared"
+})),
   ...Object.entries(events).map(([id, ev]) => ({
     id,
     ...ev,
