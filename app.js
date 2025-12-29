@@ -172,6 +172,59 @@ function isSameDay(d1, d2) {
 }
 const isShabbat = (date) => date.getDay() === 6;
 const isFriday  = (date) => date.getDay() === 5;
+
+async function ensureDefaultDayEvents(date) {
+  const dateKey = dateKeyFromDate(date);
+  const day = date.getDay();
+
+  const existing = state.cache.events[dateKey] || {};
+  const titles = Object.values(existing).map(e => e.title);
+
+  const toCreate = [];
+
+  // שינה – תמיד
+  if (!titles.includes("שינה")) {
+    toCreate.push({
+      type: "event",
+      owner: "shared",
+      title: "שינה",
+      startTime: "00:00",
+      endTime: "08:00",
+      dateKey
+    });
+  }
+
+  // ימי חול
+  if (day >= 0 && day <= 4) {
+    if (!titles.includes("עבודה")) {
+      toCreate.push({
+        type: "event",
+        owner: "shared",
+        title: "עבודה",
+        startTime: "08:00",
+        endTime: "17:00",
+        dateKey
+      });
+    }
+
+    if (!titles.includes("אוכל + מקלחת")) {
+      toCreate.push({
+        type: "event",
+        owner: "shared",
+        title: "אוכל + מקלחת",
+        startTime: "17:00",
+        endTime: "18:30",
+        dateKey
+      });
+    }
+  }
+
+  for (const ev of toCreate) {
+    const refNew = push(ref(db, `events/${dateKey}`));
+    await set(refNew, { ...ev, _id: refNew.key });
+  }
+}
+
 // ===============================
 // Shabbat times – smart monthly cache
 // ===============================
@@ -671,8 +724,10 @@ try {
 }
 
   const dateKey = dateKeyFromDate(date);
+  ensureDefaultDayEvents(date).then(() => {
   renderDayEvents(dateKey);
-renderAutoBlocks(date);
+});
+
 
   const weatherCard = el("dayWeatherContainer");
   if (weatherCard) {
@@ -795,84 +850,6 @@ autoBlocks.map(b => ({
   });
 }
 
-function renderAutoBlocks(date) {
-  const container = el("dayAutoBlocks");
-  if (!container) return;
-  container.innerHTML = "";
-
-  const blocks = [];
-  const day = date.getDay();
-  blocks.push({ label: "שינה", range: "00:00–08:00", type: "sleep" });
-
-  if (day >= 0 && day <= 4) {
-    blocks.push({ label: "עבודה", range: "08:00–17:00", type: "work" });
-    blocks.push({ label: "אוכל + מקלחת", range: "17:00–18:30", type: "meal" });
-  }
-
-  const dateKey = dateKeyFromDate(date);
-  onValue(ref(db, `days/${dateKey}/holiday`), (snap) => {
-    const isHolidayMarked = !!snap.val();
-    container.innerHTML = "";
-    const finalBlocks = [...blocks];
-
-    if (isHolidayMarked) {
-      finalBlocks.length = 0;
-      finalBlocks.push({ label: "יום חופש", range: "ללא עבודה, אוכל/מקלחת אוטומטיים", type: "holiday" });
-    }
-
-    finalBlocks.forEach((b) => {
-      const row = document.createElement("div");
-      row.className = "auto-block";
-      if (b.type === "holiday") row.classList.add("auto-holiday");
-
-      const label = document.createElement("div");
-      label.className = "auto-block-label";
-      label.textContent = b.label;
-
-      const range = document.createElement("div");
-      range.className = "auto-block-range";
-      range.textContent = b.range;
-
-      row.appendChild(label);
-      row.appendChild(range);
-      container.appendChild(row);
-    });
-  }, { onlyOnce: true });
-}
-
-function getDefaultDayBlocks(date) {
-  const day = date.getDay();
-  const blocks = [];
-
-  // שינה
-  blocks.push({
-    type: "auto",
-    title: "שינה",
-    startTime: "00:00",
-    endTime: "08:00",
-    editable: true
-  });
-
-  if (day >= 0 && day <= 4) {
-    blocks.push({
-      type: "auto",
-      title: "עבודה",
-      startTime: "08:00",
-      endTime: "17:00",
-      editable: true
-    });
-
-    blocks.push({
-      type: "auto",
-      title: "אוכל + מקלחת",
-      startTime: "17:00",
-      endTime: "18:30",
-      editable: true
-    });
-  }
-
-  return blocks;
-}
 
 // =========================
 // Edit modal + CRUD
