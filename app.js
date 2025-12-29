@@ -750,25 +750,13 @@ function renderDayEvents(dateKey) {
 
   const events = state.cache.events[dateKey] || {};
 
-  const date = parseDateKey(dateKey);
-const autoBlocks = getDefaultDayBlocks(date);
-  
-const list = [
-  
-autoBlocks.map(b => ({
-  ...b,
-  isAuto: true
-})),
-  ...Object.entries(events).map(([id, ev]) => ({
-    id,
-    ...ev,
-    isAuto: false
-  }))
-].sort((a, b) => {
-  const aTime = a.startTime || "00:00";
-  const bTime = b.startTime || "00:00";
-  return aTime.localeCompare(bTime);
-});
+const list = Object.entries(events)
+    .map(([id, ev]) => ({ id, ...ev }))
+    .sort((a, b) => {
+      const aTime = a.startTime || "00:00";
+      const bTime = b.startTime || "00:00";
+      return aTime.localeCompare(bTime);
+    });
 
   list.forEach((ev) => {
     const card = document.createElement("div");
