@@ -672,7 +672,7 @@ try {
 
   const dateKey = dateKeyFromDate(date);
   renderDayEvents(dateKey);
-
+renderAutoBlocks(date);
 
   const weatherCard = el("dayWeatherContainer");
   if (weatherCard) {
