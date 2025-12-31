@@ -224,7 +224,23 @@ async function ensureDefaultDayEvents(date) {
     await set(refNew, { ...ev, _id: refNew.key });
   }
 }
+// --- יצירת אירועי ברירת מחדל לכל ימי החודש המוצג ---
+async function preloadDefaultEventsForVisibleMonth() {
+  const year = state.currentDate.getFullYear();
+  const month = state.currentDate.getMonth();
 
+  const firstDay = new Date(year, month, 1);
+  const lastDay  = new Date(year, month + 1, 0);
+
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    const dateKey = dateKeyFromDate(d);
+
+    // אם כבר יש אירועים – לא לגעת
+    if (state.cache.events[dateKey]) continue;
+
+    await ensureDefaultDayEvents(new Date(d));
+  }
+}
 // ===============================
 // Shabbat times – smart monthly cache
 // ===============================
@@ -366,6 +382,8 @@ function renderCalendar() {
   ensureYearHolidays(year);
 
   preloadShabbatForVisibleMonth();
+
+  preloadDefaultEventsForVisibleMonth();
 
   const firstDayOfMonth = new Date(year, month, 1);
   const startDay = firstDayOfMonth.getDay();
