@@ -1685,9 +1685,13 @@ function computeStats({ user, range }) {
 
   dates.forEach((date) => {
     const dk = dateKeyFromDate(date);
-    const events = state.cache.events[dk] || {};
+    const eventsObj = state.cache.events[dk] || {};
 
-    Object.values(events).forEach((ev) => {
+    // ✅ מנגנון נגד כפילויות (בעיקר לברירת-מחדל כמו "שינה")
+    // נשמור לכל יום את הדקות המקסימליות לכל כותרת+owner+זמן כדי שלא ייסכמו כפול.
+    const seen = new Set();
+
+    Object.entries(eventsObj).forEach(([id, ev]) => {
       if (!isEventRelevantForUser(ev, user)) return;
       if (!ev.startTime || !ev.endTime) return;
 
@@ -1697,17 +1701,23 @@ function computeStats({ user, range }) {
 
       const duration = end - start;
 
-      if (ev.title === "שינה") {
+      // מפתח ייחודי לאירוע: כותרת + בעלים + זמן
+      // (כפילויות DB של אותו הדבר ייפלו פה)
+      const keySig = `${(ev.title || "").trim()}|${ev.owner || ""}|${ev.startTime}|${ev.endTime}|${ev.type || ""}|${ev.isDefault ? "D" : "U"}`;
+      if (seen.has(keySig)) return;
+      seen.add(keySig);
+
+      if ((ev.title || "").trim() === "שינה") {
         sleepMinutes += duration;
         return;
       }
 
-      if (ev.title === "עבודה") {
+      if ((ev.title || "").trim() === "עבודה") {
         workMinutes += duration;
         return;
       }
 
-      const key = ev.title || "אחר";
+      const key = (ev.title || "אחר").trim() || "אחר";
       otherMap[key] = (otherMap[key] || 0) + duration;
     });
   });
@@ -1727,6 +1737,77 @@ function computeStats({ user, range }) {
     otherMap,
     freeMinutes
   };
+}
+
+function updateStats() {
+  const user = state.currentUser;
+  const range = state.statsRange || "week";
+
+  const stats = computeStats({ user, range });
+
+  const canvas = el("workFreeChart");
+  if (!canvas || !window.Chart) return;
+
+  // ✅ הכי נכון: לחשב הכל מדקות (בלי חיסורים של מספרים מעוגלים)
+  const TOTAL_HOURS = +(stats.totalMinutesCapacity / 60).toFixed(2);
+
+  const sleep = +(stats.sleepMinutes / 60).toFixed(2);
+  const work  = +(stats.workMinutes / 60).toFixed(2);
+
+  const otherMap = stats.otherMap || {};
+  const otherLabels = Object.keys(otherMap);
+  const otherValues = Object.values(otherMap).map(v => +(v / 60).toFixed(2));
+
+  const freeHours = +(stats.freeMinutes / 60).toFixed(2);
+
+  const labels = ["שינה", "עבודה", ...otherLabels, "זמן פנוי"];
+  const data   = [sleep, work, ...otherValues, freeHours];
+
+  const colors = [
+    "#4A90E2",
+    "#E74C3C",
+    ...otherLabels.map((_, i) => `hsl(${(i * 70) % 360},70%,55%)`),
+    "#2ECC71"
+  ];
+
+  const ctx = canvas.getContext("2d");
+
+  if (!workFreeChart) {
+    workFreeChart = new Chart(ctx, {
+      type: "doughnut",
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors
+        }]
+      },
+      plugins: [doughnutCenterTextPlugin],
+      options: {
+        cutout: "65%",
+        plugins: {
+          legend: { position: "bottom" },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const val = Number(ctx.raw) || 0;
+                const pct = TOTAL_HOURS > 0 ? ((val / TOTAL_HOURS) * 100).toFixed(1) : "0.0";
+                return `${ctx.label}: ${val.toFixed(2)} שעות (${pct}%)`;
+              }
+            }
+          },
+          centerText: {
+            text: `${(TOTAL_HOURS - freeHours).toFixed(2)} ש׳ תפוס`
+          }
+        }
+      }
+    });
+  } else {
+    workFreeChart.data.labels = labels;
+    workFreeChart.data.datasets[0].data = data;
+    workFreeChart.data.datasets[0].backgroundColor = colors;
+    workFreeChart.update();
+  }
 }
 // ===============================
 // Voice Command Handler (תמציתי)
