@@ -1988,20 +1988,6 @@ const doughnutCenterTextPlugin = {
 };
 
 
-function initStatsRangeControls() {
-  const buttons = document.querySelectorAll("#statsRangeControls button");
-  if (!buttons.length) return;
-
-  buttons.forEach(btn => {
-    btn.onclick = () => {
-      buttons.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-
-      state.statsRange = btn.dataset.range;
-      updateStats();
-    };
-  });
-}
 // =========================
 // App init
 // =========================
@@ -2029,7 +2015,7 @@ rangeButtons.forEach(btn => {
 });
   
   initGihari();
-  initStatsRangeControls();
+
 
   // user select -> state.currentUser
   const userSel = el("userSelect");
