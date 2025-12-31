@@ -191,6 +191,7 @@ async function ensureDefaultDayEvents(date) {
       startTime: "00:00",
       endTime: "08:00",
       dateKey
+      isDefault: true,
     });
   }
 
@@ -204,6 +205,7 @@ async function ensureDefaultDayEvents(date) {
         startTime: "08:00",
         endTime: "17:00",
         dateKey
+        isDefault: true,
       });
     }
 
@@ -215,6 +217,8 @@ async function ensureDefaultDayEvents(date) {
         startTime: "17:00",
         endTime: "18:30",
         dateKey
+
+      isDefault: true,
       });
     }
   }
@@ -489,14 +493,17 @@ hebEl.textContent = hebDay ? toHebrewNumeral(hebDay) : "";
     pointsRow.className = "day-points";
 
     let eventCount = 0;
-    Object.values(events).forEach((ev) => {
-      const dot = document.createElement("div");
-      dot.className = "event-dot";
-      if (ev.type === "task") dot.classList.add("task");
-      if (ev.owner) dot.classList.add(`owner-${ev.owner}`);
-      pointsRow.appendChild(dot);
-      eventCount++;
-    });
+Object.values(events).forEach((ev) => {
+  // ⛔ לא מציג נקודות לאירועי ברירת מחדל
+  if (ev.isDefault) return;
+
+  const dot = document.createElement("div");
+  dot.className = "event-dot";
+  if (ev.type === "task") dot.classList.add("task");
+  if (ev.owner) dot.classList.add(`owner-${ev.owner}`);
+  pointsRow.appendChild(dot);
+  eventCount++;
+});
 
     if (eventCount > 0) cell.appendChild(pointsRow);
     if (eventCount >= 2) cell.classList.add("day-border-glow");
