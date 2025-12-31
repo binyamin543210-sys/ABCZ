@@ -1637,6 +1637,21 @@ function isEventRelevantForUser(ev, user) {
   if (ev.owner === "shared") return true;
   return ev.owner === user;
 }
+
+function getRangeDays(range) {
+  switch (range) {
+    case "day": return 1;
+    case "week": return 7;
+    case "2weeks": return 14;
+    case "month": {
+      const d = new Date(state.currentDate);
+      return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    }
+    case "year": return 365;
+    default: return 1;
+  }
+}
+
 function computeStats({ user, range }) {
   const dates = getRangeDates(range);
 
@@ -1883,41 +1898,62 @@ const doughnutPercentPlugin = {
   }
 };
 
+let workFreeChart = null;
+
 function updateStats() {
   const user = state.currentUser;
-  const range = state.statsRange || "week";
+  const range = state.statsRange || "week"; // day / week / 2weeks / month / year
 
   const stats = computeStats({ user, range });
 
   const c1 = el("workFreeChart");
   if (!c1 || !window.Chart) return;
 
-  const ctx = c1.getContext("2d");
+  // =========================
+  // חישוב שעות לטווח
+  // =========================
+  const days = getRangeDays(range);
+  const TOTAL_HOURS = days * 24;
 
+  const sleep = stats.sleepHours || 0;
+  const work  = stats.workHours || 0;
+
+  const otherMap = stats.otherMap || {};
+  const otherValues = Object.values(otherMap).map(m => +(m / 60).toFixed(1));
+  const otherTotal = otherValues.reduce((a, b) => a + b, 0);
+
+  const freeHours = Math.max(
+    0,
+    +(TOTAL_HOURS - sleep - work - otherTotal).toFixed(1)
+  );
+
+  // =========================
+  // נתונים לגרף
+  // =========================
   const labels = [
     "שינה",
     "עבודה",
-    ...Object.keys(stats.otherMap),
+    ...Object.keys(otherMap),
     "זמן פנוי"
   ];
 
-  const dataMinutes = [
-    stats.sleepMinutes,
-    stats.workMinutes,
-    ...Object.values(stats.otherMap),
-    stats.freeMinutes
+  const data = [
+    sleep,
+    work,
+    ...otherValues,
+    freeHours
   ];
-
-  const dataHours = dataMinutes.map(m => +(m / 60).toFixed(1));
 
   const colors = [
     "#4A90E2", // שינה
     "#E74C3C", // עבודה
-    ...Object.keys(stats.otherMap).map(
-      () => `hsl(${Math.random() * 360},70%,60%)`
+    ...Object.keys(otherMap).map(
+      (_, i) => `hsl(${(i * 70) % 360},70%,55%)`
     ),
     "#2ECC71"  // זמן פנוי
   ];
+
+  const ctx = c1.getContext("2d");
 
   if (!workFreeChart) {
     workFreeChart = new Chart(ctx, {
@@ -1925,41 +1961,29 @@ function updateStats() {
       data: {
         labels,
         datasets: [{
-          data: dataHours,
+          data,
           backgroundColor: colors
         }]
       },
       options: {
+        cutout: "65%",
         plugins: {
           legend: { position: "bottom" },
           tooltip: {
             callbacks: {
               label: (ctx) => {
-                const minutes = dataMinutes[ctx.dataIndex];
-                const percent = (
-                  (minutes / stats.totalMinutesCapacity) * 100
-                ).toFixed(1);
-                return `${ctx.label}: ${ctx.raw} שעות (${percent}%)`;
+                const val = ctx.raw;
+                const percent = ((val / TOTAL_HOURS) * 100).toFixed(1);
+                return `${ctx.label}: ${val} שעות (${percent}%)`;
               }
             }
-          },
-          datalabels: {
-            formatter: (value, ctx) => {
-              const minutes = dataMinutes[ctx.dataIndex];
-              const percent = (
-                (minutes / stats.totalMinutesCapacity) * 100
-              ).toFixed(0);
-              return percent > 3 ? `${percent}%` : "";
-            },
-            color: "#fff",
-            font: { weight: "bold" }
           }
         }
       }
     });
   } else {
     workFreeChart.data.labels = labels;
-    workFreeChart.data.datasets[0].data = dataHours;
+    workFreeChart.data.datasets[0].data = data;
     workFreeChart.data.datasets[0].backgroundColor = colors;
     workFreeChart.update();
   }
