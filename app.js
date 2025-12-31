@@ -394,6 +394,48 @@ setTimeout(() => t.classList.add("hidden"), 500);
 }
 
 // =========================
+// Conflict detection helpers
+// =========================
+
+function timeToMinutes(t) {
+  if (!t) return null;
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function eventsOverlap(a, b) {
+  if (!a.startTime || !b.startTime) return false;
+
+  const aStart = timeToMinutes(a.startTime);
+  const aEnd   = timeToMinutes(a.endTime || a.startTime);
+  const bStart = timeToMinutes(b.startTime);
+  const bEnd   = timeToMinutes(b.endTime || b.startTime);
+
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function isRelevantByOwner(existingOwner, newOwner) {
+  if (existingOwner === "shared" || newOwner === "shared") return true;
+  return existingOwner === newOwner;
+}
+
+function findConflicts(dateKey, newEvent, excludeId = null) {
+  const dayEvents = state.cache.events[dateKey] || {};
+  const conflicts = [];
+
+  Object.entries(dayEvents).forEach(([id, ev]) => {
+    if (excludeId && id === excludeId) return;
+    if (isDefaultEvent(ev)) return;
+    if (!isRelevantByOwner(ev.owner, newEvent.owner)) return;
+    if (!eventsOverlap(ev, newEvent)) return;
+
+    conflicts.push({ id, ...ev });
+  });
+
+  return conflicts;
+}
+
+// =========================
 // Calendar render
 // =========================
 function renderCalendar() {
@@ -970,6 +1012,27 @@ async function handleEditFormSubmit(ev) {
   const dateKey = eventObj.dateKey || "undated";
   const existingId = form.dataset.editId || null;
 
+// =========================
+  // Conflict check (before save)
+  // =========================
+
+  if (eventObj.startTime && eventObj.dateKey && eventObj.dateKey !== "undated") {
+    const conflicts = findConflicts(
+      eventObj.dateKey,
+      eventObj,
+      existingId
+    );
+
+    if (conflicts.length > 0) {
+      openConflictModal({
+        newEvent: eventObj,
+        conflicts,
+        form
+      });
+      return; // ⛔ עוצר שמירה רגילה
+    }
+  }
+  
 if (existingId) {
   await update(ref(db, `events/${dateKey}/${existingId}`), eventObj);
   showToast("עודכן");
@@ -994,6 +1057,35 @@ function openWazeFromForm() {
   const address = form.elements["address"].value;
   if (!address) return;
   window.open(`https://waze.com/ul?q=${encodeURIComponent(address)}`, "_blank");
+}
+
+// =========================
+// Conflict resolution modal
+// =========================
+
+function openConflictModal({ newEvent, conflicts, form }) {
+  const first = conflicts[0];
+
+  const msg =
+    `יש לך "${first.title}" בין ${first.startTime}` +
+    (first.endTime ? `-${first.endTime}` : "") +
+    `.\n\nמה תרצה לעשות?`;
+
+  const choice = window.confirm(
+    msg +
+    "\n\nאישור = לשנות את האירוע הקיים\nביטול = לחזור לעריכת האירוע החדש"
+  );
+
+  if (choice) {
+    // עריכת האירוע הקיים
+    openEditModal({
+      dateKey: first.dateKey,
+      id: first._id || first.id
+    });
+  } else {
+    // חזרה לעריכת האירוע החדש (לא סוגר את המודל)
+    showToast("בחרת לערוך את האירוע החדש");
+  }
 }
 
 // =========================
