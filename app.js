@@ -1898,7 +1898,6 @@ const doughnutPercentPlugin = {
   }
 };
 
-let workFreeChart = null;
 
 function updateStats() {
   const user = state.currentUser;
