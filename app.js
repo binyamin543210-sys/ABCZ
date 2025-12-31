@@ -1076,32 +1076,47 @@ function openWazeFromForm() {
 // =========================
 // Conflict resolution modal
 // =========================
-
 function openConflictModal({ newEvent, conflicts, form }) {
+  const modal = el("conflictModal");
+  const text = el("conflictText");
+
   const first = conflicts[0];
 
-  const msg =
-    `יש לך "${first.title}" בין ${first.startTime}` +
-    (first.endTime ? `-${first.endTime}` : "") +
-    `.\n\nמה תרצה לעשות?`;
+  text.innerHTML = `
+    יש התנגשות עם:<br>
+    <b>${first.title}</b><br>
+    ${first.startTime}${first.endTime ? " - " + first.endTime : ""}
+  `;
 
-  const choice = window.confirm(
-    msg +
-    "\n\nאישור = לשנות את האירוע הקיים\nביטול = לחזור לעריכת האירוע החדש"
-  );
+  modal.classList.remove("hidden");
 
-  if (choice) {
-    // עריכת האירוע הקיים
+  el("conflictEditExisting").onclick = () => {
+    modal.classList.add("hidden");
     openEditModal({
       dateKey: first.dateKey,
       id: first._id || first.id
     });
-  } else {
-    // חזרה לעריכת האירוע החדש (לא סוגר את המודל)
-    showToast("בחרת לערוך את האירוע החדש");
-  }
-}
+  };
 
+  el("conflictEditNew").onclick = () => {
+    modal.classList.add("hidden");
+  };
+
+  el("conflictKeepBoth").onclick = async () => {
+    modal.classList.add("hidden");
+
+    const dateKey = newEvent.dateKey;
+    const newRef = push(ref(db, `events/${dateKey}`));
+    await set(newRef, { ...newEvent, _id: newRef.key });
+
+    showToast("נשמר למרות ההתנגשות");
+    el("editModal").classList.add("hidden");
+  };
+
+  qsa("[data-close-conflict]", modal).forEach(
+    b => b.onclick = () => modal.classList.add("hidden")
+  );
+}
 // =========================
 // Weather
 // =========================
