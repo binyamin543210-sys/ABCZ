@@ -191,7 +191,7 @@ async function ensureDefaultDayEvents(date) {
       startTime: "00:00",
       endTime: "08:00",
       dateKey
-      isDefault: true,
+      isDefault: true
     });
   }
 
@@ -205,7 +205,7 @@ async function ensureDefaultDayEvents(date) {
         startTime: "08:00",
         endTime: "17:00",
         dateKey
-        isDefault: true,
+        isDefault: true
       });
     }
 
@@ -218,7 +218,7 @@ async function ensureDefaultDayEvents(date) {
         endTime: "18:30",
         dateKey
 
-      isDefault: true,
+      isDefault: true
       });
     }
   }
