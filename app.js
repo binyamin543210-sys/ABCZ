@@ -1602,6 +1602,84 @@ function gihariPlaceUndatedTasks() {
   });
 }
 
+// =========================
+// Stats engine
+// =========================
+
+function getRangeDates(range) {
+  const today = new Date();
+  const dates = [];
+
+  if (range === "week") {
+    const start = new Date(today);
+    start.setDate(today.getDate() - today.getDay());
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      dates.push(d);
+    }
+  }
+
+  if (range === "month") {
+    const y = today.getFullYear();
+    const m = today.getMonth();
+    const last = new Date(y, m + 1, 0).getDate();
+    for (let i = 1; i <= last; i++) {
+      dates.push(new Date(y, m, i));
+    }
+  }
+
+  return dates;
+}
+
+function isEventRelevantForUser(ev, user) {
+  if (!ev || !ev.owner) return false;
+  if (ev.owner === "shared") return true;
+  return ev.owner === user;
+}
+
+function computeStats({ user, range }) {
+  const dates = getRangeDates(range);
+
+  let totalMinutes = 0;
+  let sleepMinutes = 0;
+  let workMinutes = 0;
+  let taskCount = 0;
+  let eventCount = 0;
+
+  dates.forEach((date) => {
+    const dk = dateKeyFromDate(date);
+    const events = state.cache.events[dk] || {};
+
+    Object.values(events).forEach((ev) => {
+      if (!isEventRelevantForUser(ev, user)) return;
+      if (!ev.startTime || !ev.endTime) return;
+
+      const start = timeToMinutes(ev.startTime);
+      const end = timeToMinutes(ev.endTime);
+      if (end <= start) return;
+
+      const duration = end - start;
+      totalMinutes += duration;
+
+      if (ev.type === "task") taskCount++;
+      if (ev.type === "event") eventCount++;
+
+      if (ev.title === "שינה") sleepMinutes += duration;
+      if (ev.title === "עבודה") workMinutes += duration;
+    });
+  });
+
+  return {
+    totalHours: +(totalMinutes / 60).toFixed(1),
+    sleepHours: +(sleepMinutes / 60).toFixed(1),
+    workHours: +(workMinutes / 60).toFixed(1),
+    taskCount,
+    eventCount
+  };
+}
+
+
 // ===============================
 // Voice Command Handler (תמציתי)
 // ===============================
@@ -1769,49 +1847,66 @@ async function materializeRecurringTask(task) {
 let workFreeChart, tasksChart;
 
 function updateStats() {
+  const user = state.currentUser;
+  const range = "week";
+
+  const stats = computeStats({ user, range });
+
   const c1 = el("workFreeChart");
   const c2 = el("tasksChart");
   if (!c1 || !c2 || !window.Chart) return;
 
-  const today = new Date();
-  const { dailyLoadMinutes } = computeLoadAndFreeSlots(today);
-  const workHours = dailyLoadMinutes / 60;
-  const freeHours = Math.max(0, 14 - workHours);
-
+  // --- Chart 1: Sleep / Work / Other ---
   const ctx1 = c1.getContext("2d");
+  const other = Math.max(0, stats.totalHours - stats.sleepHours - stats.workHours);
+
   if (!workFreeChart) {
     workFreeChart = new Chart(ctx1, {
       type: "doughnut",
-      data: { labels: ["עבודה/משימות", "זמן פנוי"], datasets: [{ data: [workHours, freeHours] }] },
-      options: { responsive: true, plugins: { legend: { display: true, position: "bottom" } } }
+      data: {
+        labels: ["שינה", "עבודה", "אחר"],
+        datasets: [{
+          data: [stats.sleepHours, stats.workHours, other]
+        }]
+      },
+      options: {
+        plugins: { legend: { position: "bottom" } }
+      }
     });
   } else {
-    workFreeChart.data.datasets[0].data = [workHours, freeHours];
+    workFreeChart.data.datasets[0].data = [
+      stats.sleepHours,
+      stats.workHours,
+      other
+    ];
     workFreeChart.update();
   }
 
-  const last30Days = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const { dailyLoadMinutes: dlm } = computeLoadAndFreeSlots(d);
-    last30Days.push({ label: d.getDate(), loadHours: dlm / 60 });
-  }
-
+  // --- Chart 2: Counts ---
   const ctx2 = c2.getContext("2d");
+
   if (!tasksChart) {
     tasksChart = new Chart(ctx2, {
       type: "bar",
-      data: { labels: last30Days.map((d) => d.label), datasets: [{ label: "עומס יומי (שעות)", data: last30Days.map((d) => d.loadHours) }] },
-      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      data: {
+        labels: ["משימות", "אירועים"],
+        datasets: [{
+          label: "כמות",
+          data: [stats.taskCount, stats.eventCount]
+        }]
+      },
+      options: {
+        scales: { y: { beginAtZero: true } }
+      }
     });
   } else {
-    tasksChart.data.labels = last30Days.map((d) => d.label);
-    tasksChart.data.datasets[0].data = last30Days.map((d) => d.loadHours);
+    tasksChart.data.datasets[0].data = [
+      stats.taskCount,
+      stats.eventCount
+    ];
     tasksChart.update();
   }
 }
-
 // =========================
 // App init
 // =========================
