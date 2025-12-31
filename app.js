@@ -1878,7 +1878,6 @@ const doughnutPercentPlugin = {
   }
 };
 
-
 function updateStats() {
   const user = state.currentUser;
   const range = "week";
@@ -1888,103 +1887,84 @@ function updateStats() {
   const c1 = el("workFreeChart");
   if (!c1 || !window.Chart) return;
 
-  // =========================
-  // חישוב 24 שעות
-  // =========================
-  const TOTAL_HOURS = 24;
+  const ctx1 = c1.getContext("2d");
 
+  // =========================
+  // בניית נתונים לעוגה (24 שעות)
+  // =========================
   const sleep = stats.sleepHours || 0;
   const work  = stats.workHours || 0;
 
-  // פירוק "אחר" לפי סוגים
-  const otherBreakdown = {
-    אימון: stats.otherByType?.workout || 0,
-    פגישה: stats.otherByType?.meeting || 0,
-    סידורים: stats.otherByType?.errands || 0,
-    אחר: stats.otherByType?.other || 0
-  };
-
-  const otherTotal = Object.values(otherBreakdown).reduce((a, b) => a + b, 0);
-
-  const freeTime = Math.max(
-    0,
-    TOTAL_HOURS - sleep - work - otherTotal
+  // otherMap מחזיק דקות → נהפוך לשעות
+  const otherLabels = Object.keys(stats.otherMap || {});
+  const otherHours  = Object.values(stats.otherMap || {}).map(
+    m => +(m / 60).toFixed(1)
   );
+
+  const usedHours =
+    sleep +
+    work +
+    otherHours.reduce((a, b) => a + b, 0);
+
+  const freeHours = +(Math.max(0, 24 - usedHours)).toFixed(1);
 
   const labels = [
     "שינה",
     "עבודה",
-    ...Object.keys(otherBreakdown),
+    ...otherLabels,
     "זמן פנוי"
   ];
 
   const data = [
     sleep,
     work,
-    ...Object.values(otherBreakdown),
-    freeTime
+    ...otherHours,
+    freeHours
   ];
 
   const colors = [
     "#4A90E2", // שינה – כחול
     "#E74C3C", // עבודה – אדום
-    "#9B59B6", // אימון – סגול
-    "#2C3E50", // פגישה – שחור
-    "#F1C40F", // סידורים – צהוב
-    "#95A5A6", // אחר – אפור
+    ...otherLabels.map(() =>
+      `hsl(${Math.floor(Math.random() * 360)},70%,60%)`
+    ),
     "#2ECC71"  // זמן פנוי – ירוק
   ];
 
-const ctx1 = c1.getContext("2d");
-
-const labels = ["שינה", "עבודה", ...Object.keys(stats.otherMap), "זמן פנוי"];
-const data = [
-  stats.sleepHours,
-  stats.workHours,
-  ...Object.values(stats.otherMap).map(m => +(m / 60).toFixed(1)),
-  stats.freeHours
-];
-
-// צבעים רנדומליים אבל ברורים
-const colors = [
-  "#4A90E2", // שינה - כחול
-  "#E94E77", // עבודה - אדום
-  ...Object.keys(stats.otherMap).map(() =>
-    `hsl(${Math.random() * 360},70%,60%)`
-  ),
-  "#2ECC71"  // זמן פנוי - ירוק
-];
-
-if (!workFreeChart) {
-  workFreeChart = new Chart(ctx1, {
-    type: "doughnut",
-    data: {
-      labels,
-      datasets: [{
-        data,
-        backgroundColor: colors
-      }]
-    },
-    options: {
-      plugins: {
-        legend: { position: "bottom" },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => {
-              const val = ctx.raw;
-              const percent = ((val / 24) * 100).toFixed(1);
-              return `${ctx.label}: ${val} שעות (${percent}%)`;
+  // =========================
+  // יצירה / עדכון גרף
+  // =========================
+  if (!workFreeChart) {
+    workFreeChart = new Chart(ctx1, {
+      type: "doughnut",
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors
+        }]
+      },
+      options: {
+        plugins: {
+          legend: { position: "bottom" },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const val = ctx.raw;
+                const percent = ((val / 24) * 100).toFixed(1);
+                return `${ctx.label}: ${val} שעות (${percent}%)`;
+              }
             }
           }
         }
       }
-    }
-  });
-} else {
-  workFreeChart.data.labels = labels;
-  workFreeChart.data.datasets[0].data = data;
-  workFreeChart.data.datasets[0].backgroundColor = colors;
-  workFreeChart.update();
+    });
+  } else {
+    workFreeChart.data.labels = labels;
+    workFreeChart.data.datasets[0].data = data;
+    workFreeChart.data.datasets[0].backgroundColor = colors;
+    workFreeChart.update();
+  }
 }
 // =========================
 // App init
