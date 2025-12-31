@@ -494,8 +494,8 @@ hebEl.textContent = hebDay ? toHebrewNumeral(hebDay) : "";
 
     let eventCount = 0;
 Object.values(events).forEach((ev) => {
-  // ⛔ לא מציג נקודות לאירועי ברירת מחדל
-  if (ev.isDefault) return;
+  // ❌ לא מציג נקודה לאירועי ברירת מחדל
+  if (ev.isDefault === true) return;
 
   const dot = document.createElement("div");
   dot.className = "event-dot";
@@ -608,8 +608,13 @@ allTasks.sort((a, b) => {
       return task.type === "task" && isRecurringParent;
 
     // אירועים
-    case "dated-events":
-      return task.type === "event" && hasDate && !isRecurringParent;
+case "dated-events":
+  return (
+    task.type === "event" &&
+    hasDate &&
+    !isRecurringParent &&
+    task.isDefault !== true
+  );
 
     case "recurring-events":
       return task.type === "event" && isRecurringParent;
