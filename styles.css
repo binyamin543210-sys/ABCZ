@@ -335,27 +335,6 @@ body.dark .day-cell {
   overflow: hidden;
 }
 
-.day-points {
-  display: flex;
-  gap: 2px;
-  margin-top: 4px;
-  flex-wrap: wrap;
-}
-
-.event-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--accent);
-}
-
-.event-dot.task {
-  background: #f97316;
-}
-
-.event-dot.shared {
-  background: #22c55e;
-}
 
 .day-border-glow {
   box-shadow: 0 0 0 1px rgba(244,114,182,0.9), 0 0 18px rgba(244,114,182,0.7);
@@ -877,4 +856,85 @@ body.dark .day-cell {
   min-height: 38px;
   padding-top: 4px;
   padding-bottom: 4px;
+}
+
+
+/* =========================
+   EVENT DOTS – VERTICAL + OWNER COLORS
+========================= */
+
+/* מיקום הנקודות בתוך התא */
+.day-points {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+
+  display: flex;
+  flex-direction: column;   /* ⬅️ מלמעלה למטה */
+  align-items: center;
+  gap: 4px;
+}
+
+/* נקודה בסיסית */
+.event-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #999;
+}
+
+/* ===== צבעים לפי owner ===== */
+
+/* משותף – תכלת */
+.event-dot.owner-shared {
+  background: #4fc3f7;
+}
+
+/* בנימין – כחול חזק */
+.event-dot.owner-binyamin {
+  background: #1565c0;
+}
+
+/* ננה – ורוד */
+.event-dot.owner-nana {
+  background: #ec407a;
+}
+
+/* משימה – הדגשה קלה */
+.event-dot.task {
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.25);
+}
+
+
+
+/* =========================
+   CARD / TASK OWNER COLORS
+========================= */
+
+.card.owner-shared,
+.task-item.owner-shared {
+  border-left: 4px solid #4fc3f7;
+}
+
+.card.owner-binyamin,
+.task-item.owner-binyamin {
+  border-left: 4px solid #1565c0;
+}
+
+.card.owner-nana,
+.task-item.owner-nana {
+  border-left: 4px solid #ec407a;
+}
+
+/* כותרת */
+.owner-shared .task-title {
+  color: #4fc3f7;
+}
+
+.owner-binyamin .task-title {
+  color: #1565c0;
+}
+
+.owner-nana .task-title {
+  color: #ec407a;
 }
