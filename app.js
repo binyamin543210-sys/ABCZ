@@ -1898,6 +1898,23 @@ const doughnutPercentPlugin = {
   }
 };
 
+const doughnutCenterTextPlugin = {
+  id: "centerText",
+  afterDraw(chart, args, options) {
+    const { ctx } = chart;
+    const centerX = chart.getDatasetMeta(0).data[0].x;
+    const centerY = chart.getDatasetMeta(0).data[0].y;
+
+    ctx.save();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 20px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(options.text, centerX, centerY);
+    ctx.restore();
+  }
+};
+
 
 function updateStats() {
   const user = state.currentUser;
@@ -1914,9 +1931,10 @@ function updateStats() {
   const days = getRangeDays(range);
   const TOTAL_HOURS = days * 24;
 
-  const sleep = stats.sleepHours || 0;
-  const work  = stats.workHours || 0;
+const sleep = +(stats.sleepMinutes / 60).toFixed(1);
+const work  = +(stats.workMinutes / 60).toFixed(1);
 
+  
   const otherMap = stats.otherMap || {};
   const otherValues = Object.values(otherMap).map(m => +(m / 60).toFixed(1));
   const otherTotal = otherValues.reduce((a, b) => a + b, 0);
@@ -1964,22 +1982,26 @@ function updateStats() {
           backgroundColor: colors
         }]
       },
+
+plugins: [doughnutCenterTextPlugin],
+      
       options: {
         cutout: "65%",
-        plugins: {
-          legend: { position: "bottom" },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => {
-                const val = ctx.raw;
-                const percent = ((val / TOTAL_HOURS) * 100).toFixed(1);
-                return `${ctx.label}: ${val} שעות (${percent}%)`;
-              }
-            }
-          }
-        }
+ plugins: {
+  legend: { position: "bottom" },
+  tooltip: {
+    callbacks: {
+      label: (ctx) => {
+        const val = ctx.raw;
+        const percent = ((val / TOTAL_HOURS) * 100).toFixed(1);
+        return `${ctx.label}: ${val} שעות (${percent}%)`;
       }
-    });
+    }
+  },
+  centerText: {
+    text: `${(TOTAL_HOURS - freeHours).toFixed(1)} ש׳`
+  }
+}
   } else {
     workFreeChart.data.labels = labels;
     workFreeChart.data.datasets[0].data = data;
