@@ -190,7 +190,7 @@ async function ensureDefaultDayEvents(date) {
       title: "שינה",
       startTime: "00:00",
       endTime: "08:00",
-      dateKey
+      dateKey,
       isDefault: true
     });
   }
@@ -204,7 +204,7 @@ async function ensureDefaultDayEvents(date) {
         title: "עבודה",
         startTime: "08:00",
         endTime: "17:00",
-        dateKey
+        dateKey,
         isDefault: true
       });
     }
@@ -216,7 +216,7 @@ async function ensureDefaultDayEvents(date) {
         title: "אוכל + מקלחת",
         startTime: "17:00",
         endTime: "18:30",
-        dateKey
+        dateKey,
 
       isDefault: true
       });
