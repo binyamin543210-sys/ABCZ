@@ -1968,32 +1968,7 @@ async function materializeRecurringTask(task) {
 // =========================
 let workFreeChart, tasksChart;
 
-const doughnutPercentPlugin = {
-  id: "percentLabels",
-  afterDraw(chart) {
-    const { ctx, data, options } = chart;
-    const dataset = data.datasets[0];
 
-    const TOTAL_HOURS = options.plugins?.percentLabels?.totalHours;
-    if (!TOTAL_HOURS) return;
-
-    chart.getDatasetMeta(0).data.forEach((arc, i) => {
-      const value = dataset.data[i];
-      if (!value) return;
-
-      const pct = Math.round((value / TOTAL_HOURS) * 100);
-      const pos = arc.tooltipPosition();
-
-      ctx.save();
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 12px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(pct + "%", pos.x, pos.y);
-      ctx.restore();
-    });
-  }
-};
 const doughnutCenterTextPlugin = {
   id: "centerText",
   afterDraw(chart, args, options) {
