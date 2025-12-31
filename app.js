@@ -1637,13 +1637,12 @@ function isEventRelevantForUser(ev, user) {
   if (ev.owner === "shared") return true;
   return ev.owner === user;
 }
-
 function computeStats({ user, range }) {
   const dates = getRangeDates(range);
 
-  let totalMinutes = 0;
   let sleepMinutes = 0;
   let workMinutes = 0;
+  let otherMap = {}; // פירוט "אחר"
   let taskCount = 0;
   let eventCount = 0;
 
@@ -1660,26 +1659,34 @@ function computeStats({ user, range }) {
       if (end <= start) return;
 
       const duration = end - start;
-      totalMinutes += duration;
 
       if (ev.type === "task") taskCount++;
       if (ev.type === "event") eventCount++;
 
-      if (ev.title === "שינה") sleepMinutes += duration;
-      if (ev.title === "עבודה") workMinutes += duration;
+      if (ev.title === "שינה") {
+        sleepMinutes += duration;
+      } else if (ev.title === "עבודה") {
+        workMinutes += duration;
+      } else {
+        const key = ev.title || "אחר";
+        otherMap[key] = (otherMap[key] || 0) + duration;
+      }
     });
   });
 
+  const totalMinutes = dates.length * 24 * 60;
+  const usedMinutes = sleepMinutes + workMinutes + Object.values(otherMap).reduce((a, b) => a + b, 0);
+  const freeMinutes = Math.max(0, totalMinutes - usedMinutes);
+
   return {
-    totalHours: +(totalMinutes / 60).toFixed(1),
     sleepHours: +(sleepMinutes / 60).toFixed(1),
     workHours: +(workMinutes / 60).toFixed(1),
+    freeHours: +(freeMinutes / 60).toFixed(1),
+    otherMap,
     taskCount,
     eventCount
   };
 }
-
-
 // ===============================
 // Voice Command Handler (תמציתי)
 // ===============================
@@ -1846,6 +1853,32 @@ async function materializeRecurringTask(task) {
 // =========================
 let workFreeChart, tasksChart;
 
+const doughnutPercentPlugin = {
+  id: "percentLabels",
+  afterDraw(chart) {
+    const { ctx, data } = chart;
+    const dataset = data.datasets[0];
+    const total = dataset.data.reduce((a, b) => a + b, 0);
+
+    chart.getDatasetMeta(0).data.forEach((arc, i) => {
+      const value = dataset.data[i];
+      if (!value) return;
+
+      const pct = Math.round((value / total) * 100);
+      const pos = arc.tooltipPosition();
+
+      ctx.save();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(pct + "%", pos.x, pos.y);
+      ctx.restore();
+    });
+  }
+};
+
+
 function updateStats() {
   const user = state.currentUser;
   const range = "week";
@@ -1853,59 +1886,105 @@ function updateStats() {
   const stats = computeStats({ user, range });
 
   const c1 = el("workFreeChart");
-  const c2 = el("tasksChart");
-  if (!c1 || !c2 || !window.Chart) return;
+  if (!c1 || !window.Chart) return;
 
-  // --- Chart 1: Sleep / Work / Other ---
-  const ctx1 = c1.getContext("2d");
-  const other = Math.max(0, stats.totalHours - stats.sleepHours - stats.workHours);
+  // =========================
+  // חישוב 24 שעות
+  // =========================
+  const TOTAL_HOURS = 24;
 
-  if (!workFreeChart) {
-    workFreeChart = new Chart(ctx1, {
-      type: "doughnut",
-      data: {
-        labels: ["שינה", "עבודה", "אחר"],
-        datasets: [{
-          data: [stats.sleepHours, stats.workHours, other]
-        }]
-      },
-      options: {
-        plugins: { legend: { position: "bottom" } }
+  const sleep = stats.sleepHours || 0;
+  const work  = stats.workHours || 0;
+
+  // פירוק "אחר" לפי סוגים
+  const otherBreakdown = {
+    אימון: stats.otherByType?.workout || 0,
+    פגישה: stats.otherByType?.meeting || 0,
+    סידורים: stats.otherByType?.errands || 0,
+    אחר: stats.otherByType?.other || 0
+  };
+
+  const otherTotal = Object.values(otherBreakdown).reduce((a, b) => a + b, 0);
+
+  const freeTime = Math.max(
+    0,
+    TOTAL_HOURS - sleep - work - otherTotal
+  );
+
+  const labels = [
+    "שינה",
+    "עבודה",
+    ...Object.keys(otherBreakdown),
+    "זמן פנוי"
+  ];
+
+  const data = [
+    sleep,
+    work,
+    ...Object.values(otherBreakdown),
+    freeTime
+  ];
+
+  const colors = [
+    "#4A90E2", // שינה – כחול
+    "#E74C3C", // עבודה – אדום
+    "#9B59B6", // אימון – סגול
+    "#2C3E50", // פגישה – שחור
+    "#F1C40F", // סידורים – צהוב
+    "#95A5A6", // אחר – אפור
+    "#2ECC71"  // זמן פנוי – ירוק
+  ];
+
+const ctx1 = c1.getContext("2d");
+
+const labels = ["שינה", "עבודה", ...Object.keys(stats.otherMap), "זמן פנוי"];
+const data = [
+  stats.sleepHours,
+  stats.workHours,
+  ...Object.values(stats.otherMap).map(m => +(m / 60).toFixed(1)),
+  stats.freeHours
+];
+
+// צבעים רנדומליים אבל ברורים
+const colors = [
+  "#4A90E2", // שינה - כחול
+  "#E94E77", // עבודה - אדום
+  ...Object.keys(stats.otherMap).map(() =>
+    `hsl(${Math.random() * 360},70%,60%)`
+  ),
+  "#2ECC71"  // זמן פנוי - ירוק
+];
+
+if (!workFreeChart) {
+  workFreeChart = new Chart(ctx1, {
+    type: "doughnut",
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const val = ctx.raw;
+              const percent = ((val / 24) * 100).toFixed(1);
+              return `${ctx.label}: ${val} שעות (${percent}%)`;
+            }
+          }
+        }
       }
-    });
-  } else {
-    workFreeChart.data.datasets[0].data = [
-      stats.sleepHours,
-      stats.workHours,
-      other
-    ];
-    workFreeChart.update();
-  }
-
-  // --- Chart 2: Counts ---
-  const ctx2 = c2.getContext("2d");
-
-  if (!tasksChart) {
-    tasksChart = new Chart(ctx2, {
-      type: "bar",
-      data: {
-        labels: ["משימות", "אירועים"],
-        datasets: [{
-          label: "כמות",
-          data: [stats.taskCount, stats.eventCount]
-        }]
-      },
-      options: {
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-  } else {
-    tasksChart.data.datasets[0].data = [
-      stats.taskCount,
-      stats.eventCount
-    ];
-    tasksChart.update();
-  }
+    }
+  });
+} else {
+  workFreeChart.data.labels = labels;
+  workFreeChart.data.datasets[0].data = data;
+  workFreeChart.data.datasets[0].backgroundColor = colors;
+  workFreeChart.update();
 }
 // =========================
 // App init
