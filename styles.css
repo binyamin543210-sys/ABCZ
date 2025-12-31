@@ -864,17 +864,16 @@ body.dark .day-cell {
 ========================= */
 
 /* מיקום הנקודות בתוך התא */
+/* ===== DAY CELL DOTS – BELOW DATE ===== */
 .day-points {
-  position: absolute;
-  top: 6px;
-  right: 6px;
+  position: relative;        /* לא absolute */
+  margin-top: 6px;
 
   display: flex;
-  flex-direction: column;   /* ⬅️ מלמעלה למטה */
+  flex-direction: column;   /* אנכי */
   align-items: center;
   gap: 4px;
 }
-
 /* נקודה בסיסית */
 .event-dot {
   width: 6px;
