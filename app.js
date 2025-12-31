@@ -1606,7 +1606,66 @@ function gihariPlaceUndatedTasks() {
 // =========================
 // Stats engine
 // =========================
+function getRangeDates(range) {
+  const base = new Date(state.currentDate);
+  base.setHours(12, 0, 0, 0); // מונע סטיות יום
+  const dates = [];
 
+  const pushDays = (count) => {
+    for (let i = 0; i < count; i++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      dates.push(d);
+    }
+  };
+
+  switch (range) {
+    case "day":
+      pushDays(1);
+      break;
+
+    case "week": {
+      const start = new Date(base);
+      start.setDate(base.getDate() - base.getDay());
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        dates.push(d);
+      }
+      break;
+    }
+
+    case "2weeks":
+      pushDays(14);
+      break;
+
+    case "month": {
+      const y = base.getFullYear();
+      const m = base.getMonth();
+      const daysInMonth = new Date(y, m + 1, 0).getDate();
+      for (let i = 1; i <= daysInMonth; i++) {
+        dates.push(new Date(y, m, i));
+      }
+      break;
+    }
+
+    case "year": {
+      const y = base.getFullYear();
+      for (let m = 0; m < 12; m++) {
+        const days = new Date(y, m + 1, 0).getDate();
+        for (let d = 1; d <= days; d++) {
+          dates.push(new Date(y, m, d));
+        }
+      }
+      break;
+    }
+
+    default:
+      pushDays(1);
+  }
+
+  return dates;
+}
 
 
 function isEventRelevantForUser(ev, user) {
