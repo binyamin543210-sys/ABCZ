@@ -1918,59 +1918,37 @@ const doughnutCenterTextPlugin = {
 
 function updateStats() {
   const user = state.currentUser;
-  const range = state.statsRange || "week"; // day / week / 2weeks / month / year
+  const range = state.statsRange || "week";
 
   const stats = computeStats({ user, range });
 
-  const c1 = el("workFreeChart");
-  if (!c1 || !window.Chart) return;
+  const canvas = el("workFreeChart");
+  if (!canvas || !window.Chart) return;
 
-  // =========================
-  // חישוב שעות לטווח
-  // =========================
   const days = getRangeDays(range);
   const TOTAL_HOURS = days * 24;
 
-const sleep = +(stats.sleepMinutes / 60).toFixed(1);
-const work  = +(stats.workMinutes / 60).toFixed(1);
+  const sleep = +(stats.sleepMinutes / 60).toFixed(1);
+  const work  = +(stats.workMinutes / 60).toFixed(1);
 
-  
   const otherMap = stats.otherMap || {};
-  const otherValues = Object.values(otherMap).map(m => +(m / 60).toFixed(1));
+  const otherLabels = Object.keys(otherMap);
+  const otherValues = Object.values(otherMap).map(v => +(v / 60).toFixed(1));
   const otherTotal = otherValues.reduce((a, b) => a + b, 0);
 
-  const freeHours = Math.max(
-    0,
-    +(TOTAL_HOURS - sleep - work - otherTotal).toFixed(1)
-  );
+  const freeHours = +(TOTAL_HOURS - sleep - work - otherTotal).toFixed(1);
 
-  // =========================
-  // נתונים לגרף
-  // =========================
-  const labels = [
-    "שינה",
-    "עבודה",
-    ...Object.keys(otherMap),
-    "זמן פנוי"
-  ];
-
-  const data = [
-    sleep,
-    work,
-    ...otherValues,
-    freeHours
-  ];
+  const labels = ["שינה", "עבודה", ...otherLabels, "זמן פנוי"];
+  const data   = [sleep, work, ...otherValues, freeHours];
 
   const colors = [
-    "#4A90E2", // שינה
-    "#E74C3C", // עבודה
-    ...Object.keys(otherMap).map(
-      (_, i) => `hsl(${(i * 70) % 360},70%,55%)`
-    ),
-    "#2ECC71"  // זמן פנוי
+    "#4A90E2",
+    "#E74C3C",
+    ...otherLabels.map((_, i) => `hsl(${(i * 70) % 360},70%,55%)`),
+    "#2ECC71"
   ];
 
-  const ctx = c1.getContext("2d");
+  const ctx = canvas.getContext("2d");
 
   if (!workFreeChart) {
     workFreeChart = new Chart(ctx, {
@@ -1982,26 +1960,26 @@ const work  = +(stats.workMinutes / 60).toFixed(1);
           backgroundColor: colors
         }]
       },
-
-plugins: [doughnutCenterTextPlugin],
-      
+      plugins: [doughnutCenterTextPlugin],
       options: {
         cutout: "65%",
- plugins: {
-  legend: { position: "bottom" },
-  tooltip: {
-    callbacks: {
-      label: (ctx) => {
-        const val = ctx.raw;
-        const percent = ((val / TOTAL_HOURS) * 100).toFixed(1);
-        return `${ctx.label}: ${val} שעות (${percent}%)`;
+        plugins: {
+          legend: { position: "bottom" },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const val = ctx.raw;
+                const pct = ((val / TOTAL_HOURS) * 100).toFixed(1);
+                return `${ctx.label}: ${val} שעות (${pct}%)`;
+              }
+            }
+          },
+          centerText: {
+            text: `${(TOTAL_HOURS - freeHours).toFixed(1)} ש׳ תפוס`
+          }
+        }
       }
-    }
-  },
-  centerText: {
-    text: `${(TOTAL_HOURS - freeHours).toFixed(1)} ש׳`
-  }
-}
+    });
   } else {
     workFreeChart.data.labels = labels;
     workFreeChart.data.datasets[0].data = data;
