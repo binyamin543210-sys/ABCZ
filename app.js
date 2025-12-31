@@ -1731,7 +1731,6 @@ function computeStats({ user, range }) {
     freeMinutes
   };
 }
-
 function updateStats() {
   const user = state.currentUser;
   const range = state.statsRange || "week";
@@ -1741,20 +1740,20 @@ function updateStats() {
   const canvas = el("workFreeChart");
   if (!canvas || !window.Chart) return;
 
-  // ✅ הכי נכון: לחשב הכל מדקות (בלי חיסורים של מספרים מעוגלים)
-  const TOTAL_HOURS = +(stats.totalMinutesCapacity / 60).toFixed(2);
-
-  const sleep = +(stats.sleepMinutes / 60).toFixed(2);
-  const work  = +(stats.workMinutes / 60).toFixed(2);
+  const sleep = stats.sleepMinutes / 60;
+  const work  = stats.workMinutes / 60;
 
   const otherMap = stats.otherMap || {};
   const otherLabels = Object.keys(otherMap);
-  const otherValues = Object.values(otherMap).map(v => +(v / 60).toFixed(2));
+  const otherValues = Object.values(otherMap).map(v => v / 60);
 
-  const freeHours = +(stats.freeMinutes / 60).toFixed(2);
+  const freeHours = stats.freeMinutes / 60;
 
   const labels = ["שינה", "עבודה", ...otherLabels, "זמן פנוי"];
   const data   = [sleep, work, ...otherValues, freeHours];
+
+  // ✅ זה הבסיס היחיד לחישוב אחוזים
+  const TOTAL_HOURS = data.reduce((a, b) => a + b, 0);
 
   const colors = [
     "#4A90E2",
@@ -1783,14 +1782,16 @@ function updateStats() {
           tooltip: {
             callbacks: {
               label: (ctx) => {
-                const val = Number(ctx.raw) || 0;
-                const pct = TOTAL_HOURS > 0 ? ((val / TOTAL_HOURS) * 100).toFixed(1) : "0.0";
+                const val = ctx.raw || 0;
+                const pct = TOTAL_HOURS > 0
+                  ? ((val / TOTAL_HOURS) * 100).toFixed(1)
+                  : "0.0";
                 return `${ctx.label}: ${val.toFixed(2)} שעות (${pct}%)`;
               }
             }
           },
           centerText: {
-            text: `${(TOTAL_HOURS - freeHours).toFixed(2)} ש׳ תפוס`
+            text: `${(TOTAL_HOURS - freeHours).toFixed(1)} ש׳ תפוס`
           }
         }
       }
