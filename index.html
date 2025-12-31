@@ -349,6 +349,33 @@
     </div>
   </div>
 
+  <!-- ===================== -->
+<!-- Conflict Modal -->
+<!-- ===================== -->
+<div id="conflictModal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">התנגשות ביומן</div>
+      <button class="icon-btn" data-close-conflict>✕</button>
+    </div>
+
+    <div id="conflictText" class="small-text"></div>
+
+    <div class="task-actions">
+      <button id="conflictEditExisting" class="ghost-pill full-width">
+        ערוך את האירוע הקיים
+      </button>
+      <button id="conflictEditNew" class="ghost-pill full-width">
+        חזור לעריכת האירוע שלי
+      </button>
+      <button id="conflictKeepBoth" class="primary-pill full-width">
+        השאר ככה
+      </button>
+    </div>
+  </div>
+</div>
+
   <!-- Service Worker (פעם אחת!) -->
   <script>
     if ('serviceWorker' in navigator) {
