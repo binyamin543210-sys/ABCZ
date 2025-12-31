@@ -403,6 +403,11 @@ function timeToMinutes(t) {
   return h * 60 + m;
 }
 
+function isEndBeforeStart(start, end) {
+  if (!start || !end) return false;
+  return timeToMinutes(end) <= timeToMinutes(start);
+}
+
 function eventsOverlap(a, b) {
   if (!a.startTime || !b.startTime) return false;
 
@@ -987,6 +992,26 @@ function openEditModal({ dateKey, id } = {}) {
   qsa("[data-close-modal]", modal).forEach((btn) => (btn.onclick = () => modal.classList.add("hidden")));
   const bd = qs(".modal-backdrop", modal);
   if (bd) bd.onclick = () => modal.classList.add("hidden");
+// =========================
+  // Live time validation (before save)
+  // =========================
+  const startInput = form.elements["startTime"];
+  const endInput = form.elements["endTime"];
+
+  function validateTimesLive() {
+    const start = startInput.value;
+    const end = endInput.value;
+
+    if (start && end && isEndBeforeStart(start, end)) {
+      showToast("⛔ שעת סיום חייבת להיות אחרי שעת התחלה");
+      endInput.value = "";
+      endInput.focus();
+    }
+  }
+
+  startInput.onchange = validateTimesLive;
+  endInput.onchange = validateTimesLive;
+  
 }
 
 async function handleEditFormSubmit(ev) {
