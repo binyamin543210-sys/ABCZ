@@ -427,6 +427,10 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
     const holiday = state.cache.holidays[dateKey];
     const events = state.cache.events[dateKey] || {};
 
+    const realEvents = Object.values(events).filter(
+  ev => ev.isDefault !== true
+);
+    
     const header = document.createElement("div");
     header.className = "day-header";
 
@@ -505,8 +509,8 @@ Object.values(events).forEach((ev) => {
   eventCount++;
 });
 
-    if (eventCount > 0) cell.appendChild(pointsRow);
-    if (eventCount >= 2) cell.classList.add("day-border-glow");
+   if (realEvents.length > 0) cell.appendChild(pointsRow);
+if (realEvents.length >= 2) cell.classList.add("day-border-glow");
     if (outside) cell.classList.add("outside");
     if (isSameDay(cellDate, today)) cell.classList.add("day-cell-today");
 
@@ -539,14 +543,15 @@ if (ev.type === "task" && !ev.isRecurringInstance) {
 }
 
     // אירועים רגילים (לא חוזרים)
+// אירועים רגילים (לא חוזרים) – ❌ בלי ברירת מחדל
 if (
   ev.type === "event" &&
-  (!ev.recurring || ev.recurring === "none")
+  (!ev.recurring || ev.recurring === "none") &&
+  ev.isDefault !== true
 ) {
   allTasks.push({ id, dateKey, ...ev });
   return;
 }
-
     // אירועים חוזרים בלבד
     if (
   ev.type === "event" &&
@@ -719,7 +724,9 @@ function markTaskDone(task) {
 // =========================
 function hasEventsOnDate(dateKey) {
   const events = state.cache.events[dateKey] || {};
-  return Object.keys(events).length > 0;
+  return Object.values(events).some(
+    ev => ev.isDefault !== true
+  );
 }
 
 function openDayModal(date) {
