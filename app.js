@@ -807,12 +807,23 @@ function renderDayEvents(dateKey) {
   const events = state.cache.events[dateKey] || {};
 
 const list = Object.entries(events)
-    .map(([id, ev]) => ({ id, ...ev }))
-    .sort((a, b) => {
-      const aTime = a.startTime || "00:00";
-      const bTime = b.startTime || "00:00";
-      return aTime.localeCompare(bTime);
-    });
+  .map(([id, ev]) => ({ id, ...ev }))
+  .sort((a, b) => {
+    const aHasTime = !!a.startTime;
+    const bHasTime = !!b.startTime;
+
+    // מי שיש לו שעה – תמיד קודם
+    if (aHasTime && !bHasTime) return -1;
+    if (!aHasTime && bHasTime) return 1;
+
+    // לשניהם יש שעה → מיין לפי שעה
+    if (aHasTime && bHasTime) {
+      return a.startTime.localeCompare(b.startTime);
+    }
+
+    // לשניהם אין שעה → השאר בסוף, בלי להזיז
+    return 0;
+  });
 
   list.forEach((ev) => {
     const card = document.createElement("div");
