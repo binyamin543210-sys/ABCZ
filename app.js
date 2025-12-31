@@ -1607,60 +1607,7 @@ function gihariPlaceUndatedTasks() {
 // Stats engine
 // =========================
 
-function getRangeDates(range) {
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
 
-  const dates = [];
-
-  const pushDays = (count, startOffset = 0) => {
-    for (let i = 0; i < count; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + startOffset + i);
-      dates.push(d);
-    }
-  };
-
-  switch (range) {
-    case "day":
-      pushDays(1);
-      break;
-
-    case "week": {
-      const start = new Date(today);
-      start.setDate(today.getDate() - today.getDay());
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(start);
-        d.setDate(start.getDate() + i);
-        dates.push(d);
-      }
-      break;
-    }
-
-    case "2weeks":
-      pushDays(14);
-      break;
-
-    case "month": {
-      const y = today.getFullYear();
-      const m = today.getMonth();
-      const last = new Date(y, m + 1, 0).getDate();
-      for (let i = 1; i <= last; i++) {
-        dates.push(new Date(y, m, i));
-      }
-      break;
-    }
-
-    case "year":
-      pushDays(365);
-      break;
-
-    default:
-      pushDays(7);
-  }
-
-  return dates;
-}
 
 function isEventRelevantForUser(ev, user) {
   if (!ev || !ev.owner) return false;
@@ -1930,7 +1877,6 @@ const doughnutCenterTextPlugin = {
   }
 };
 
-
 function updateStats() {
   const user = state.currentUser;
   const range = state.statsRange || "week";
@@ -1940,8 +1886,7 @@ function updateStats() {
   const canvas = el("workFreeChart");
   if (!canvas || !window.Chart) return;
 
-  const days = getRangeDays(range);
-  const TOTAL_HOURS = days * 24;
+  const TOTAL_HOURS = stats.totalDays * 24;
 
   const sleep = +(stats.sleepMinutes / 60).toFixed(1);
   const work  = +(stats.workMinutes / 60).toFixed(1);
@@ -2002,7 +1947,6 @@ function updateStats() {
     workFreeChart.update();
   }
 }
-
 
 function initStatsRangeControls() {
   const buttons = document.querySelectorAll("#statsRangeControls button");
