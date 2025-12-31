@@ -24,7 +24,29 @@ const state = {
 const el = (id) => document.getElementById(id);
 const qs = (sel, root = document) => root.querySelector(sel);
 const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+function isDefaultEvent(ev) {
+  if (!ev) return false;
 
+  // תופס גם true וגם "true" וגם 1
+  if (
+    ev.isDefault === true ||
+    ev.isDefault === "true" ||
+    ev.isDefault === 1 ||
+    ev.isDefault === "1"
+  ) return true;
+
+  // גיבוי לדאטה ישן
+  const t = (ev.title || "").trim();
+  const owner = ev.owner || "";
+
+  if (ev.type === "event" && owner === "shared") {
+    if (t === "שינה" && ev.startTime === "00:00" && ev.endTime === "08:00") return true;
+    if (t === "עבודה" && ev.startTime === "08:00" && ev.endTime === "17:00") return true;
+    if (t === "אוכל + מקלחת" && ev.startTime === "17:00" && ev.endTime === "18:30") return true;
+  }
+
+  return false;
+}
 function getHebcal() {
   return window.Hebcal || null; // global מהסקריפט
 }
@@ -427,8 +449,8 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
     const holiday = state.cache.holidays[dateKey];
     const events = state.cache.events[dateKey] || {};
 
-    const realEvents = Object.values(events).filter(
-  ev => ev.isDefault !== true
+const realEvents = Object.values(events).filter(
+  ev => !isDefaultEvent(ev)
 );
     
     const header = document.createElement("div");
@@ -499,7 +521,7 @@ hebEl.textContent = hebDay ? toHebrewNumeral(hebDay) : "";
     let eventCount = 0;
 Object.values(events).forEach((ev) => {
   // ❌ לא מציג נקודה לאירועי ברירת מחדל
-  if (ev.isDefault === true) return;
+if (isDefaultEvent(ev)) return;
 
   const dot = document.createElement("div");
   dot.className = "event-dot";
@@ -547,7 +569,7 @@ if (ev.type === "task" && !ev.isRecurringInstance) {
 if (
   ev.type === "event" &&
   (!ev.recurring || ev.recurring === "none") &&
-  ev.isDefault !== true
+  !isDefaultEvent(ev)
 ) {
   allTasks.push({ id, dateKey, ...ev });
   return;
@@ -618,9 +640,8 @@ case "dated-events":
     task.type === "event" &&
     hasDate &&
     !isRecurringParent &&
-    task.isDefault !== true
+    !isDefaultEvent(task)
   );
-
     case "recurring-events":
       return task.type === "event" && isRecurringParent;
 
@@ -724,9 +745,7 @@ function markTaskDone(task) {
 // =========================
 function hasEventsOnDate(dateKey) {
   const events = state.cache.events[dateKey] || {};
-  return Object.values(events).some(
-    ev => ev.isDefault !== true
-  );
+  return Object.values(events).some(ev => !isDefaultEvent(ev));
 }
 
 function openDayModal(date) {
@@ -1121,9 +1140,24 @@ function renderShoppingList() {
 // =========================
 // Firebase listeners
 // =========================
+async function migrateDefaultsOnce() {
+  const all = state.cache.events || {};
+
+  for (const [dk, items] of Object.entries(all)) {
+    for (const [id, ev] of Object.entries(items || {})) {
+      if (!ev || ev.type !== "event") continue;
+
+      if (isDefaultEvent(ev) && ev.isDefault !== true) {
+        await update(ref(db, `events/${dk}/${id}`), { isDefault: true });
+      }
+    }
+  }
+}
+
 function initFirebaseListeners() {
   onValue(ref(db, "events"), (snap) => {
     state.cache.events = snap.val() || {};
+    migrateDefaultsOnce();
     renderCalendar();
     renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
     updateStats();
