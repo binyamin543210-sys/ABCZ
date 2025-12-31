@@ -10,6 +10,7 @@ import { db } from "./firebase-config.js";
 const state = {
   currentUser: "binyamin",
   currentDate: new Date(),
+  statsRange: "week",
   settings: { city: null, cityLat: null, cityLon: null, cityTz: null },
   cache: {
     events: {},        // dateKey -> {id: event}
@@ -1987,6 +1988,22 @@ function updateStats() {
     workFreeChart.update();
   }
 }
+
+
+function initStatsRangeControls() {
+  const buttons = document.querySelectorAll("#statsRangeControls button");
+  if (!buttons.length) return;
+
+  buttons.forEach(btn => {
+    btn.onclick = () => {
+      buttons.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      state.statsRange = btn.dataset.range;
+      updateStats();
+    };
+  });
+}
 // =========================
 // App init
 // =========================
@@ -1998,6 +2015,7 @@ function initApp() {
   initShopping();
   initFirebaseListeners();
   initGihari();
+  initStatsRangeControls();
 
   // user select -> state.currentUser
   const userSel = el("userSelect");
