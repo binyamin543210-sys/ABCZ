@@ -1608,10 +1608,11 @@ function gihariPlaceUndatedTasks() {
 // =========================
 function getRangeDates(range) {
   const base = new Date(state.currentDate);
-  base.setHours(12, 0, 0, 0); // מונע סטיות יום
+  base.setHours(12, 0, 0, 0);
+
   const dates = [];
 
-  const pushDays = (count) => {
+  const addDays = (count) => {
     for (let i = 0; i < count; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() + i);
@@ -1621,22 +1622,15 @@ function getRangeDates(range) {
 
   switch (range) {
     case "day":
-      pushDays(1);
+      addDays(1);
       break;
 
-    case "week": {
-      const start = new Date(base);
-      start.setDate(base.getDate() - base.getDay());
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(start);
-        d.setDate(start.getDate() + i);
-        dates.push(d);
-      }
+    case "week":
+      addDays(7);
       break;
-    }
 
     case "2weeks":
-      pushDays(14);
+      addDays(14);
       break;
 
     case "month": {
@@ -1644,7 +1638,7 @@ function getRangeDates(range) {
       const m = base.getMonth();
       const daysInMonth = new Date(y, m + 1, 0).getDate();
       for (let i = 1; i <= daysInMonth; i++) {
-        dates.push(new Date(y, m, i));
+        dates.push(new Date(y, m, i, 12));
       }
       break;
     }
@@ -1652,21 +1646,20 @@ function getRangeDates(range) {
     case "year": {
       const y = base.getFullYear();
       for (let m = 0; m < 12; m++) {
-        const days = new Date(y, m + 1, 0).getDate();
-        for (let d = 1; d <= days; d++) {
-          dates.push(new Date(y, m, d));
+        const daysInMonth = new Date(y, m + 1, 0).getDate();
+        for (let d = 1; d <= daysInMonth; d++) {
+          dates.push(new Date(y, m, d, 12));
         }
       }
       break;
     }
 
     default:
-      pushDays(1);
+      addDays(7);
   }
 
   return dates;
 }
-
 
 function isEventRelevantForUser(ev, user) {
   if (!ev || !ev.owner) return false;
