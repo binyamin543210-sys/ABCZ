@@ -1609,25 +1609,54 @@ function gihariPlaceUndatedTasks() {
 
 function getRangeDates(range) {
   const today = new Date();
+  today.setHours(12, 0, 0, 0);
+
   const dates = [];
 
-  if (range === "week") {
-    const start = new Date(today);
-    start.setDate(today.getDate() - today.getDay());
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
+  const pushDays = (count, startOffset = 0) => {
+    for (let i = 0; i < count; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + startOffset + i);
       dates.push(d);
     }
-  }
+  };
 
-  if (range === "month") {
-    const y = today.getFullYear();
-    const m = today.getMonth();
-    const last = new Date(y, m + 1, 0).getDate();
-    for (let i = 1; i <= last; i++) {
-      dates.push(new Date(y, m, i));
+  switch (range) {
+    case "day":
+      pushDays(1);
+      break;
+
+    case "week": {
+      const start = new Date(today);
+      start.setDate(today.getDate() - today.getDay());
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        dates.push(d);
+      }
+      break;
     }
+
+    case "2weeks":
+      pushDays(14);
+      break;
+
+    case "month": {
+      const y = today.getFullYear();
+      const m = today.getMonth();
+      const last = new Date(y, m + 1, 0).getDate();
+      for (let i = 1; i <= last; i++) {
+        dates.push(new Date(y, m, i));
+      }
+      break;
+    }
+
+    case "year":
+      pushDays(365);
+      break;
+
+    default:
+      pushDays(7);
   }
 
   return dates;
@@ -1639,25 +1668,10 @@ function isEventRelevantForUser(ev, user) {
   return ev.owner === user;
 }
 
-function getRangeDays(range) {
-  switch (range) {
-    case "day": return 1;
-    case "week": return 7;
-    case "2weeks": return 14;
-    case "month": {
-      const d = new Date(state.currentDate);
-      return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    }
-    case "year": return 365;
-    default: return 1;
-  }
-}
-
 function computeStats({ user, range }) {
   const dates = getRangeDates(range);
 
-  const totalDays = dates.length;
-  const totalMinutesCapacity = totalDays * 24 * 60;
+  const totalMinutesCapacity = dates.length * 24 * 60;
 
   let sleepMinutes = 0;
   let workMinutes = 0;
@@ -1687,7 +1701,6 @@ function computeStats({ user, range }) {
         return;
       }
 
-      // --- פירוק "אחר" לפי כותרת ---
       const key = ev.title || "אחר";
       otherMap[key] = (otherMap[key] || 0) + duration;
     });
@@ -1701,6 +1714,7 @@ function computeStats({ user, range }) {
   const freeMinutes = Math.max(0, totalMinutesCapacity - usedMinutes);
 
   return {
+    totalDays: dates.length,
     totalMinutesCapacity,
     sleepMinutes,
     workMinutes,
