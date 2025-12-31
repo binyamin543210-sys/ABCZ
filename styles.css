@@ -937,3 +937,42 @@ body.dark .day-cell {
 .owner-nana .task-title {
   color: #ec407a;
 }
+/* ===== Stats Range Buttons ===== */
+.stats-range {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 14px 0 6px;
+}
+
+.stats-range .segmented-btn {
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  color: #ddd;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(6px);
+}
+
+.stats-range .segmented-btn:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+.stats-range .segmented-btn.active {
+  background: linear-gradient(135deg, #4A90E2, #2ECC71);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  border-color: transparent;
+}
+
+/* Dark mode tweak */
+body.dark .stats-range .segmented-btn {
+  border-color: rgba(255,255,255,0.1);
+}
+
+
