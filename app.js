@@ -411,7 +411,8 @@ function eventsOverlap(a, b) {
   const bStart = timeToMinutes(b.startTime);
   const bEnd   = timeToMinutes(b.endTime || b.startTime);
 
-  return aStart < bEnd && bStart < aEnd;
+ // התנגשות גם אם זה בדיוק באותה דקה
+return aStart <= bEnd && bStart <= aEnd;
 }
 
 function isRelevantByOwner(existingOwner, newOwner) {
@@ -1009,6 +1010,19 @@ async function handleEditFormSubmit(ev) {
     urgency: data.urgency || "none"
   };
 
+// =========================
+  // Time sanity check
+  // =========================
+  if (eventObj.startTime && eventObj.endTime) {
+    const s = timeToMinutes(eventObj.startTime);
+    const e = timeToMinutes(eventObj.endTime);
+
+    if (e <= s) {
+      showToast("⛔ שעת סיום חייבת להיות אחרי שעת התחלה");
+      return;
+    }
+  }
+  
   const dateKey = eventObj.dateKey || "undated";
   const existingId = form.dataset.editId || null;
 
