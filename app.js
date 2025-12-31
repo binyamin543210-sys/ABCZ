@@ -2014,6 +2014,22 @@ function initApp() {
   initTasksFilters();
   initShopping();
   initFirebaseListeners();
+
+// =========================
+// Stats range selector
+// =========================
+const rangeButtons = document.querySelectorAll("#statsRangeSelector .segmented-btn");
+
+rangeButtons.forEach(btn => {
+  btn.onclick = () => {
+    rangeButtons.forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+
+    state.statsRange = btn.dataset.range;
+    updateStats();
+  };
+});
+  
   initGihari();
   initStatsRangeControls();
 
