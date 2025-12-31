@@ -1897,15 +1897,17 @@ let workFreeChart, tasksChart;
 const doughnutPercentPlugin = {
   id: "percentLabels",
   afterDraw(chart) {
-    const { ctx, data } = chart;
+    const { ctx, data, options } = chart;
     const dataset = data.datasets[0];
-    const total = dataset.data.reduce((a, b) => a + b, 0);
+
+    const TOTAL_HOURS = options.plugins?.percentLabels?.totalHours;
+    if (!TOTAL_HOURS) return;
 
     chart.getDatasetMeta(0).data.forEach((arc, i) => {
       const value = dataset.data[i];
       if (!value) return;
 
-      const pct = Math.round((value / total) * 100);
+      const pct = Math.round((value / TOTAL_HOURS) * 100);
       const pos = arc.tooltipPosition();
 
       ctx.save();
@@ -1918,7 +1920,6 @@ const doughnutPercentPlugin = {
     });
   }
 };
-
 const doughnutCenterTextPlugin = {
   id: "centerText",
   afterDraw(chart, args, options) {
@@ -1945,26 +1946,41 @@ function updateStats() {
   const canvas = el("workFreeChart");
   if (!canvas || !window.Chart) return;
 
-  const TOTAL_HOURS = stats.totalDays * 24;
+  // =========================
+  // חישוב בקנה מידה נכון
+  // =========================
+  const TOTAL_MINUTES = stats.totalMinutesCapacity;
+  const TOTAL_HOURS = TOTAL_MINUTES / 60;
 
-  const sleep = +(stats.sleepMinutes / 60).toFixed(1);
-  const work  = +(stats.workMinutes / 60).toFixed(1);
+  const sleepMinutes = stats.sleepMinutes || 0;
+  const workMinutes  = stats.workMinutes  || 0;
 
   const otherMap = stats.otherMap || {};
-  const otherLabels = Object.keys(otherMap);
-  const otherValues = Object.values(otherMap).map(v => +(v / 60).toFixed(1));
-  const otherTotal = otherValues.reduce((a, b) => a + b, 0);
 
-  const freeHours = +(TOTAL_HOURS - sleep - work - otherTotal).toFixed(1);
+  // דקות -> שעות (רק לתצוגה)
+  const sleepHours = +(sleepMinutes / 60).toFixed(1);
+  const workHours  = +(workMinutes  / 60).toFixed(1);
+
+  const otherLabels = Object.keys(otherMap);
+  const otherMinutes = Object.values(otherMap);
+  const otherHours = otherMinutes.map(m => +(m / 60).toFixed(1));
+
+  const usedMinutes =
+    sleepMinutes +
+    workMinutes +
+    otherMinutes.reduce((a, b) => a + b, 0);
+
+  const freeMinutes = Math.max(0, TOTAL_MINUTES - usedMinutes);
+  const freeHours = +(freeMinutes / 60).toFixed(1);
 
   const labels = ["שינה", "עבודה", ...otherLabels, "זמן פנוי"];
-  const data   = [sleep, work, ...otherValues, freeHours];
+  const data   = [sleepHours, workHours, ...otherHours, freeHours];
 
   const colors = [
-    "#4A90E2",
-    "#E74C3C",
+    "#4A90E2", // שינה
+    "#E74C3C", // עבודה
     ...otherLabels.map((_, i) => `hsl(${(i * 70) % 360},70%,55%)`),
-    "#2ECC71"
+    "#2ECC71"  // זמן פנוי
   ];
 
   const ctx = canvas.getContext("2d");
@@ -1986,15 +2002,16 @@ function updateStats() {
           legend: { position: "bottom" },
           tooltip: {
             callbacks: {
-              label: (ctx) => {
-                const val = ctx.raw;
-                const pct = ((val / TOTAL_HOURS) * 100).toFixed(1);
-                return `${ctx.label}: ${val} שעות (${pct}%)`;
+              label: (c) => {
+                const hours = c.raw;
+                const minutes = hours * 60;
+                const pct = ((minutes / TOTAL_MINUTES) * 100).toFixed(1);
+                return `${c.label}: ${hours} שעות (${pct}%)`;
               }
             }
           },
           centerText: {
-            text: `${(TOTAL_HOURS - freeHours).toFixed(1)} ש׳ תפוס`
+            text: `${(usedMinutes / 60).toFixed(1)} ש׳ תפוס`
           }
         }
       }
@@ -2006,7 +2023,6 @@ function updateStats() {
     workFreeChart.update();
   }
 }
-
 function initStatsRangeControls() {
   const buttons = document.querySelectorAll("#statsRangeControls button");
   if (!buttons.length) return;
