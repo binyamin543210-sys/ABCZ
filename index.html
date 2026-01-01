@@ -103,6 +103,11 @@
       <section id="statsSection" class="screen">
         <div class="section-header">
 
+          <button id="btnOpenGoals" class="ghost-pill small">
+  🎯 מטרות
+</button>
+
+
 <div id="statsRangeSelector">
   <button class="segmented-btn active" data-range="day">יומי</button>
   <button class="segmented-btn" data-range="week">שבועי</button>
@@ -395,6 +400,36 @@
         navigator.serviceWorker.register('./sw.js');
       });
     }
+ <div id="goalsModal" class="modal hidden">
+  <div class="modal-backdrop" data-close-goals></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">🎯 ניהול מטרות</div>
+      <button class="icon-btn" data-close-goals>✕</button>
+    </div>
+
+    <div class="form">
+      <div class="field">
+        <label>נושא</label>
+        <input id="goalTitle" placeholder="לדוגמה: שיעור" />
+      </div>
+
+      <div class="field">
+        <label>שעות לשבוע</label>
+        <input id="goalHours" type="number" min="0" step="0.5" />
+      </div>
+
+      <button id="btnAddGoal" class="primary-pill full-width">
+        הוסף מטרה
+      </button>
+    </div>
+
+    <div id="goalsList" class="list-container" style="margin-top:10px"></div>
+  </div>
+</div>
+
+  
+  
   </script>
 </body>
 </html>
