@@ -22,6 +22,16 @@ const state = {
   ui: { darkMode: false, notificationsGranted: false }
 };
 
+const STATS_TARGETS = {
+  sleep: {
+    perDay: 8 // שעות ליום
+  },
+  work: {
+    perDay: 8
+  }
+};
+
+
 const el = (id) => document.getElementById(id);
 const qs = (sel, root = document) => root.querySelector(sel);
 const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1731,6 +1741,26 @@ function computeStats({ user, range }) {
     freeMinutes
   };
 }
+
+function getTargetStatus({ range, totalDays, sleepHours, workHours }) {
+  const sleepTarget = STATS_TARGETS.sleep.perDay * totalDays;
+  const workTarget  = STATS_TARGETS.work.perDay * totalDays;
+
+  const calc = (actual, target) => {
+    const diff = actual - target;
+
+    if (Math.abs(diff) <= target * 0.05) return { status: "ok", diff };
+    if (diff < 0) return { status: "low", diff };
+    return { status: "high", diff };
+  };
+
+  return {
+    sleep: calc(sleepHours, sleepTarget),
+    work: calc(workHours, workTarget)
+  };
+}
+
+
 function updateStats() {
   const user = state.currentUser;
   const range = state.statsRange || "week";
@@ -1742,6 +1772,42 @@ function updateStats() {
 
   const sleep = stats.sleepMinutes / 60;
   const work  = stats.workMinutes / 60;
+
+  const targetStatus = getTargetStatus({
+  range,
+  totalDays: stats.totalDays,
+  sleepHours: sleep,
+  workHours: work
+});
+
+function statusToText(label, obj) {
+  const icon =
+    obj.status === "ok" ? "🟢" :
+    obj.status === "low" ? "🟠" : "🔴";
+
+  const hours = Math.abs(obj.diff).toFixed(1);
+
+  const text =
+    obj.status === "ok" ? "בטווח" :
+    obj.status === "low" ? `חסר ${hours} ש׳` :
+    `חריגה ${hours} ש׳`;
+
+  return `${icon} ${label}: ${text}`;
+}
+
+const summary = [
+  statusToText("שינה", targetStatus.sleep),
+  statusToText("עבודה", targetStatus.work)
+].join(" | ");
+
+el("statsSummary")?.remove();
+const div = document.createElement("div");
+div.id = "statsSummary";
+div.style.marginTop = "10px";
+div.style.fontWeight = "bold";
+div.textContent = summary;
+
+canvas.parentElement.appendChild(div);
 
   const otherMap = stats.otherMap || {};
   const otherLabels = Object.keys(otherMap);
