@@ -1983,12 +1983,15 @@ function openPostponeModal(task) {
     b.onclick = () => el("postponeModal")?.classList.add("hidden");
   });
 
-  el("postponeOk").onclick = () => {
-    const v = el("postponeDateInput").value;
-    if (!v) return;
-    moveTaskToDate(_postponeTask, v);
-    el("postponeModal").classList.add("hidden");
-  };
+el("postponeOk").onclick = () => {
+  const date = el("postponeDateInput").value;
+  const time = el("postponeTimeInput").value || _postponeTask.startTime;
+
+  if (!date) return;
+
+  moveTaskToDate(_postponeTask, date, time);
+  el("postponeModal").classList.add("hidden");
+};
 }
 async function deleteTaskSmart(task) {
   const id = task._id || task.id;
