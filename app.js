@@ -6,28 +6,37 @@
 
 import { ref, onValue, set, push, update, remove } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 import { db } from "./firebase-config.js";
-
 const state = {
   currentUser: "binyamin",
   currentDate: new Date(),
   statsRange: "week",
-  settings: { city: null, cityLat: null, cityLon: null, cityTz: null },
-  cache: {
-    events: {},        // dateKey -> {id: event}
-    shopping: {},      // listKey -> {id: item}
-    holidays: {},      // dateKey -> {name}
-    holidaysLoadedYear: null,
-    shabbat: {}        // fridayKey -> {candle, havdalah}
+
+  settings: {
+    city: null,
+    cityLat: null,
+    cityLon: null,
+    cityTz: null
   },
-  ui: { darkMode: false, notificationsGranted: false }
+
+  cache: {
+    events: {},
+    shopping: {},
+    holidays: {},
+    holidaysLoadedYear: null,
+    shabbat: {}
+  },
+
+  ui: {
+    darkMode: false,
+    notificationsGranted: false
+  },
+
+  // ✅ יעדים דינמיים – המשתמש שולט
   targets: {
-  // דוגמה התחלתית – הכל ניתן לשינוי
-  "שינה": { hours: 8, per: "day" },
-  "עבודה": { hours: 8, per: "day" }
-}
-
+    "שינה": { hours: 8, per: "day" },
+    "עבודה": { hours: 8, per: "day" }
+  }
 };
-
 
 
 const el = (id) => document.getElementById(id);
