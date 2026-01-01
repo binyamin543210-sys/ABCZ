@@ -9,17 +9,19 @@ import { db } from "./firebase-config.js";
 const state = {
 
 
+
+  
   currentUser: "binyamin",
   currentDate: new Date(),
   statsRange: "week",
   goals: {}
 }
-  settings: {
-    city: null,
-    cityLat: null,
-    cityLon: null,
-    cityTz: null
-  },
+ settings: {
+  city: null,
+  cityLat: null,
+  cityLon: null,
+  cityTz: null
+},
 
   cache: {
     events: {},
