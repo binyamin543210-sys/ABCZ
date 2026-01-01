@@ -806,14 +806,16 @@ if (filter !== "recurring") {
 
 function markTaskDone(task) {
   const id = task._id || task.id;
-  if (!id) return;
-  // שומר במשימות שבוצעו
-  set(ref(db, `tasksDone/${id}`), { ...task, doneAt: Date.now() }).catch(()=>{});
-  // מוחק מהאירועים
-  if (task.dateKey) remove(ref(db, `events/${task.dateKey}/${id}`)).catch(()=>{});
-  showToast("סומן כבוצע");
-}
+  if (!id || !task.dateKey) return;
 
+  update(ref(db, `events/${task.dateKey}/${id}`), {
+    ...task,
+    completed: true,
+    completedAt: Date.now()
+  });
+
+  showToast("סומן כבוצע ✔");
+}
 // =========================
 // Day modal
 // =========================
