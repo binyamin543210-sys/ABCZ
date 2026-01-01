@@ -1720,6 +1720,12 @@ function computeStats({ user, range }) {
       if (!isEventRelevantForUser(ev, user)) return;
       if (!ev.startTime || !ev.endTime) return;
 
+      const ALWAYS_COUNT = ["שינה", "עבודה", "אוכל", "מקלחת"];
+const title = (ev.title || "").trim();
+
+// אם זה לא אחד מהקבועים – חייב להיות בוצע
+if (!ALWAYS_COUNT.includes(title) && !ev.completed) return;
+
       const s = timeToMinutes(ev.startTime);
       const e = timeToMinutes(ev.endTime);
       if (e <= s) return;
@@ -1729,7 +1735,7 @@ function computeStats({ user, range }) {
       seen.add(sig);
 
       const dur = e - s;
-      const title = (ev.title || "").trim();
+     
 
       if (title === "שינה") sleepMinutes += dur;
       else if (title === "עבודה") workMinutes += dur;
