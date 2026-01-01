@@ -17,12 +17,17 @@ const state = {
 goals: {}
 
 }
- settings: {
-  city: null,
-  cityLat: null,
-  cityLon: null,
-  cityTz: null
-},
+const state = {
+  currentUser: "binyamin",
+  currentDate: new Date(),
+  statsRange: "week",
+
+  settings: {
+    city: null,
+    cityLat: null,
+    cityLon: null,
+    cityTz: null
+  },
 
   cache: {
     events: {},
@@ -37,13 +42,9 @@ goals: {}
     notificationsGranted: false
   },
 
-  // ✅ יעדים דינמיים – המשתמש שולט
-  targets: {
-    "שינה": { hours: 8, per: "day" },
-    "עבודה": { hours: 8, per: "day" }
-  }
+  // מטרות שבועיות – מנוהלות מדף סטטיסטיקות
+  goals: {}
 };
-
 
 const el = (id) => document.getElementById(id);
 const qs = (sel, root = document) => root.querySelector(sel);
