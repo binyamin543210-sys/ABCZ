@@ -6,17 +6,7 @@
 
 import { ref, onValue, set, push, update, remove } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 import { db } from "./firebase-config.js";
-const state = {
 
-
-
-  
-  currentUser: "binyamin",
-  currentDate: new Date(),
-  statsRange: "week",
-goals: {}
-
-}
 const state = {
   currentUser: "binyamin",
   currentDate: new Date(),
