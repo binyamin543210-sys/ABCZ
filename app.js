@@ -2071,6 +2071,10 @@ function openGoalsModal() {
   if (!modal) return;
 
   modal.classList.remove("hidden");
+
+  const ownerSelect = el("goalOwner");
+if (ownerSelect) ownerSelect.value = state.currentUser;
+  
   renderGoals();
 
   // ❌ סגירה בלחיצה על X או על הרקע
@@ -2088,6 +2092,7 @@ function renderGoals() {
   box.innerHTML = "";
 
   Object.entries(state.goals || {}).forEach(([id, g]) => {
+    if (g.owner !== state.currentUser) return;
     const div = document.createElement("div");
     div.className = "task-item";
 
@@ -2151,21 +2156,27 @@ function initApp() {
 el("btnAddGoal").onclick = () => {
   const title = el("goalTitle").value.trim();
   const hours = Number(el("goalHours").value);
-  if (!title || !hours) return;
+  const owner = el("goalOwner").value; // 👈 חדש
+
+  if (!title || !hours || !owner) return;
 
   const id = Date.now();
-  state.goals[id] = { title, weeklyHours: hours };
+  state.goals[id] = {
+    title,
+    weeklyHours: hours,
+    owner
+  };
+
   update(ref(db, "goals"), state.goals);
 
   el("goalTitle").value = "";
   el("goalHours").value = "";
 
-  // ✅ סגירת חלונית אחרי שמירה
   el("goalsModal").classList.add("hidden");
+
+  renderGoals();
+  updateStats();
 };
-
-
-
 // =========================
 // Stats range selector
 // =========================
