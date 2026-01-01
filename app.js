@@ -2083,34 +2083,58 @@ function openGoalsModal() {
 }
 function renderGoals() {
   const box = el("goalsList");
+  if (!box) return;
+
   box.innerHTML = "";
 
   Object.entries(state.goals || {}).forEach(([id, g]) => {
     const div = document.createElement("div");
     div.className = "task-item";
+
     div.innerHTML = `
       <b>${g.title}</b> – ${g.weeklyHours} ש׳ / שבוע
-      <button class="ghost-pill small">🗑</button>
+      <div style="display:flex; gap:6px;">
+        <button class="ghost-pill small edit-goal">✏️</button>
+        <button class="ghost-pill small delete-goal">🗑</button>
+      </div>
     `;
-  div.querySelector("button").onclick = () => {
-  if (!confirm(`למחוק את המטרה "${g.title}"?`)) return;
 
-  // 1️⃣ מחיקה מה־state
-  delete state.goals[id];
+    // ✏️ עריכת שעות
+    div.querySelector(".edit-goal").onclick = () => {
+      const input = prompt(
+        `עדכן שעות שבועיות עבור "${g.title}"`,
+        g.weeklyHours
+      );
 
-  // 2️⃣ עדכון Firebase
-  update(ref(db, "goals"), state.goals);
+      if (input === null) return;
 
-  // 3️⃣ רענון רשימת מטרות
-  renderGoals();
+      const hours = Number(input);
+      if (isNaN(hours) || hours < 0) {
+        alert("אנא הזן מספר שעות חוקי");
+        return;
+      }
 
-  // 4️⃣ רענון סטטיסטיקות + עוגה
-  updateStats();
-};
+      state.goals[id].weeklyHours = hours;
+
+      update(ref(db, "goals"), state.goals);
+      renderGoals();
+      updateStats();
+    };
+
+    // 🗑 מחיקה
+    div.querySelector(".delete-goal").onclick = () => {
+      if (!confirm(`למחוק את המטרה "${g.title}"?`)) return;
+
+      delete state.goals[id];
+      update(ref(db, "goals"), state.goals);
+
+      renderGoals();
+      updateStats();
+    };
+
     box.appendChild(div);
   });
 }
-
 
 // =========================
 // App init
