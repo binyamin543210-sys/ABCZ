@@ -238,7 +238,48 @@ body.dark .day.has-events {
   padding: 4px 10px;
   font-size: 0.75rem;
 }
+/* =========================
+   BUTTON INTERACTIONS – PREMIUM
+========================= */
 
+/* כל הכפתורים */
+button {
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+/* אפקט לחיצה */
+button:active {
+  transform: scale(0.96);
+}
+
+/* Primary pill – hover */
+.primary-pill:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 12px 28px rgba(88,28,135,0.6);
+}
+
+/* Ghost pill – hover */
+.ghost-pill:hover {
+  background: rgba(99,102,241,0.08);
+  border-color: var(--accent);
+}
+
+/* Icon buttons – תזוזה קלה */
+.icon-btn:hover {
+  transform: translateY(-1px);
+}
+
+/* כפתור מנוטרל */
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
 .primary-pill.full-width,
 .ghost-pill.full-width {
   width: 100%;
@@ -513,8 +554,14 @@ body.dark .day-cell {
 }
 
 @keyframes slideUp {
-  from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(100%) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
 }
 
 .modal-header {
@@ -726,6 +773,33 @@ body.dark .day-cell {
 .settings-group {
   margin-bottom: 12px;
 }
+
+/* ===== TOAST / FEEDBACK ===== */
+#toast {
+  position: fixed;
+  bottom: calc(var(--bottom-nav-height) + 20px);
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 12px 28px rgba(22,163,74,0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+  z-index: 100;
+}
+
+#toast:not(.hidden) {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 @media (max-width: 480px) {
 
   /* ===== APP LAYOUT ===== */
