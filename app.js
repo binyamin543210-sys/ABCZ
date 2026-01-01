@@ -2324,3 +2324,10 @@ rangeButtons.forEach(btn => {
 }
 
 document.addEventListener("DOMContentLoaded", initApp);
+
+});
+
+
+
+
+      
