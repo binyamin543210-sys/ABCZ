@@ -1356,6 +1356,12 @@ state.targets = settings.targets || state.targets;
     el("cityLabel").textContent = state.settings.city || "לא נבחרה";
     el("settingsCityInput").value = state.settings.city || "";
   });
+  if (el("targetSleep")) {
+  el("targetSleep").value = state.targets["שינה"]?.hours ?? 8;
+}
+if (el("targetWork")) {
+  el("targetWork").value = state.targets["עבודה"]?.hours ?? 8;
+}
 }
 
 async function saveCitySettings() {
@@ -1813,14 +1819,22 @@ function updateStats() {
         cutout: "65%",
         plugins: {
           tooltip: {
-            callbacks: {
-              label: c => {
-                const v = c.raw || 0;
-                const pct = total ? ((v / total) * 100).toFixed(1) : "0.0";
-                return `${c.label}: ${v.toFixed(2)} ש׳ (${pct}%)`;
-              }
-            }
-          }
+  callbacks: {
+    label: (ctx) => {
+      const val = Number(ctx.raw) || 0;
+
+      // 🔥 זה המקור היחיד לאמת
+      const dataset = ctx.chart.data.datasets[0].data || [];
+      const total = dataset.reduce((a, b) => a + b, 0);
+
+      const pct = total > 0
+        ? ((val / total) * 100).toFixed(1)
+        : "0.0";
+
+      return `${ctx.label}: ${val.toFixed(2)} ש׳ (${pct}%)`;
+    }
+  }
+}
         }
       }
     });
@@ -2025,6 +2039,21 @@ function initApp() {
   initTasksFilters();
   initShopping();
   initFirebaseListeners();
+
+  el("btnSaveTargets")?.addEventListener("click", () => {
+  state.targets["שינה"] = {
+    hours: Number(el("targetSleep").value) || 0,
+    per: "day"
+  };
+
+  state.targets["עבודה"] = {
+    hours: Number(el("targetWork").value) || 0,
+    per: "day"
+  };
+
+  saveTargets();
+  updateStats();
+});
 
 // =========================
 // Stats range selector
