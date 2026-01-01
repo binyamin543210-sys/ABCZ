@@ -2095,50 +2095,8 @@ function openGoalsModal() {
   const backdrop = modal.querySelector(".modal-backdrop");
   if (backdrop) backdrop.onclick = () => modal.classList.add("hidden");
 }
-function renderGoals() {
-  const box = el("goalsList");
-  if (!box) return;
 
-  box.innerHTML = "";
-
-  const owner = state.currentUser;
-  const goals = state.goals?.[owner] || {};
-
-  Object.entries(goals).forEach(([id, g]) => {
-    const div = document.createElement("div");
-    div.className = "task-item";
-
-    div.innerHTML = `
-      <b>${g.title}</b> – ${g.weeklyHours} ש׳ / שבוע
-      <div style="display:flex; gap:6px;">
-        <button class="ghost-pill small edit-goal">✏️</button>
-        <button class="ghost-pill small delete-goal">🗑</button>
-      </div>
-    `;
-
-    // ✏️ עריכת שעות
-    div.querySelector(".edit-goal").onclick = () => {
-      const input = prompt(
-        `עדכן שעות שבועיות עבור "${g.title}"`,
-        g.weeklyHours
-      );
-
-      if (input === null) return;
-
-      const hours = Number(input);
-      if (isNaN(hours) || hours < 0) {
-        alert("אנא הזן מספר שעות חוקי");
-        return;
-      }
-
-      state.goals[owner][id].weeklyHours = hours;
-      update(ref(db, "goals"), state.goals);
-
-      renderGoals();
-      updateStats();
-    };
-
-    // 🗑 מחיקה
+   
    
 // =========================
 // Delete confirmation modal
@@ -2327,6 +2285,6 @@ document.addEventListener("DOMContentLoaded", initApp);
 
 
 
-  }
+
 
                                 
