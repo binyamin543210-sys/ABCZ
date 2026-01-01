@@ -2139,7 +2139,7 @@ function renderGoals() {
     };
 
     // 🗑 מחיקה
-    div.querySelector(".delete-goal").onclick = () => {
+   
 // =========================
 // Delete confirmation modal
 // =========================
