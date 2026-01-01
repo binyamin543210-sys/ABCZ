@@ -2132,14 +2132,12 @@ function renderGoals() {
 
   box.innerHTML = "";
 
-  const goals = state.goals || {};
   const owner = state.currentUser;
+  const goals = state.goals?.[owner] || {};
 
   Object.entries(goals).forEach(([id, g]) => {
-    if (g.owner !== owner) return;
-
     const div = document.createElement("div");
-    div.className = `task-item owner-${g.owner}`;
+    div.className = "task-item";
 
     div.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -2160,7 +2158,6 @@ function renderGoals() {
         `עדכן שעות שבועיות עבור "${g.title}"`,
         g.weeklyHours
       );
-
       if (input === null) return;
 
       const hours = Number(input);
@@ -2169,18 +2166,18 @@ function renderGoals() {
         return;
       }
 
-      state.goals[id].weeklyHours = hours;
+      state.goals[owner][id].weeklyHours = hours;
       update(ref(db, "goals"), state.goals);
       renderGoals();
       updateStats();
     };
 
-    // 🗑 מחיקה עם חלונית יפה
+    // 🗑 מחיקה
     div.querySelector(".delete-goal").onclick = () => {
       openDeleteConfirm({
         text: `למחוק את המטרה "${g.title}"?`,
         onConfirm: () => {
-          delete state.goals[id];
+          delete state.goals[owner][id];
           update(ref(db, "goals"), state.goals);
           renderGoals();
           updateStats();
