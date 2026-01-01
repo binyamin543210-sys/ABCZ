@@ -1384,12 +1384,6 @@ async function saveCitySettings() {
     showToast("נשמר");
   }
 }
-async function saveTargets() {
-  await update(ref(db, "settings"), {
-    targets: state.targets
-  });
-  showToast("יעדים נשמרו");
-}
 
 // =========================
 // Theme + notifications
@@ -2040,20 +2034,6 @@ function initApp() {
   initShopping();
   initFirebaseListeners();
 
-  el("btnSaveTargets")?.addEventListener("click", () => {
-  state.targets["שינה"] = {
-    hours: Number(el("targetSleep").value) || 0,
-    per: "day"
-  };
-
-  state.targets["עבודה"] = {
-    hours: Number(el("targetWork").value) || 0,
-    per: "day"
-  };
-
-  saveTargets();
-  updateStats();
-});
 
 // =========================
 // Stats range selector
