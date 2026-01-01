@@ -36,6 +36,12 @@ const state = {
   goals: {}
 };
 
+const GOAL_COLORS = {
+  "שינה": "#60a5fa",   // תכלת
+  "עבודה": "#ef4444", // אדום
+  "אוכל + מקלחת": "#f59e0b" // כתום
+};
+
 const el = (id) => document.getElementById(id);
 const qs = (sel, root = document) => root.querySelector(sel);
 const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1742,6 +1748,7 @@ function computeStats({ user, range }) {
 
 function computeTargetStatuses(stats) {
   const results = [];
+
   const weeks =
     state.statsRange === "week" ? 1 :
     state.statsRange === "month" ? 4.345 :
@@ -1749,15 +1756,28 @@ function computeTargetStatuses(stats) {
     1;
 
   Object.values(state.goals || {}).forEach(g => {
-    const actual = (stats.otherMap[g.title] || 0) / 60;
+    let actualHours = 0;
+
+    if (g.title === "שינה") {
+      actualHours = stats.sleepMinutes / 60;
+    } else if (g.title === "עבודה") {
+      actualHours = stats.workMinutes / 60;
+    } else {
+      actualHours = (stats.otherMap[g.title] || 0) / 60;
+    }
+
     const target = g.weeklyHours * weeks;
-    const diff = actual - target;
+    const diff = actualHours - target;
 
     let status = "ok";
     if (diff < -0.5) status = "low";
     if (diff > 0.5) status = "high";
 
-    results.push({ title: g.title, diff, status });
+    results.push({
+      title: g.title,
+      diff,
+      status
+    });
   });
 
   return results;
@@ -1807,7 +1827,13 @@ function updateStats() {
   if (!workFreeChart) {
     workFreeChart = new Chart(ctx, {
       type: "doughnut",
-      data: { labels, datasets: [{ data }] },
+      data: {
+  labels,
+  datasets: [{
+    data,
+    backgroundColor: labels.map(l => GOAL_COLORS[l] || "#9ca3af")
+  }]
+},
       options: {
         cutout: "65%",
         plugins: {
@@ -2021,10 +2047,20 @@ const doughnutCenterTextPlugin = {
   }
 };
 function openGoalsModal() {
-  el("goalsModal").classList.remove("hidden");
-  renderGoals();
-}
+  const modal = el("goalsModal");
+  if (!modal) return;
 
+  modal.classList.remove("hidden");
+  renderGoals();
+
+  // ❌ סגירה בלחיצה על X או על הרקע
+  modal.querySelectorAll("[data-close-goals]").forEach(b => {
+    b.onclick = () => modal.classList.add("hidden");
+  });
+
+  const backdrop = modal.querySelector(".modal-backdrop");
+  if (backdrop) backdrop.onclick = () => modal.classList.add("hidden");
+}
 function renderGoals() {
   const box = el("goalsList");
   box.innerHTML = "";
@@ -2066,8 +2102,12 @@ el("btnAddGoal").onclick = () => {
   const id = Date.now();
   state.goals[id] = { title, weeklyHours: hours };
   update(ref(db, "goals"), state.goals);
+
   el("goalTitle").value = "";
   el("goalHours").value = "";
+
+  // ✅ סגירת חלונית אחרי שמירה
+  el("goalsModal").classList.add("hidden");
 };
 
 
