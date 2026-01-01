@@ -1758,7 +1758,12 @@ function computeTargetStatuses(stats) {
     state.statsRange === "year" ? 52 :
     1;
 
-  Object.values(state.goals || {}).forEach(g => {
+  // 🔥 כאן התיקון הקריטי
+  const userGoals = state.goals?.[state.currentUser] || {};
+
+  Object.values(userGoals).forEach(g => {
+    if (!g || !g.title || !g.weeklyHours) return;
+
     let actualHours = 0;
 
     if (g.title === "שינה") {
@@ -1785,7 +1790,6 @@ function computeTargetStatuses(stats) {
 
   return results;
 }
-
 function updateStats() {
   const stats = computeStats({
     user: state.currentUser,
