@@ -1652,6 +1652,26 @@ function gihariPlaceUndatedTasks() {
 // Stats engine
 // =========================
 
+function moveTaskToDate(task, newDateKey) {
+  const id = task._id || task.id;
+  if (!id || !task.dateKey || !newDateKey) return;
+
+  const oldRef = ref(db, `events/${task.dateKey}/${id}`);
+  const newRef = ref(db, `events/${newDateKey}/${id}`);
+
+  // מעתיק לתאריך חדש
+  set(newRef, {
+    ...task,
+    dateKey: newDateKey
+  });
+
+  // מוחק מהישן
+  remove(oldRef);
+
+  showToast("המשימה נדחתה");
+}
+
+
 function getRangeDates(range) {
   const base = new Date(state.currentDate);
   base.setHours(12, 0, 0, 0);
