@@ -1779,17 +1779,23 @@ function updateStats() {
         cutout: "65%",
         plugins: {
           legend: { position: "bottom" },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => {
-                const val = ctx.raw || 0;
-                const pct = TOTAL_HOURS > 0
-                  ? ((val / TOTAL_HOURS) * 100).toFixed(1)
-                  : "0.0";
-                return `${ctx.label}: ${val.toFixed(2)} שעות (${pct}%)`;
-              }
-            }
-          },
+         tooltip: {
+  callbacks: {
+    label: (ctx) => {
+      const val = Number(ctx.raw) || 0;
+
+      // ✅ מחשבים TOTAL_HOURS מהנתונים בפועל (דינמי!)
+      const dataset = ctx.chart.data.datasets[0].data || [];
+      const total = dataset.reduce((a, b) => a + b, 0);
+
+      const pct = total > 0
+        ? ((val / total) * 100).toFixed(1)
+        : "0.0";
+
+      return `${ctx.label}: ${val.toFixed(2)} שעות (${pct}%)`;
+    }
+  }
+},
           centerText: {
             text: `${(TOTAL_HOURS - freeHours).toFixed(1)} ש׳ תפוס`
           }
