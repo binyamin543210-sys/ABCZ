@@ -330,10 +330,15 @@
         <div class="modal-title">דחיית משימה</div>
         <button class="icon-btn" data-close-postpone>✕</button>
       </div>
-      <div class="field">
-        <label>תאריך חדש (YYYY-MM-DD)</label>
-        <input id="postponeDateInput" placeholder="2025-12-30" />
-      </div>
+     <div class="field">
+  <label>תאריך חדש</label>
+  <input id="postponeDateInput" type="date" />
+</div>
+
+<div class="field">
+  <label>שעת התחלה</label>
+  <input id="postponeTimeInput" type="time" />
+</div>
       <div class="task-actions">
         <button id="postponeOk" class="primary-pill">אישור</button>
         <button class="ghost-pill" data-close-postpone>ביטול</button>
