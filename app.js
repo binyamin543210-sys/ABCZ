@@ -14,7 +14,7 @@ const state = {
   currentUser: "binyamin",
   currentDate: new Date(),
   statsRange: "week",
-  goals: {}
+
 }
  settings: {
   city: null,
