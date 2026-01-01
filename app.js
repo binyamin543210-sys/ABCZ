@@ -1801,22 +1801,21 @@ function updateStats() {
   summary.id = "statsSummary";
   summary.style.marginTop = "10px";
 
-  summary.innerHTML = computeTargetStatuses(stats).map(t => {
+summary.innerHTML = computeTargetStatuses(stats).map(t => {
   const diff = Math.abs(t.diff).toFixed(1);
 
-  // סטטוס מילולי נכון
+  // טקסט חדש
   const text =
-    t.status === "high" ? `חריגה ${diff} ש׳` :
+    t.status === "high" ? `אקסטרה ${diff} ש׳` :
     t.status === "low"  ? `חסר ${diff} ש׳` :
     `מדויק`;
 
-  // צבע טקסט לפי סטטוס
+  // צבעים חדשים
   const textColor =
-    t.status === "high" ? "#ef4444" :   // אדום
-    t.status === "low"  ? "#f59e0b" :   // כתום/חסר
-    "#3b82f6";                           // כחול (מדויק)
+    t.status === "high" ? "#16a34a" : // ירוק – אקסטרה
+    t.status === "low"  ? "#dc2626" : // אדום – חסר
+    "#3b82f6";                         // כחול – מדויק
 
-  // צבע נקודה לפי נושא (כמו בעוגה)
   const dotColor = GOAL_COLORS[t.title] || "#9ca3af";
 
   return `
@@ -1832,7 +1831,6 @@ function updateStats() {
     </div>
   `;
 }).join("");
-
   canvas.parentElement.appendChild(summary);
 
   // ---- גרף ----
@@ -2094,11 +2092,21 @@ function renderGoals() {
       <b>${g.title}</b> – ${g.weeklyHours} ש׳ / שבוע
       <button class="ghost-pill small">🗑</button>
     `;
-    div.querySelector("button").onclick = () => {
-      delete state.goals[id];
-      update(ref(db, "goals"), state.goals);
-      renderGoals();
-    };
+  div.querySelector("button").onclick = () => {
+  if (!confirm(`למחוק את המטרה "${g.title}"?`)) return;
+
+  // 1️⃣ מחיקה מה־state
+  delete state.goals[id];
+
+  // 2️⃣ עדכון Firebase
+  update(ref(db, "goals"), state.goals);
+
+  // 3️⃣ רענון רשימת מטרות
+  renderGoals();
+
+  // 4️⃣ רענון סטטיסטיקות + עוגה
+  updateStats();
+};
     box.appendChild(div);
   });
 }
