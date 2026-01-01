@@ -785,8 +785,8 @@ if (filter !== "recurring") {
 }
     const doneBtn = document.createElement("button");
     doneBtn.className = "ghost-pill small";
-    doneBtn.textContent = "✔ בוצע";
-    doneBtn.onclick = () => markTaskDone(task);
+  doneBtn.textContent = task.completed ? "↩ בטל בוצע" : "✔ בוצע";
+doneBtn.onclick = () => toggleTaskDone(task);
 
     const postponeBtn = document.createElement("button");
     postponeBtn.className = "ghost-pill small";
@@ -804,17 +804,18 @@ if (filter !== "recurring") {
   });
 }
 
-function markTaskDone(task) {
+function toggleTaskDone(task) {
   const id = task._id || task.id;
   if (!id || !task.dateKey) return;
 
+  const isDone = !!task.completed;
+
   update(ref(db, `events/${task.dateKey}/${id}`), {
-    ...task,
-    completed: true,
-    completedAt: Date.now()
+    completed: !isDone,
+    completedAt: isDone ? null : Date.now()
   });
 
-  showToast("סומן כבוצע ✔");
+  showToast(isDone ? "בוטל סימון בוצע" : "סומן כבוצע ✔");
 }
 // =========================
 // Day modal
