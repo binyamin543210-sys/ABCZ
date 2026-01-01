@@ -394,13 +394,16 @@
 </div>
 
   <!-- Service Worker (פעם אחת!) -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js');
-      });
-    }
- <div id="goalsModal" class="modal hidden">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js');
+    });
+  }
+</script>
+
+<!-- Goals Modal -->
+<div id="goalsModal" class="modal hidden">
   <div class="modal-backdrop" data-close-goals></div>
   <div class="modal-content">
     <div class="modal-header">
@@ -427,9 +430,5 @@
     <div id="goalsList" class="list-container" style="margin-top:10px"></div>
   </div>
 </div>
-
-  
-  
-  </script>
 </body>
 </html>
