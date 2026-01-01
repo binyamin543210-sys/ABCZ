@@ -1802,14 +1802,36 @@ function updateStats() {
   summary.style.marginTop = "10px";
 
   summary.innerHTML = computeTargetStatuses(stats).map(t => {
-    const icon = t.status === "ok" ? "🟢" : t.status === "low" ? "🟠" : "🔴";
-    const diff = Math.abs(t.diff).toFixed(1);
-    const text =
-      t.status === "ok" ? "בטווח" :
-      t.status === "low" ? `חסר ${diff} ש׳` :
-      `חריגה ${diff} ש׳`;
-    return `<div>${icon} ${t.title}: ${text}</div>`;
-  }).join("");
+  const diff = Math.abs(t.diff).toFixed(1);
+
+  // סטטוס מילולי נכון
+  const text =
+    t.status === "high" ? `חריגה ${diff} ש׳` :
+    t.status === "low"  ? `חסר ${diff} ש׳` :
+    `מדויק`;
+
+  // צבע טקסט לפי סטטוס
+  const textColor =
+    t.status === "high" ? "#ef4444" :   // אדום
+    t.status === "low"  ? "#f59e0b" :   // כתום/חסר
+    "#3b82f6";                           // כחול (מדויק)
+
+  // צבע נקודה לפי נושא (כמו בעוגה)
+  const dotColor = GOAL_COLORS[t.title] || "#9ca3af";
+
+  return `
+    <div style="display:flex;align-items:center;gap:8px;color:${textColor}">
+      <span style="
+        width:10px;
+        height:10px;
+        border-radius:50%;
+        background:${dotColor};
+        display:inline-block;
+      "></span>
+      <strong>${t.title}</strong> – ${text}
+    </div>
+  `;
+}).join("");
 
   canvas.parentElement.appendChild(summary);
 
