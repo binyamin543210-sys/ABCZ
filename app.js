@@ -33,7 +33,10 @@ const state = {
   },
 
   // מטרות שבועיות – מנוהלות מדף סטטיסטיקות
-  goals: {}
+goals: {
+  binyamin: {},
+  nana: {}
+}
 };
 
 const GOAL_COLORS = {
@@ -2072,12 +2075,15 @@ function openGoalsModal() {
 
   modal.classList.remove("hidden");
 
+  // קובע בעלים לפי המשתמש הנוכחי
   const ownerSelect = el("goalOwner");
-if (ownerSelect) ownerSelect.value = state.currentUser;
-  
+  if (ownerSelect) {
+    ownerSelect.value = state.currentUser;
+  }
+
   renderGoals();
 
-  // ❌ סגירה בלחיצה על X או על הרקע
+  // סגירה ב־X או רקע
   modal.querySelectorAll("[data-close-goals]").forEach(b => {
     b.onclick = () => modal.classList.add("hidden");
   });
@@ -2091,8 +2097,10 @@ function renderGoals() {
 
   box.innerHTML = "";
 
-  Object.entries(state.goals || {}).forEach(([id, g]) => {
-    if (g.owner !== state.currentUser) return;
+  const owner = state.currentUser;
+  const goals = state.goals?.[owner] || {};
+
+  Object.entries(goals).forEach(([id, g]) => {
     const div = document.createElement("div");
     div.className = "task-item";
 
@@ -2119,9 +2127,9 @@ function renderGoals() {
         return;
       }
 
-      state.goals[id].weeklyHours = hours;
-
+      state.goals[owner][id].weeklyHours = hours;
       update(ref(db, "goals"), state.goals);
+
       renderGoals();
       updateStats();
     };
@@ -2130,7 +2138,7 @@ function renderGoals() {
     div.querySelector(".delete-goal").onclick = () => {
       if (!confirm(`למחוק את המטרה "${g.title}"?`)) return;
 
-      delete state.goals[id];
+      delete state.goals[owner][id];
       update(ref(db, "goals"), state.goals);
 
       renderGoals();
@@ -2140,7 +2148,6 @@ function renderGoals() {
     box.appendChild(div);
   });
 }
-
 // =========================
 // App init
 // =========================
@@ -2156,15 +2163,19 @@ function initApp() {
 el("btnAddGoal").onclick = () => {
   const title = el("goalTitle").value.trim();
   const hours = Number(el("goalHours").value);
-  const owner = el("goalOwner").value; // 👈 חדש
+  const owner = el("goalOwner").value;
 
-  if (!title || !hours || !owner) return;
+  if (!title || isNaN(hours) || hours <= 0 || !owner) return;
+
+  if (!state.goals[owner]) {
+    state.goals[owner] = {};
+  }
 
   const id = Date.now();
-  state.goals[id] = {
+
+  state.goals[owner][id] = {
     title,
-    weeklyHours: hours,
-    owner
+    weeklyHours: hours
   };
 
   update(ref(db, "goals"), state.goals);
