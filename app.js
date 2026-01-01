@@ -45,6 +45,8 @@ const GOAL_COLORS = {
   "אוכל + מקלחת": "#f59e0b" // כתום
 };
 
+let editingGoalId = null;
+
 const el = (id) => document.getElementById(id);
 const qs = (sel, root = document) => root.querySelector(sel);
 const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -2153,24 +2155,16 @@ function renderGoals() {
     `;
 
     // ✏️ עריכת שעות
-    div.querySelector(".edit-goal").onclick = () => {
-      const input = prompt(
-        `עדכן שעות שבועיות עבור "${g.title}"`,
-        g.weeklyHours
-      );
-      if (input === null) return;
+div.querySelector(".edit-goal").onclick = () => {
+  editingGoalId = id;
 
-      const hours = Number(input);
-      if (isNaN(hours) || hours < 0) {
-        alert("אנא הזן מספר שעות חוקי");
-        return;
-      }
+  el("goalTitle").value = g.title;
+  el("goalHours").value = g.weeklyHours;
+  el("goalOwner").value = owner;
 
-      state.goals[owner][id].weeklyHours = hours;
-      update(ref(db, "goals"), state.goals);
-      renderGoals();
-      updateStats();
-    };
+  el("btnAddGoal").textContent = "שמור שינויים";
+  el("goalsModal").classList.remove("hidden");
+};
 
     // 🗑 מחיקה
     div.querySelector(".delete-goal").onclick = () => {
@@ -2211,17 +2205,30 @@ el("btnAddGoal").onclick = () => {
     state.goals[owner] = {};
   }
 
-  const id = Date.now();
-
-  state.goals[owner][id] = {
-    title,
-    weeklyHours: hours
-  };
+  // ✏️ מצב עריכה
+  if (editingGoalId) {
+    state.goals[owner][editingGoalId] = {
+      ...state.goals[owner][editingGoalId],
+      title,
+      weeklyHours: hours
+    };
+  } 
+  // ➕ מצב הוספה
+  else {
+    const id = Date.now();
+    state.goals[owner][id] = {
+      title,
+      weeklyHours: hours
+    };
+  }
 
   update(ref(db, "goals"), state.goals);
 
+  // ניקוי מצב
+  editingGoalId = null;
   el("goalTitle").value = "";
   el("goalHours").value = "";
+  el("btnAddGoal").textContent = "הוסף מטרה";
 
   el("goalsModal").classList.add("hidden");
 
