@@ -20,16 +20,14 @@ const state = {
     shabbat: {}        // fridayKey -> {candle, havdalah}
   },
   ui: { darkMode: false, notificationsGranted: false }
+  targets: {
+  // דוגמה התחלתית – הכל ניתן לשינוי
+  "שינה": { hours: 8, per: "day" },
+  "עבודה": { hours: 8, per: "day" }
+}
+
 };
 
-const STATS_TARGETS = {
-  sleep: {
-    perDay: 8 // שעות ליום
-  },
-  work: {
-    perDay: 8
-  }
-};
 
 
 const el = (id) => document.getElementById(id);
@@ -1342,6 +1340,10 @@ function initFirebaseListeners() {
     state.settings.cityLat = settings.cityLat || null;
     state.settings.cityLon = settings.cityLon || null;
     state.settings.cityTz = settings.cityTz || null;
+
+state.targets = settings.targets || state.targets;
+
+    
     el("cityLabel").textContent = state.settings.city || "לא נבחרה";
     el("settingsCityInput").value = state.settings.city || "";
   });
@@ -1366,6 +1368,12 @@ async function saveCitySettings() {
     await update(ref(db, "settings"), { city: state.settings.city });
     showToast("נשמר");
   }
+}
+async function saveTargets() {
+  await update(ref(db, "settings"), {
+    targets: state.targets
+  });
+  showToast("יעדים נשמרו");
 }
 
 // =========================
@@ -1742,22 +1750,42 @@ function computeStats({ user, range }) {
   };
 }
 
-function getTargetStatus({ range, totalDays, sleepHours, workHours }) {
-  const sleepTarget = STATS_TARGETS.sleep.perDay * totalDays;
-  const workTarget  = STATS_TARGETS.work.perDay * totalDays;
+function computeTargetStatuses(stats) {
+  const results = [];
+  const totalDays = stats.totalDays;
 
-  const calc = (actual, target) => {
-    const diff = actual - target;
+  Object.entries(state.targets || {}).forEach(([title, cfg]) => {
+    const actualMinutes =
+      title === "שינה"
+        ? stats.sleepMinutes
+        : title === "עבודה"
+        ? stats.workMinutes
+        : stats.otherMap[title] || 0;
 
-    if (Math.abs(diff) <= target * 0.05) return { status: "ok", diff };
-    if (diff < 0) return { status: "low", diff };
-    return { status: "high", diff };
-  };
+    const actualHours = actualMinutes / 60;
 
-  return {
-    sleep: calc(sleepHours, sleepTarget),
-    work: calc(workHours, workTarget)
-  };
+    const targetHours =
+      cfg.per === "day"
+        ? cfg.hours * totalDays
+        : cfg.hours;
+
+    const diff = actualHours - targetHours;
+
+    let status = "ok";
+    if (Math.abs(diff) > targetHours * 0.05) {
+      status = diff < 0 ? "low" : "high";
+    }
+
+    results.push({
+      title,
+      actualHours,
+      targetHours,
+      diff,
+      status
+    });
+  });
+
+  return results;
 }
 
 
@@ -1773,12 +1801,30 @@ function updateStats() {
   const sleep = stats.sleepMinutes / 60;
   const work  = stats.workMinutes / 60;
 
-  const targetStatus = getTargetStatus({
-  range,
-  totalDays: stats.totalDays,
-  sleepHours: sleep,
-  workHours: work
-});
+ const targetStatuses = computeTargetStatuses(stats);
+
+el("statsSummary")?.remove();
+const wrap = document.createElement("div");
+wrap.id = "statsSummary";
+wrap.style.marginTop = "10px";
+
+wrap.innerHTML = targetStatuses.map(t => {
+  const icon =
+    t.status === "ok" ? "🟢" :
+    t.status === "low" ? "🟠" : "🔴";
+
+  const diff = Math.abs(t.diff).toFixed(1);
+  const text =
+    t.status === "ok"
+      ? "בטווח"
+      : t.status === "low"
+      ? `חסר ${diff} ש׳`
+      : `חריגה ${diff} ש׳`;
+
+  return `<div>${icon} ${t.title}: ${text}</div>`;
+}).join("");
+
+canvas.parentElement.appendChild(wrap);
 
 function statusToText(label, obj) {
   const icon =
