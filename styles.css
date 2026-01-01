@@ -1049,4 +1049,39 @@ body.dark .stats-range .segmented-btn {
   border-color: rgba(255,255,255,0.1);
 }
 
+/* =========================
+   CONFIRM MODAL – APP STYLE
+========================= */
+
+.confirm-modal {
+  max-width: 420px;
+  text-align: center;
+  padding: 18px 16px 20px;
+}
+
+.confirm-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.confirm-text {
+  font-size: 0.85rem;
+  color: var(--text-soft);
+  margin-bottom: 16px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.primary-pill.danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  box-shadow: 0 10px 24px rgba(220,38,38,0.45);
+}
+
+
+
+
 
