@@ -1631,8 +1631,10 @@ function gihariPlaceUndatedTasks() {
 }
 
 // =========================
+// =========================
 // Stats engine
 // =========================
+
 function getRangeDates(range) {
   const base = new Date(state.currentDate);
   base.setHours(12, 0, 0, 0);
@@ -1648,23 +1650,15 @@ function getRangeDates(range) {
   };
 
   switch (range) {
-    case "day":
-      addDays(1);
-      break;
-
-    case "week":
-      addDays(7);
-      break;
-
-    case "2weeks":
-      addDays(14);
-      break;
+    case "day": addDays(1); break;
+    case "week": addDays(7); break;
+    case "2weeks": addDays(14); break;
 
     case "month": {
       const y = base.getFullYear();
       const m = base.getMonth();
-      const daysInMonth = new Date(y, m + 1, 0).getDate();
-      for (let i = 1; i <= daysInMonth; i++) {
+      const days = new Date(y, m + 1, 0).getDate();
+      for (let i = 1; i <= days; i++) {
         dates.push(new Date(y, m, i, 12));
       }
       break;
@@ -1673,8 +1667,8 @@ function getRangeDates(range) {
     case "year": {
       const y = base.getFullYear();
       for (let m = 0; m < 12; m++) {
-        const daysInMonth = new Date(y, m + 1, 0).getDate();
-        for (let d = 1; d <= daysInMonth; d++) {
+        const days = new Date(y, m + 1, 0).getDate();
+        for (let d = 1; d <= days; d++) {
           dates.push(new Date(y, m, d, 12));
         }
       }
@@ -1703,80 +1697,59 @@ function computeStats({ user, range }) {
   let workMinutes = 0;
   let otherMap = {};
 
-  dates.forEach((date) => {
+  dates.forEach(date => {
     const dk = dateKeyFromDate(date);
-    const eventsObj = state.cache.events[dk] || {};
-
-    // ✅ מנגנון נגד כפילויות (בעיקר לברירת-מחדל כמו "שינה")
-    // נשמור לכל יום את הדקות המקסימליות לכל כותרת+owner+זמן כדי שלא ייסכמו כפול.
+    const events = state.cache.events[dk] || {};
     const seen = new Set();
 
-    Object.entries(eventsObj).forEach(([id, ev]) => {
+    Object.values(events).forEach(ev => {
       if (!isEventRelevantForUser(ev, user)) return;
       if (!ev.startTime || !ev.endTime) return;
 
-      const start = timeToMinutes(ev.startTime);
-      const end = timeToMinutes(ev.endTime);
-      if (end <= start) return;
+      const s = timeToMinutes(ev.startTime);
+      const e = timeToMinutes(ev.endTime);
+      if (e <= s) return;
 
-      const duration = end - start;
+      const sig = `${ev.title}|${ev.owner}|${s}-${e}|${ev.isDefault}`;
+      if (seen.has(sig)) return;
+      seen.add(sig);
 
-      // מפתח ייחודי לאירוע: כותרת + בעלים + זמן
-      // (כפילויות DB של אותו הדבר ייפלו פה)
-      const keySig = `${(ev.title || "").trim()}|${ev.owner || ""}|${ev.startTime}|${ev.endTime}|${ev.type || ""}|${ev.isDefault ? "D" : "U"}`;
-      if (seen.has(keySig)) return;
-      seen.add(keySig);
+      const dur = e - s;
+      const title = (ev.title || "").trim();
 
-      if ((ev.title || "").trim() === "שינה") {
-        sleepMinutes += duration;
-        return;
-      }
-
-      if ((ev.title || "").trim() === "עבודה") {
-        workMinutes += duration;
-        return;
-      }
-
-      const key = (ev.title || "אחר").trim() || "אחר";
-      otherMap[key] = (otherMap[key] || 0) + duration;
+      if (title === "שינה") sleepMinutes += dur;
+      else if (title === "עבודה") workMinutes += dur;
+      else otherMap[title] = (otherMap[title] || 0) + dur;
     });
   });
 
-  const usedMinutes =
+  const used =
     sleepMinutes +
     workMinutes +
     Object.values(otherMap).reduce((a, b) => a + b, 0);
 
-  const freeMinutes = Math.max(0, totalMinutesCapacity - usedMinutes);
-
   return {
     totalDays: dates.length,
-    totalMinutesCapacity,
     sleepMinutes,
     workMinutes,
     otherMap,
-    freeMinutes
+    freeMinutes: Math.max(0, totalMinutesCapacity - used)
   };
 }
 
 function computeTargetStatuses(stats) {
   const results = [];
-  const totalDays = stats.totalDays;
+  const days = stats.totalDays;
 
   Object.entries(state.targets || {}).forEach(([title, cfg]) => {
     const actualMinutes =
-      title === "שינה"
-        ? stats.sleepMinutes
-        : title === "עבודה"
-        ? stats.workMinutes
-        : stats.otherMap[title] || 0;
+      title === "שינה" ? stats.sleepMinutes :
+      title === "עבודה" ? stats.workMinutes :
+      stats.otherMap[title] || 0;
 
     const actualHours = actualMinutes / 60;
-
     const targetHours =
-      cfg.per === "day"
-        ? cfg.hours * totalDays
-        : cfg.hours;
+      cfg.per === "day" ? cfg.hours * days : cfg.hours;
 
     const diff = actualHours - targetHours;
 
@@ -1785,24 +1758,17 @@ function computeTargetStatuses(stats) {
       status = diff < 0 ? "low" : "high";
     }
 
-    results.push({
-      title,
-      actualHours,
-      targetHours,
-      diff,
-      status
-    });
+    results.push({ title, diff, status });
   });
 
   return results;
 }
 
-
 function updateStats() {
-  const user = state.currentUser;
-  const range = state.statsRange || "week";
-
-  const stats = computeStats({ user, range });
+  const stats = computeStats({
+    user: state.currentUser,
+    range: state.statsRange || "week"
+  });
 
   const canvas = el("workFreeChart");
   if (!canvas || !window.Chart) return;
@@ -1810,115 +1776,50 @@ function updateStats() {
   const sleep = stats.sleepMinutes / 60;
   const work  = stats.workMinutes / 60;
 
- const targetStatuses = computeTargetStatuses(stats);
+  // ---- סיכום יעדים ----
+  el("statsSummary")?.remove();
+  const summary = document.createElement("div");
+  summary.id = "statsSummary";
+  summary.style.marginTop = "10px";
 
-el("statsSummary")?.remove();
-const wrap = document.createElement("div");
-wrap.id = "statsSummary";
-wrap.style.marginTop = "10px";
+  summary.innerHTML = computeTargetStatuses(stats).map(t => {
+    const icon = t.status === "ok" ? "🟢" : t.status === "low" ? "🟠" : "🔴";
+    const diff = Math.abs(t.diff).toFixed(1);
+    const text =
+      t.status === "ok" ? "בטווח" :
+      t.status === "low" ? `חסר ${diff} ש׳` :
+      `חריגה ${diff} ש׳`;
+    return `<div>${icon} ${t.title}: ${text}</div>`;
+  }).join("");
 
-wrap.innerHTML = targetStatuses.map(t => {
-  const icon =
-    t.status === "ok" ? "🟢" :
-    t.status === "low" ? "🟠" : "🔴";
+  canvas.parentElement.appendChild(summary);
 
-  const diff = Math.abs(t.diff).toFixed(1);
-  const text =
-    t.status === "ok"
-      ? "בטווח"
-      : t.status === "low"
-      ? `חסר ${diff} ש׳`
-      : `חריגה ${diff} ש׳`;
-
-  return `<div>${icon} ${t.title}: ${text}</div>`;
-}).join("");
-
-canvas.parentElement.appendChild(wrap);
-
-function statusToText(label, obj) {
-  const icon =
-    obj.status === "ok" ? "🟢" :
-    obj.status === "low" ? "🟠" : "🔴";
-
-  const hours = Math.abs(obj.diff).toFixed(1);
-
-  const text =
-    obj.status === "ok" ? "בטווח" :
-    obj.status === "low" ? `חסר ${hours} ש׳` :
-    `חריגה ${hours} ש׳`;
-
-  return `${icon} ${label}: ${text}`;
-}
-
-const summary = [
-  statusToText("שינה", targetStatus.sleep),
-  statusToText("עבודה", targetStatus.work)
-].join(" | ");
-
-el("statsSummary")?.remove();
-const div = document.createElement("div");
-div.id = "statsSummary";
-div.style.marginTop = "10px";
-div.style.fontWeight = "bold";
-div.textContent = summary;
-
-canvas.parentElement.appendChild(div);
-
-  const otherMap = stats.otherMap || {};
-  const otherLabels = Object.keys(otherMap);
-  const otherValues = Object.values(otherMap).map(v => v / 60);
-
+  // ---- גרף ----
+  const otherLabels = Object.keys(stats.otherMap);
+  const otherValues = Object.values(stats.otherMap).map(v => v / 60);
   const freeHours = stats.freeMinutes / 60;
 
   const labels = ["שינה", "עבודה", ...otherLabels, "זמן פנוי"];
-  const data   = [sleep, work, ...otherValues, freeHours];
-
-  // ✅ זה הבסיס היחיד לחישוב אחוזים
-  const TOTAL_HOURS = data.reduce((a, b) => a + b, 0);
-
-  const colors = [
-    "#4A90E2",
-    "#E74C3C",
-    ...otherLabels.map((_, i) => `hsl(${(i * 70) % 360},70%,55%)`),
-    "#2ECC71"
-  ];
+  const data = [sleep, work, ...otherValues, freeHours];
+  const total = data.reduce((a, b) => a + b, 0);
 
   const ctx = canvas.getContext("2d");
 
   if (!workFreeChart) {
     workFreeChart = new Chart(ctx, {
       type: "doughnut",
-      data: {
-        labels,
-        datasets: [{
-          data,
-          backgroundColor: colors
-        }]
-      },
-      plugins: [doughnutCenterTextPlugin],
+      data: { labels, datasets: [{ data }] },
       options: {
         cutout: "65%",
         plugins: {
-          legend: { position: "bottom" },
-         tooltip: {
-  callbacks: {
-    label: (ctx) => {
-      const val = Number(ctx.raw) || 0;
-
-      // ✅ מחשבים TOTAL_HOURS מהנתונים בפועל (דינמי!)
-      const dataset = ctx.chart.data.datasets[0].data || [];
-      const total = dataset.reduce((a, b) => a + b, 0);
-
-      const pct = total > 0
-        ? ((val / total) * 100).toFixed(1)
-        : "0.0";
-
-      return `${ctx.label}: ${val.toFixed(2)} שעות (${pct}%)`;
-    }
-  }
-},
-          centerText: {
-            text: `${(TOTAL_HOURS - freeHours).toFixed(1)} ש׳ תפוס`
+          tooltip: {
+            callbacks: {
+              label: c => {
+                const v = c.raw || 0;
+                const pct = total ? ((v / total) * 100).toFixed(1) : "0.0";
+                return `${c.label}: ${v.toFixed(2)} ש׳ (${pct}%)`;
+              }
+            }
           }
         }
       }
@@ -1926,7 +1827,6 @@ canvas.parentElement.appendChild(div);
   } else {
     workFreeChart.data.labels = labels;
     workFreeChart.data.datasets[0].data = data;
-    workFreeChart.data.datasets[0].backgroundColor = colors;
     workFreeChart.update();
   }
 }
