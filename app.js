@@ -7,6 +7,8 @@
 import { ref, onValue, set, push, update, remove } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 import { db } from "./firebase-config.js";
 const state = {
+  goals: {}
+
   currentUser: "binyamin",
   currentDate: new Date(),
   statsRange: "week",
@@ -1338,6 +1340,12 @@ function initFirebaseListeners() {
     updateStats();
   });
 
+  onValue(ref(db, "goals"), snap => {
+  state.goals = snap.val() || {};
+  updateStats();
+});
+
+
   onValue(ref(db, "shopping"), (snap) => {
     state.cache.shopping = snap.val() || {};
     renderShoppingList();
@@ -1739,26 +1747,22 @@ function computeStats({ user, range }) {
 
 function computeTargetStatuses(stats) {
   const results = [];
-  const days = stats.totalDays;
+  const weeks =
+    state.statsRange === "week" ? 1 :
+    state.statsRange === "month" ? 4.345 :
+    state.statsRange === "year" ? 52 :
+    1;
 
-  Object.entries(state.targets || {}).forEach(([title, cfg]) => {
-    const actualMinutes =
-      title === "שינה" ? stats.sleepMinutes :
-      title === "עבודה" ? stats.workMinutes :
-      stats.otherMap[title] || 0;
-
-    const actualHours = actualMinutes / 60;
-    const targetHours =
-      cfg.per === "day" ? cfg.hours * days : cfg.hours;
-
-    const diff = actualHours - targetHours;
+  Object.values(state.goals || {}).forEach(g => {
+    const actual = (stats.otherMap[g.title] || 0) / 60;
+    const target = g.weeklyHours * weeks;
+    const diff = actual - target;
 
     let status = "ok";
-    if (Math.abs(diff) > targetHours * 0.05) {
-      status = diff < 0 ? "low" : "high";
-    }
+    if (diff < -0.5) status = "low";
+    if (diff > 0.5) status = "high";
 
-    results.push({ title, diff, status });
+    results.push({ title: g.title, diff, status });
   });
 
   return results;
@@ -2021,6 +2025,30 @@ const doughnutCenterTextPlugin = {
     ctx.restore();
   }
 };
+function openGoalsModal() {
+  el("goalsModal").classList.remove("hidden");
+  renderGoals();
+}
+
+function renderGoals() {
+  const box = el("goalsList");
+  box.innerHTML = "";
+
+  Object.entries(state.goals || {}).forEach(([id, g]) => {
+    const div = document.createElement("div");
+    div.className = "task-item";
+    div.innerHTML = `
+      <b>${g.title}</b> – ${g.weeklyHours} ש׳ / שבוע
+      <button class="ghost-pill small">🗑</button>
+    `;
+    div.querySelector("button").onclick = () => {
+      delete state.goals[id];
+      update(ref(db, "goals"), state.goals);
+      renderGoals();
+    };
+    box.appendChild(div);
+  });
+}
 
 
 // =========================
@@ -2033,6 +2061,20 @@ function initApp() {
   initTasksFilters();
   initShopping();
   initFirebaseListeners();
+
+  el("btnOpenGoals").onclick = openGoalsModal;
+el("btnAddGoal").onclick = () => {
+  const title = el("goalTitle").value.trim();
+  const hours = Number(el("goalHours").value);
+  if (!title || !hours) return;
+
+  const id = Date.now();
+  state.goals[id] = { title, weeklyHours: hours };
+  update(ref(db, "goals"), state.goals);
+  el("goalTitle").value = "";
+  el("goalHours").value = "";
+};
+
 
 
 // =========================
