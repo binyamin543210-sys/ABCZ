@@ -2189,6 +2189,13 @@ div.querySelector(".edit-goal").onclick = () => {
 // App init
 // =========================
 function initApp() {
+
+// 🔥 טעינת משתמש שמור
+const savedUser = localStorage.getItem("bnapp_currentUser");
+if (savedUser) {
+  state.currentUser = savedUser;
+}
+  
   loadVoices();
   initTheme();
   initBottomNav();
@@ -2257,17 +2264,24 @@ rangeButtons.forEach(btn => {
 
 
   // user select -> state.currentUser
-  const userSel = el("userSelect");
-  if (userSel) {
-    userSel.value = state.currentUser;
-    userSel.onchange = () => {
-      state.currentUser = userSel.value || "binyamin";
-      renderCalendar();
-      renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
-      updateStats();
-    };
-  }
+const userSel = el("userSelect");
+if (userSel) {
+  // טעינה ראשונית מה־state
+  userSel.value = state.currentUser;
 
+  userSel.onchange = () => {
+    state.currentUser = userSel.value || "binyamin";
+
+    // 🔥 שמירה קבועה
+    localStorage.setItem("bnapp_currentUser", state.currentUser);
+
+    renderCalendar();
+    renderTasks(
+      qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated"
+    );
+    updateStats();
+  };
+}
   el("btnPrevMonth").onclick = () => { state.currentDate.setMonth(state.currentDate.getMonth() - 1); renderCalendar(); };
   el("btnNextMonth").onclick = () => { state.currentDate.setMonth(state.currentDate.getMonth() + 1); renderCalendar(); };
   el("btnToday").onclick = () => { state.currentDate = new Date(); renderCalendar(); };
