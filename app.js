@@ -2140,13 +2140,94 @@ function renderGoals() {
 
     // 🗑 מחיקה
     div.querySelector(".delete-goal").onclick = () => {
-      if (!confirm(`למחוק את המטרה "${g.title}"?`)) return;
+// =========================
+// Delete confirmation modal
+// =========================
+function openDeleteConfirm({ text, onConfirm }) {
+  const modal = el("deleteConfirmModal");
+  if (!modal) return;
 
-      delete state.goals[owner][id];
+  el("confirmText").textContent = text;
+  modal.classList.remove("hidden");
+
+  el("confirmCancel").onclick = () => {
+    modal.classList.add("hidden");
+  };
+
+  el("confirmOk").onclick = () => {
+    modal.classList.add("hidden");
+    onConfirm(); // 👈 רק כאן מתבצעת פעולה
+  };
+
+  modal.querySelector(".modal-backdrop").onclick = () => {
+    modal.classList.add("hidden");
+  };
+}
+
+
+// =========================
+// Render goals (per user)
+// =========================
+function renderGoals() {
+  const box = el("goalsList");
+  if (!box) return;
+
+  box.innerHTML = "";
+
+  const goals = state.goals || {};
+  const owner = state.currentUser;
+
+  Object.entries(goals).forEach(([id, g]) => {
+    if (g.owner !== owner) return;
+
+    const div = document.createElement("div");
+    div.className = `task-item owner-${g.owner}`;
+
+    div.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div class="task-title">${g.title}</div>
+          <div class="task-meta">${g.weeklyHours} ש׳ / שבוע</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="ghost-pill small edit-goal">✏️</button>
+          <button class="ghost-pill small delete-goal">🗑</button>
+        </div>
+      </div>
+    `;
+
+    // ✏️ עריכת שעות
+    div.querySelector(".edit-goal").onclick = () => {
+      const input = prompt(
+        `עדכן שעות שבועיות עבור "${g.title}"`,
+        g.weeklyHours
+      );
+
+      if (input === null) return;
+
+      const hours = Number(input);
+      if (isNaN(hours) || hours < 0) {
+        alert("אנא הזן מספר שעות חוקי");
+        return;
+      }
+
+      state.goals[id].weeklyHours = hours;
       update(ref(db, "goals"), state.goals);
-
       renderGoals();
       updateStats();
+    };
+
+    // 🗑 מחיקה עם חלונית יפה
+    div.querySelector(".delete-goal").onclick = () => {
+      openDeleteConfirm({
+        text: `למחוק את המטרה "${g.title}"?`,
+        onConfirm: () => {
+          delete state.goals[id];
+          update(ref(db, "goals"), state.goals);
+          renderGoals();
+          updateStats();
+        }
+      });
     };
 
     box.appendChild(div);
