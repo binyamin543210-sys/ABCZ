@@ -433,6 +433,21 @@ function showToast(text = "בוצע") {
 setTimeout(() => t.classList.add("hidden"), 500);
 }
 
+function applyBackground(bg) {
+  document.body.className =
+    document.body.className.replace(/bg-\d+/g, "");
+  document.body.classList.add("bg-" + bg);
+  localStorage.setItem("appBackground", bg);
+}
+
+const savedBg = localStorage.getItem("appBackground");
+if (savedBg) applyBackground(savedBg);
+
+document.querySelectorAll("#bgSelector button").forEach(btn => {
+  btn.onclick = () => applyBackground(btn.dataset.bg);
+});
+
+
 // ===============================
 // Notifications – Request Permission
 // ===============================
