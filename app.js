@@ -5,7 +5,7 @@
 // - hebcal.noloc.min.js (global Hebcal) - עם fallback אם לא נטען
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js");
+  navigator.serviceWorker.register("./sw.js");
 }
 
 
