@@ -1977,30 +1977,33 @@ function renderCompletedCards() {
       <h3 style="margin:16px 0 8px">${icon} ${title}</h3>
       <div class="cards-grid">
         ${items.map(i => `
-     <div class="stat-card">
-  <div class="stat-title">${i.title}</div>
-  <div class="stat-meta">👤 ${i.owner}</div>
+          <div class="stat-card">
+            <div class="stat-title">${i.title}</div>
+            <div class="stat-meta">👤 ${i.owner}</div>
 
-  ${
-    i.startTime
-      ? `<div class="stat-meta">🕒 ${i.startTime}–${i.endTime}</div>`
-      : i.duration
-        ? `<div class="stat-meta">🕒 ${Math.round(i.duration / 60)} ש׳</div>`
-        : ""
-  }
+            ${
+              i.startTime
+                ? `<div class="stat-meta">🕒 ${i.startTime}–${i.endTime}</div>`
+                : i.duration
+                  ? `<div class="stat-meta">🕒 ${Math.round(i.duration / 60)} ש׳</div>`
+                  : ""
+            }
 
-  <div class="stat-meta">📅 ${i.dateKey}</div>
+            <div class="stat-meta">📅 ${i.dateKey}</div>
 
-  <button class="ghost-pill small"
-    onclick="toggleTaskDone({ 
-      _id: '${i._id}', 
-      dateKey: '${i.dateKey}', 
-      completed: true 
-    })">
-    ↩ בטל בוצע
-  </button>
-</div>
-
+            <button class="ghost-pill small"
+              onclick="toggleTaskDone({
+                _id: '${i._id}',
+                dateKey: '${i.dateKey}',
+                completed: true
+              })">
+              ↩ בטל בוצע
+            </button>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  };
 
   container.innerHTML =
     makeSection("משימות שבוצעו", tasks, "✔") +
