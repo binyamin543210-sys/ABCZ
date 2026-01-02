@@ -627,6 +627,11 @@ function renderTasks(filter = "undated") {
 Object.entries(state.cache.events).forEach(([dateKey, items]) => {
   Object.entries(items || {}).forEach(([id, ev]) => {
 
+    
+    // ⛔ לא מציג פריטים שבוצעו
+if (ev.completed === true) return;
+
+
     // ⛔ חסימה מוחלטת של מופעי חזרות (משימות + אירועים)
 if (ev.isRecurringInstance === true) {
   return;
@@ -1789,8 +1794,15 @@ function getCompletedItemsInRange(range) {
 
   dateKeys.forEach(dk => {
     const dayEvents = state.cache.events?.[dk] || {};
-    Object.values(dayEvents).forEach(ev => {
-      if (!ev.completed) return;
+   Object.values(dayEvents).forEach(ev => {
+  if (!ev.completed) return;
+
+  // ⛔ פילטר לפי משתמש
+  if (
+    ev.owner !== "shared" &&
+    ev.owner !== state.currentUser
+  ) return;
+
 
       const isEvent = ev.startTime && ev.endTime;
       const item = { ...ev, dateKey: dk };
@@ -1965,22 +1977,30 @@ function renderCompletedCards() {
       <h3 style="margin:16px 0 8px">${icon} ${title}</h3>
       <div class="cards-grid">
         ${items.map(i => `
-          <div class="stat-card">
-            <div class="stat-title">${i.title}</div>
-            <div class="stat-meta">👤 ${i.owner}</div>
-            ${
-              i.startTime
-                ? `<div class="stat-meta">🕒 ${i.startTime}–${i.endTime}</div>`
-                : i.duration
-                  ? `<div class="stat-meta">🕒 ${Math.round(i.duration / 60)} ש׳</div>`
-                  : ""
-            }
-            <div class="stat-meta">📅 ${i.dateKey}</div>
-          </div>
-        `).join("")}
-      </div>
-    `;
-  };
+     <div class="stat-card">
+  <div class="stat-title">${i.title}</div>
+  <div class="stat-meta">👤 ${i.owner}</div>
+
+  ${
+    i.startTime
+      ? `<div class="stat-meta">🕒 ${i.startTime}–${i.endTime}</div>`
+      : i.duration
+        ? `<div class="stat-meta">🕒 ${Math.round(i.duration / 60)} ש׳</div>`
+        : ""
+  }
+
+  <div class="stat-meta">📅 ${i.dateKey}</div>
+
+  <button class="ghost-pill small"
+    onclick="toggleTaskDone({ 
+      _id: '${i._id}', 
+      dateKey: '${i.dateKey}', 
+      completed: true 
+    })">
+    ↩ בטל בוצע
+  </button>
+</div>
+
 
   container.innerHTML =
     makeSection("משימות שבוצעו", tasks, "✔") +
