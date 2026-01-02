@@ -1975,8 +1975,6 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
 
   
   // ברירת מחדל: מהיום עד +30 יום
-  const fromInput = el("completedFromDate");
-  const toInput   = el("completedToDate");
 
   if (fromInput && !fromInput.value) {
     const today = new Date();
