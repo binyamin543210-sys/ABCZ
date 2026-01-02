@@ -1785,27 +1785,37 @@ if (!ALWAYS_COUNT.includes(title) && !ev.completed) return;
   };
 }
 
-function getCompletedItemsInRange(range) {
-  const dates = getRangeDates(range);
-  const dateKeys = dates.map(d => dateKeyFromDate(d));
-
+function getCompletedItemsInRange(range, from, to) {
   const tasks = [];
   const events = [];
 
-  dateKeys.forEach(dk => {
-    const dayEvents = state.cache.events?.[dk] || {};
-   Object.values(dayEvents).forEach(ev => {
-  if (!ev.completed) return;
+  // טווח תאריכים ידני (אם קיים)
+  const fromTs = from
+    ? new Date(from).setHours(0, 0, 0, 0)
+    : null;
 
-  // ⛔ פילטר לפי משתמש
-  if (
-    ev.owner !== "shared" &&
-    ev.owner !== state.currentUser
-  ) return;
+  const toTs = to
+    ? new Date(to).setHours(23, 59, 59, 999)
+    : null;
 
+  Object.values(state.cache.events || {}).forEach(dayEvents => {
+    Object.values(dayEvents || {}).forEach(ev => {
+      if (!ev.completed) return;
+
+      // פילטר לפי משתמש
+      if (
+        ev.owner !== "shared" &&
+        ev.owner !== state.currentUser
+      ) return;
+
+      const completedTs = ev.completedAt || 0;
+
+      // פילטר לפי תאריך ביצוע
+      if (fromTs && completedTs < fromTs) return;
+      if (toTs && completedTs > toTs) return;
 
       const isEvent = ev.startTime && ev.endTime;
-      const item = { ...ev, dateKey: dk };
+      const item = { ...ev };
 
       if (isEvent) events.push(item);
       else tasks.push(item);
@@ -1814,7 +1824,6 @@ function getCompletedItemsInRange(range) {
 
   return { tasks, events };
 }
-
 
 function computeTargetStatuses(stats) {
   const results = [];
