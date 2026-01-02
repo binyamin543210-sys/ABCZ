@@ -454,6 +454,16 @@ if (btnNotif) {
     console.log("FCM TOKEN:", token);
     alert("התראות הופעלו בהצלחה");
   };
+
+  
+}
+const btnDisableNotif = document.getElementById("btnDisableNotifications");
+
+if (btnDisableNotif) {
+  btnDisableNotif.onclick = () => {
+    localStorage.setItem("notificationsEnabled", "false");
+    alert("התראות כובו");
+  };
 }
 
 
