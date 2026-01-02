@@ -1963,51 +1963,73 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
  renderCompletedCards();
 }
 
+function toggleCompletedSection(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle("hidden");
+}
+
+
 function renderCompletedCards() {
   const container = el("statsCompleted");
   if (!container) return;
 
-  const { tasks, events } = getCompletedItemsInRange(state.statsRange || "week");
+  const from = el("completedFromDate")?.value;
+  const to   = el("completedToDate")?.value;
+
+  const { tasks, events } = getCompletedItemsInRange(
+    state.statsRange || "week",
+    from,
+    to
+  );
+
   container.innerHTML = "";
 
-  const makeSection = (title, items, icon) => {
+  const makeSection = (id, title, items, icon) => {
     if (!items.length) return "";
 
     return `
-      <h3 style="margin:16px 0 8px">${icon} ${title}</h3>
-      <div class="cards-grid">
-        ${items.map(i => `
-          <div class="stat-card">
-            <div class="stat-title">${i.title}</div>
-            <div class="stat-meta">👤 ${i.owner}</div>
+      <div class="completed-section">
+        <h3 class="completed-header" onclick="toggleCompletedSection('${id}')">
+          ${icon} ${title} (${items.length})
+        </h3>
 
-            ${
-              i.startTime
-                ? `<div class="stat-meta">🕒 ${i.startTime}–${i.endTime}</div>`
-                : i.duration
-                  ? `<div class="stat-meta">🕒 ${Math.round(i.duration / 60)} ש׳</div>`
-                  : ""
-            }
+        <div id="${id}" class="completed-body hidden">
+          <div class="cards-grid">
+            ${items.map(i => `
+              <div class="stat-card">
+                <div class="stat-title">${i.title}</div>
+                <div class="stat-meta">👤 ${i.owner}</div>
 
-            <div class="stat-meta">📅 ${i.dateKey}</div>
+                ${
+                  i.startTime
+                    ? `<div class="stat-meta">🕒 ${i.startTime}–${i.endTime}</div>`
+                    : i.duration
+                      ? `<div class="stat-meta">🕒 ${Math.round(i.duration / 60)} ש׳</div>`
+                      : ""
+                }
 
-            <button class="ghost-pill small"
-              onclick="toggleTaskDone({
-                _id: '${i._id}',
-                dateKey: '${i.dateKey}',
-                completed: true
-              })">
-              ↩ בטל בוצע
-            </button>
+                <div class="stat-meta">📅 ${i.dateKey}</div>
+
+                <button class="ghost-pill small"
+                  onclick="toggleTaskDone({
+                    _id: '${i._id}',
+                    dateKey: '${i.dateKey}',
+                    completed: true
+                  })">
+                  ↩ בטל בוצע
+                </button>
+              </div>
+            `).join("")}
           </div>
-        `).join("")}
+        </div>
       </div>
     `;
   };
 
   container.innerHTML =
-    makeSection("משימות שבוצעו", tasks, "✔") +
-    makeSection("אירועים שבוצעו", events, "📅");
+    makeSection("completedTasks", "משימות שבוצעו", tasks, "✔") +
+    makeSection("completedEvents", "אירועים שבוצעו", events, "📅");
 }
 
 // ===============================
@@ -2360,6 +2382,26 @@ el("btnAddGoal").onclick = () => {
 
   el("goalsModal").classList.add("hidden");
 
+// ===== Completed stats default date range =====
+const fromInput = el("completedFromDate");
+const toInput   = el("completedToDate");
+
+if (fromInput && toInput) {
+  const today = new Date();
+  const from = today.toISOString().slice(0, 10);
+
+  const future = new Date(today);
+  future.setDate(future.getDate() + 30);
+  const to = future.toISOString().slice(0, 10);
+
+  fromInput.value = from;
+  toInput.value = to;
+
+  fromInput.onchange = () => renderCompletedCards();
+  toInput.onchange = () => renderCompletedCards();
+}
+
+  
   renderGoals();
   updateStats();
 };
