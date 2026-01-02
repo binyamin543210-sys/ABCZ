@@ -1963,11 +1963,6 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
  renderCompletedCards();
 }
 
-function toggleCompletedSection(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.toggle("hidden");
-}
 
 
 function renderCompletedCards() {
@@ -2030,6 +2025,11 @@ function renderCompletedCards() {
   container.innerHTML =
     makeSection("completedTasks", "משימות שבוצעו", tasks, "✔") +
     makeSection("completedEvents", "אירועים שבוצעו", events, "📅");
+}
+function toggleCompletedSection(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle("hidden");
 }
 
 // ===============================
