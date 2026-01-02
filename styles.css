@@ -1132,3 +1132,18 @@ body.dark .stats-range .segmented-btn {
 .completed-section {
   margin-bottom: 12px;
 }
+
+
+
+
+
+body.bg-1 { background: linear-gradient(135deg, #6366f1, #a855f7); }
+body.bg-2 { background: linear-gradient(135deg, #22c55e, #16a34a); }
+body.bg-3 { background: linear-gradient(135deg, #0ea5e9, #0369a1); }
+body.bg-4 { background: linear-gradient(135deg, #f97316, #ea580c); }
+body.bg-5 { background: linear-gradient(135deg, #ec4899, #be185d); }
+body.bg-6 { background: linear-gradient(135deg, #14b8a6, #0f766e); }
+body.bg-7 { background: linear-gradient(135deg, #64748b, #334155); }
+body.bg-8 { background: linear-gradient(135deg, #eab308, #ca8a04); }
+body.bg-9 { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+body.bg-10 { background: linear-gradient(135deg, #111827, #000000); }
