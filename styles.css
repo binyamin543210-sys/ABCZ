@@ -1107,3 +1107,28 @@ body.dark .stats-range .segmented-btn {
 
 
 
+/* ===== Completed stats accordion ===== */
+
+.completed-header {
+  cursor: pointer;
+  user-select: none;
+  padding: 10px 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.completed-header:hover {
+  opacity: 0.85;
+}
+
+.completed-body.hidden {
+  display: none;
+}
+
+/* ריווח בין קבוצות */
+.completed-section {
+  margin-bottom: 12px;
+}
