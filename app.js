@@ -1780,6 +1780,30 @@ if (!ALWAYS_COUNT.includes(title) && !ev.completed) return;
   };
 }
 
+function getCompletedItemsInRange(range) {
+  const dates = getRangeDates(range);
+  const dateKeys = dates.map(d => dateKeyFromDate(d));
+
+  const tasks = [];
+  const events = [];
+
+  dateKeys.forEach(dk => {
+    const dayEvents = state.cache.events?.[dk] || {};
+    Object.values(dayEvents).forEach(ev => {
+      if (!ev.completed) return;
+
+      const isEvent = ev.startTime && ev.endTime;
+      const item = { ...ev, dateKey: dk };
+
+      if (isEvent) events.push(item);
+      else tasks.push(item);
+    });
+  });
+
+  return { tasks, events };
+}
+
+
 function computeTargetStatuses(stats) {
   const results = [];
 
@@ -1919,8 +1943,50 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
     workFreeChart.data.labels = labels;
     workFreeChart.data.datasets[0].data = data;
     workFreeChart.update();
+   
+
   }
+
+
+ renderCompletedCards();
 }
+
+function renderCompletedCards() {
+  const container = el("statsCompleted");
+  if (!container) return;
+
+  const { tasks, events } = getCompletedItemsInRange(state.statsRange || "week");
+  container.innerHTML = "";
+
+  const makeSection = (title, items, icon) => {
+    if (!items.length) return "";
+
+    return `
+      <h3 style="margin:16px 0 8px">${icon} ${title}</h3>
+      <div class="cards-grid">
+        ${items.map(i => `
+          <div class="stat-card">
+            <div class="stat-title">${i.title}</div>
+            <div class="stat-meta">👤 ${i.owner}</div>
+            ${
+              i.startTime
+                ? `<div class="stat-meta">🕒 ${i.startTime}–${i.endTime}</div>`
+                : i.duration
+                  ? `<div class="stat-meta">🕒 ${Math.round(i.duration / 60)} ש׳</div>`
+                  : ""
+            }
+            <div class="stat-meta">📅 ${i.dateKey}</div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  };
+
+  container.innerHTML =
+    makeSection("משימות שבוצעו", tasks, "✔") +
+    makeSection("אירועים שבוצעו", events, "📅");
+}
+
 // ===============================
 // Voice Command Handler (תמציתי)
 // ===============================
