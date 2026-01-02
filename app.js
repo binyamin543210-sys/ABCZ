@@ -1959,8 +1959,8 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
 
   }
 
-
  renderCompletedCards();
+
 }
 
 
@@ -2460,6 +2460,11 @@ if (userSel) {
   renderTasks();
   renderShoppingList();
   updateStats();
+
+  // ===== expose functions for inline HTML handlers =====
+window.toggleCompletedSection = toggleCompletedSection;
+window.toggleTaskDone = toggleTaskDone;
+
 }
 
 document.addEventListener("DOMContentLoaded", initApp);
