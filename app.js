@@ -1676,10 +1676,30 @@ function moveTaskToDate(task, newDateKey) {
   showToast("המשימה נדחתה");
 }
 
-
 function getRangeDates(range) {
   const base = new Date(state.currentDate);
   base.setHours(12, 0, 0, 0);
+
+  // 🔥 תמיד מסתכלים אחורה
+  if (range === "day") {
+    base.setDate(base.getDate() - 1);
+  }
+
+  if (range === "week" || range === "2weeks") {
+    // קופצים לשבוע הקודם
+    base.setDate(base.getDate() - 7);
+  }
+
+  if (range === "month") {
+    // קופצים לחודש הקודם
+    base.setMonth(base.getMonth() - 1);
+  }
+
+  if (range === "year") {
+    // קופצים לשנה הקודמת
+    base.setFullYear(base.getFullYear() - 1);
+  }
+
 
   const dates = [];
 
