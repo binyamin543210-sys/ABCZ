@@ -1958,8 +1958,41 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
    
 
   }
+    // --- מאזיני סינון לפי תאריך (סטטיסטיקה) ---
+  const fromInput = el("completedFromDate");
+  const toInput   = el("completedToDate");
 
+  if (fromInput && !fromInput.dataset.bound) {
+    fromInput.dataset.bound = "1";
+    fromInput.onchange = () => renderCompletedCards();
+  }
+
+  if (toInput && !toInput.dataset.bound) {
+    toInput.dataset.bound = "1";
+    toInput.onchange = () => renderCompletedCards();
+  }
+
+
+  
+  // ברירת מחדל: מהיום עד +30 יום
+  const fromInput = el("completedFromDate");
+  const toInput   = el("completedToDate");
+
+  if (fromInput && !fromInput.value) {
+    const today = new Date();
+    fromInput.value = today.toISOString().slice(0, 10);
+  }
+
+  if (toInput && !toInput.value) {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    toInput.value = d.toISOString().slice(0, 10);
+  }
+
+  
  renderCompletedCards();
+
+
 
 }
 
