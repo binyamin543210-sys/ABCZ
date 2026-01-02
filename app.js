@@ -4,8 +4,22 @@
 // - Chart.js (global Chart)
 // - hebcal.noloc.min.js (global Hebcal) - עם fallback אם לא נטען
 
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js");
+}
+
+
 import { ref, onValue, set, push, update, remove } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 import { db } from "./firebase-config.js";
+import {
+  getMessaging,
+  getToken
+} from "https://www.gstatic.com/firebasejs/9.22.2/firebase-messaging.js";
+
+import { firebaseApp } from "./firebase-config.js";
+
+const messaging = getMessaging(firebaseApp);
+
 
 const state = {
   currentUser: "binyamin",
@@ -418,6 +432,30 @@ function showToast(text = "בוצע") {
   t.classList.remove("hidden");
 setTimeout(() => t.classList.add("hidden"), 500);
 }
+
+// ===============================
+// Notifications – Request Permission
+// ===============================
+const btnNotif = document.getElementById("btnRequestNotifications");
+
+if (btnNotif) {
+  btnNotif.onclick = async () => {
+    const permission = await Notification.requestPermission();
+
+    if (permission !== "granted") {
+      alert("חייב לאשר התראות כדי שזה יעבוד");
+      return;
+    }
+
+    const token = await getToken(messaging, {
+      vapidKey: "BFzkYCDuV_Ij_b3PQtswrDNnPe4xTVUbxYBJKkLx7YEkERrgOSOYC6KeZ1kNUuABeQV1GZ_xYIVnbU27Rseozss"
+    });
+
+    console.log("FCM TOKEN:", token);
+    alert("התראות הופעלו בהצלחה");
+  };
+}
+
 
 // =========================
 // Conflict detection helpers
