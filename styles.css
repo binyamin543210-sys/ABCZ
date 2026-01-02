@@ -1080,6 +1080,28 @@ body.dark .stats-range .segmented-btn {
   background: linear-gradient(135deg, #ef4444, #dc2626);
   box-shadow: 0 10px 24px rgba(220,38,38,0.45);
 }
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  background: var(--bg-elevated);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: var(--shadow-soft);
+}
+
+.stat-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.stat-meta {
+  font-size: 13px;
+  opacity: 0.85;
+}
 
 
 
