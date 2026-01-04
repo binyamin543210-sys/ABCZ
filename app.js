@@ -466,6 +466,13 @@ if (btnNotif) {
       vapidKey: "BFzkYCDuV_Ij_b3PQtswrDNnPe4xTVUbxYBJKkLx7YEkERrgOSOYC6KeZ1kNUuABeQV1GZ_xYIVnbU27Rseozss"
     });
 
+await set(ref(db, "notificationTokens/" + token), {
+  user: state.currentUser,
+  createdAt: Date.now(),
+  userAgent: navigator.userAgent
+});
+
+    
     console.log("FCM TOKEN:", token);
     alert("התראות הופעלו בהצלחה");
   };
