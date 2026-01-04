@@ -3,7 +3,7 @@
   "short_name": "BNAPP",
   "start_url": "./",
   "display": "standalone",
-"gcm_sender_id": "103953800507"
+"gcm_sender_id": "103953800507",
   "background_color": "#f6f6fb",
   "theme_color": "#6366f1",
   "dir": "rtl",
