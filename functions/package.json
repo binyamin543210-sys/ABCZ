@@ -1,0 +1,10 @@
+{
+  "name": "bnapp-functions",
+  "private": true,
+  "engines": { "node": "18" },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.0.1"
+  }
+}
