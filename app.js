@@ -1891,7 +1891,12 @@ function computeStats({ user, range }) {
 const title = (ev.title || "").trim();
 
 // אם זה לא אחד מהקבועים – חייב להיות בוצע
-if (!ALWAYS_COUNT.includes(title) && !ev.completed) return;
+if (
+  !ALWAYS_COUNT.includes(title) &&
+  !ev.completed &&
+  !ev.completedAt
+) return;
+
 
       const s = timeToMinutes(ev.startTime);
       const e = timeToMinutes(ev.endTime);
@@ -1939,7 +1944,8 @@ function getCompletedItemsInRange(range, from, to) {
 
   Object.values(state.cache.events || {}).forEach(dayEvents => {
     Object.values(dayEvents || {}).forEach(ev => {
-      if (!ev.completed) return;
+  if (!ev.completed && !ev.completedAt) return;
+
 
       // פילטר לפי משתמש
       if (
@@ -1947,6 +1953,10 @@ function getCompletedItemsInRange(range, from, to) {
         ev.owner !== state.currentUser
       ) return;
 
+// אם זה מופע חוזר – סופרים רק את המופע עצמו
+if (ev.isRecurringParent) return;
+
+      
       const completedTs = ev.completedAt || 0;
 
       // פילטר לפי תאריך ביצוע
