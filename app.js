@@ -463,6 +463,24 @@ const btnNotif = document.getElementById("btnRequestNotifications");
 const savedBg = localStorage.getItem("appBackground");
 if (savedBg) applyBackground(savedBg);
 
+// ===============================
+// BG SELECTOR – FIX (REAL)
+// ===============================
+const bgSelector = document.getElementById("bgSelector");
+
+if (bgSelector) {
+  bgSelector.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+
+    const bg = btn.dataset.bg;
+    if (!bg) return;
+
+    applyBackground(bg);
+  });
+}
+
+
 
 if (btnNotif) {
   btnNotif.onclick = async () => {
