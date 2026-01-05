@@ -1045,6 +1045,24 @@ const list = Object.entries(events)
     const actions = document.createElement("div");
     actions.className = "task-actions";
 
+    // =========================
+// DONE BUTTON (DAY MODAL)
+// =========================
+const doneBtn = document.createElement("button");
+doneBtn.className = "ghost-pill small";
+doneBtn.textContent = ev.completed ? "↩ בטל בוצע" : "✔ בוצע";
+
+doneBtn.onclick = () => {
+  toggleTaskDone({
+    ...ev,
+    dateKey,
+    id: ev._id || ev.id
+  });
+};
+
+actions.appendChild(doneBtn);
+
+
     const editBtn = document.createElement("button");
     editBtn.className = "ghost-pill small";
     editBtn.textContent = "עריכה";
