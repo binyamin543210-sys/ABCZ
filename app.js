@@ -2200,7 +2200,8 @@ function renderCompletedCards() {
 
     return `
       <div class="completed-section">
-        <h3 class="completed-header" onclick="toggleCompletedSection('${id}')">
+       <h3 class="completed-header" data-toggle-id="${id}">
+
           ${icon} ${title} (${items.length})
         </h3>
 
@@ -2216,6 +2217,14 @@ function renderCompletedCards() {
   container.innerHTML =
     makeSection("completedTasks", "משימות שבוצעו", tasks, "✔") +
     makeSection("completedEvents", "אירועים שבוצעו", events, "📅");
+
+  container.querySelectorAll(".completed-header").forEach(h => {
+  h.onclick = () => {
+    const id = h.dataset.toggleId;
+    toggleCompletedSection(id);
+  };
+});
+
 }
 
 function toggleCompletedSection(id) {
