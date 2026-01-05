@@ -1136,14 +1136,59 @@ body.dark .stats-range .segmented-btn {
 
 
 
+/* =========================
+   CALENDAR BACKGROUNDS
+========================= */
 
-body.bg-1 { background: linear-gradient(135deg, #6366f1, #a855f7); }
-body.bg-2 { background: linear-gradient(135deg, #22c55e, #16a34a); }
-body.bg-3 { background: linear-gradient(135deg, #0ea5e9, #0369a1); }
-body.bg-4 { background: linear-gradient(135deg, #f97316, #ea580c); }
-body.bg-5 { background: linear-gradient(135deg, #ec4899, #be185d); }
-body.bg-6 { background: linear-gradient(135deg, #14b8a6, #0f766e); }
-body.bg-7 { background: linear-gradient(135deg, #64748b, #334155); }
-body.bg-8 { background: linear-gradient(135deg, #eab308, #ca8a04); }
-body.bg-9 { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
-body.bg-10 { background: linear-gradient(135deg, #111827, #000000); }
+body.bg-1 { --bg: #f6f6fb; }
+body.bg-2 { --bg: #eef2ff; }
+body.bg-3 { --bg: #ecfeff; }
+body.bg-4 { --bg: #f0fdf4; }
+body.bg-5 { --bg: #fff7ed; }
+body.bg-6 { --bg: #fef2f2; }
+body.bg-7 { --bg: #faf5ff; }
+body.bg-8 { --bg: #f8fafc; }
+body.bg-9 { --bg: #0f172a; }
+body.bg-10 { --bg: #020617; }
+
+/* dark text fix */
+body.bg-9,
+body.bg-10 {
+  --text: #f8fafc;
+  --text-soft: #cbd5e1;
+}
+
+
+
+/* =========================
+   BG SELECTOR BUTTONS
+========================= */
+
+#bgSelector {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+#bgSelector button {
+  height: 36px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+#bgSelector button[data-bg="1"]  { background:#f6f6fb; }
+#bgSelector button[data-bg="2"]  { background:#eef2ff; }
+#bgSelector button[data-bg="3"]  { background:#ecfeff; }
+#bgSelector button[data-bg="4"]  { background:#f0fdf4; }
+#bgSelector button[data-bg="5"]  { background:#fff7ed; }
+#bgSelector button[data-bg="6"]  { background:#fef2f2; }
+#bgSelector button[data-bg="7"]  { background:#faf5ff; }
+#bgSelector button[data-bg="8"]  { background:#f8fafc; }
+#bgSelector button[data-bg="9"]  { background:#0f172a; color:white; }
+#bgSelector button[data-bg="10"] { background:#020617; color:white; }
+
+#bgSelector button.active {
+  outline: 3px solid var(--accent);
+}
