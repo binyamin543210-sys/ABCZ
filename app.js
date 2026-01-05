@@ -434,11 +434,15 @@ setTimeout(() => t.classList.add("hidden"), 500);
 }
 
 function applyBackground(bg) {
-  // ניקוי רקעים קודמים
-  document.body.className =
-    document.body.className.replace(/bg-\d+/g, "").trim();
 
-  // החלת רקע חדש
+  // הסרת כל bg-* בלי לגעת בשאר המחלקות (dark וכו')
+  document.body.classList.forEach(cls => {
+    if (cls.startsWith("bg-")) {
+      document.body.classList.remove(cls);
+    }
+  });
+
+  // הוספת הרקע החדש
   document.body.classList.add("bg-" + bg);
 
   // שמירה
