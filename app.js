@@ -2172,6 +2172,29 @@ function renderCompletedCards() {
 
   container.innerHTML = "";
 
+  const makeCardsHtml = (items) =>
+    items.map(i => `
+      <div class="stat-card">
+        <div class="stat-title">${i.title}</div>
+        <div class="stat-meta">👤 ${i.owner}</div>
+
+        ${
+          i.startTime
+            ? `<div class="stat-meta">🕒 ${i.startTime}–${i.endTime}</div>`
+            : i.duration
+              ? `<div class="stat-meta">🕒 ${Math.round(i.duration / 60)} ש׳</div>`
+              : ""
+        }
+
+        <div class="stat-meta">📅 ${i.dateKey}</div>
+
+        <button class="ghost-pill small"
+          onclick="toggleTaskDone({ _id: '${i._id}', dateKey: '${i.dateKey}', completed: true })">
+          ↩ בטל בוצע
+        </button>
+      </div>
+    `).join("");
+
   const makeSection = (id, title, items, icon) => {
     if (!items.length) return "";
 
@@ -2183,31 +2206,7 @@ function renderCompletedCards() {
 
         <div id="${id}" class="completed-body hidden">
           <div class="cards-grid">
-            ${items.map(i => `
-              <div class="stat-card">
-                <div class="stat-title">${i.title}</div>
-                <div class="stat-meta">👤 ${i.owner}</div>
-
-                ${
-                  i.startTime
-                    ? `<div class="stat-meta">🕒 ${i.startTime}–${i.endTime}</div>`
-                    : i.duration
-                      ? `<div class="stat-meta">🕒 ${Math.round(i.duration / 60)} ש׳</div>`
-                      : ""
-                }
-
-                <div class="stat-meta">📅 ${i.dateKey}</div>
-
-                <button class="ghost-pill small"
-                  onclick="toggleTaskDone({
-                    _id: '${i._id}',
-                    dateKey: '${i.dateKey}',
-                    completed: true
-                  })">
-                  ↩ בטל בוצע
-                </button>
-              </div>
-            `).join("")}
+            ${makeCardsHtml(items)}
           </div>
         </div>
       </div>
@@ -2218,6 +2217,7 @@ function renderCompletedCards() {
     makeSection("completedTasks", "משימות שבוצעו", tasks, "✔") +
     makeSection("completedEvents", "אירועים שבוצעו", events, "📅");
 }
+
 function toggleCompletedSection(id) {
   const el = document.getElementById(id);
   if (!el) return;
