@@ -41,10 +41,12 @@ const state = {
     shabbat: {}
   },
 
-  ui: {
-    darkMode: false,
-    notificationsGranted: false
-  },
+ui: {
+  darkMode: false,
+  notificationsGranted: false,
+  statsManualRange: false
+},
+
 
   // מטרות שבועיות – מנוהלות מדף סטטיסטיקות
 goals: {
@@ -2110,12 +2112,14 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
 
   if (fromInput && !fromInput.dataset.bound) {
     fromInput.dataset.bound = "1";
-    fromInput.onchange = () => renderCompletedCards();
+   fromInput.onchange = () => { statsMarkManualDates(); renderCompletedCards(); };
+
   }
 
   if (toInput && !toInput.dataset.bound) {
     toInput.dataset.bound = "1";
-    toInput.onchange = () => renderCompletedCards();
+   toInput.onchange = () => { statsMarkManualDates(); renderCompletedCards(); };
+
   }
 
 
@@ -2138,6 +2142,17 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
 
 
 
+}
+// שחזור תאריכים שמורים
+const savedFrom = localStorage.getItem("bnapp_stats_from");
+const savedTo   = localStorage.getItem("bnapp_stats_to");
+
+if (fromInput && savedFrom) fromInput.value = savedFrom;
+if (toInput && savedTo) toInput.value = savedTo;
+
+// אם אין תאריכים שמורים ואין שינוי ידני – תן לברירת המחדל להיות "שעבר" לפי הטווח הנבחר
+if ((!savedFrom || !savedTo) && localStorage.getItem("bnapp_stats_manualDates") !== "1") {
+  statsApplyPresetDates(state.statsRange || "week");
 }
 
 
@@ -2582,21 +2597,85 @@ if (fromInput && toInput) {
   renderGoals();
   updateStats();
 };
+
+// =========================
+// Stats date range helpers (auto vs manual)
+// =========================
+function statsMarkManualDates() {
+  localStorage.setItem("bnapp_stats_manualDates", "1");
+
+  const from = el("completedFromDate")?.value || "";
+  const to   = el("completedToDate")?.value || "";
+  localStorage.setItem("bnapp_stats_from", from);
+  localStorage.setItem("bnapp_stats_to", to);
+}
+
+function statsApplyPresetDates(range) {
+  // אם המשתמש שינה ידנית – לא לדרוס
+  if (localStorage.getItem("bnapp_stats_manualDates") === "1") return;
+
+  const fromInput = el("completedFromDate");
+  const toInput   = el("completedToDate");
+  if (!fromInput || !toInput) return;
+
+  const now = new Date();
+  now.setHours(12, 0, 0, 0);
+
+  let fromDate = null;
+  let toDate = null;
+
+  // תמיד עד אתמול (כדי שלא יהיה "על ההווה")
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (range === "week") {
+    toDate = yesterday;
+    fromDate = new Date(toDate);
+    fromDate.setDate(fromDate.getDate() - 6);
+  } else if (range === "month") {
+    const y = now.getFullYear();
+    const m = now.getMonth(); // החודש הנוכחי (0-11)
+    // חודש שעבר:
+    fromDate = new Date(y, m - 1, 1);
+    toDate = new Date(y, m, 0); // היום ה-0 של החודש הנוכחי = היום האחרון של החודש הקודם
+  } else if (range === "year") {
+    const y = now.getFullYear() - 1;
+    fromDate = new Date(y, 0, 1);
+    toDate = new Date(y, 11, 31);
+  } else {
+    // אם יש לך עוד טווחים בעתיד – לא עושים כלום
+    return;
+  }
+
+  fromInput.value = fromDate.toISOString().slice(0, 10);
+  toInput.value   = toDate.toISOString().slice(0, 10);
+
+  // לשמור כדי שגם ריענון ישמר
+  localStorage.setItem("bnapp_stats_from", fromInput.value);
+  localStorage.setItem("bnapp_stats_to", toInput.value);
+
+  renderCompletedCards();
+}
+
+  
 // =========================
 // Stats range selector
 // =========================
 const rangeButtons = document.querySelectorAll("#statsRangeSelector .segmented-btn");
 
 rangeButtons.forEach(btn => {
-  btn.onclick = () => {
-    rangeButtons.forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
+btn.onclick = () => {
+  rangeButtons.forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
 
-    state.statsRange = btn.dataset.range;
-    updateStats();
-  };
-});
-  
+  state.statsRange = btn.dataset.range;
+
+  // ✅ אוטומטי לטווח "שעבר" (רק אם המשתמש לא שינה ידנית)
+  statsApplyPresetDates(state.statsRange);
+
+  updateStats();
+};
+
   initGihari();
 
 
