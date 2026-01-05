@@ -2675,7 +2675,9 @@ btn.onclick = () => {
 
   updateStats();
 };
+});
 
+  
   initGihari();
 
 
