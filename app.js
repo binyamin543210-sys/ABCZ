@@ -434,24 +434,31 @@ setTimeout(() => t.classList.add("hidden"), 500);
 }
 
 function applyBackground(bg) {
+  // ניקוי רקעים קודמים
   document.body.className =
-    document.body.className.replace(/bg-\d+/g, "");
+    document.body.className.replace(/bg-\d+/g, "").trim();
+
+  // החלת רקע חדש
   document.body.classList.add("bg-" + bg);
+
+  // שמירה
   localStorage.setItem("appBackground", bg);
+
+  // סימון כפתור פעיל
+  document.querySelectorAll("#bgSelector button").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.bg === bg);
+  });
 }
-
-const savedBg = localStorage.getItem("appBackground");
-if (savedBg) applyBackground(savedBg);
-
-document.querySelectorAll("#bgSelector button").forEach(btn => {
-  btn.onclick = () => applyBackground(btn.dataset.bg);
-});
 
 
 // ===============================
 // Notifications – Request Permission
 // ===============================
 const btnNotif = document.getElementById("btnRequestNotifications");
+
+const savedBg = localStorage.getItem("appBackground");
+if (savedBg) applyBackground(savedBg);
+
 
 if (btnNotif) {
   btnNotif.onclick = async () => {
