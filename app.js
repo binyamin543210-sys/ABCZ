@@ -2140,9 +2140,6 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
   
  renderCompletedCards();
 
-
-
-}
 // שחזור תאריכים שמורים
 const savedFrom = localStorage.getItem("bnapp_stats_from");
 const savedTo   = localStorage.getItem("bnapp_stats_to");
@@ -2154,6 +2151,9 @@ if (toInput && savedTo) toInput.value = savedTo;
 if ((!savedFrom || !savedTo) && localStorage.getItem("bnapp_stats_manualDates") !== "1") {
   statsApplyPresetDates(state.statsRange || "week");
 }
+
+}
+
 
 
 
