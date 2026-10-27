@@ -1180,6 +1180,7 @@ function openEditModal({ dateKey, id } = {}) {
   }
 
   // כפתורי בחירה מהירה של תזכורת בטופס עריכה
+  form.dataset.remInMinutes = "";
   const presetBtns = qsa("#editReminderPresets button");
   const remMinInput = form.elements["reminderMinutes"];
   const remDateInput = form.elements["reminderDate"];
@@ -1197,6 +1198,7 @@ function openEditModal({ dateKey, id } = {}) {
     b.onclick = () => {
       if (b.dataset.remIn) {
         const minsFromNow = Number(b.dataset.remIn);
+        form.dataset.remInMinutes = String(minsFromNow);
         const dt = new Date(Date.now() + minsFromNow * 60000);
         if (remDateInput) remDateInput.value = dateKeyFromDate(dt);
         if (remTimeInput) remTimeInput.value = formatTimeHM(dt);
@@ -1204,6 +1206,7 @@ function openEditModal({ dateKey, id } = {}) {
         presetBtns.forEach((btn) => btn.classList.remove("active"));
         b.classList.add("active");
       } else {
+        form.dataset.remInMinutes = "";
         if (remMinInput) remMinInput.value = b.dataset.remMin;
         if (remDateInput) remDateInput.value = "";
         if (remTimeInput) remTimeInput.value = "";
@@ -1211,7 +1214,17 @@ function openEditModal({ dateKey, id } = {}) {
       }
     };
   });
-  if (remMinInput) remMinInput.oninput = syncPresetHighlight;
+  if (remMinInput) {
+    remMinInput.oninput = () => {
+      form.dataset.remInMinutes = "";
+      syncPresetHighlight();
+    };
+  }
+  if (remTimeInput) {
+    remTimeInput.oninput = () => {
+      form.dataset.remInMinutes = "";
+    };
+  }
 
   qsa("[data-close-modal]", modal).forEach((btn) => (btn.onclick = () => modal.classList.add("hidden")));
   const bd = qs(".modal-backdrop", modal);
@@ -1249,12 +1262,17 @@ async function handleEditFormSubmit(ev) {
   const remTimeVal = (data.reminderTime || "").trim() || null;
 
   let reminderCustomTs = null;
-  if (remTimeVal) {
+  if (form.dataset.remInMinutes) {
+    reminderCustomTs = Date.now() + Number(form.dataset.remInMinutes) * 60000;
+  } else if (remTimeVal) {
     const baseDk = remDateVal || (data.date && data.date !== "undated" ? data.date : dateKeyFromDate(new Date()));
     const dObj = parseDateKey(baseDk);
     const [rh, rm] = remTimeVal.split(":").map(Number);
     dObj.setHours(rh || 0, rm || 0, 0, 0);
     reminderCustomTs = dObj.getTime();
+    if (reminderCustomTs < Date.now() && Date.now() - reminderCustomTs < 60000) {
+      reminderCustomTs = Date.now() + 15000;
+    }
   } else if (remMinRaw != null && !data.startTime) {
     // אם לא הוזנה שעת התחלה (למשל משימה) והוזנו דקות תזכורת -> תזכורת בעוד X דקות מעכשיו!
     reminderCustomTs = Date.now() + remMinRaw * 60000;
@@ -1599,7 +1617,7 @@ function initFirebaseListeners() {
     migrateDefaultsOnce();
     renderCalendar();
     renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
-    updateStats();
+    try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
     checkDueReminders();
   });
 
@@ -1744,8 +1762,19 @@ function formatReminderLabel(ev) {
   return "";
 }
 
+function hasExplicitReminderSet(ev) {
+  if (!ev) return false;
+  return (
+    ev.reminderCustomTs != null ||
+    ev.reminderTime != null ||
+    (ev.reminderMinutes !== null && ev.reminderMinutes !== undefined && ev.reminderMinutes !== "")
+  );
+}
+
 function getEventReminderTimestamp(ev, fallbackDateKey) {
-  if (!ev || isDefaultEvent(ev)) return null;
+  if (!ev) return null;
+  if (isDefaultEvent(ev) && !hasExplicitReminderSet(ev)) return null;
+
   if (ev.reminderCustomTs && Number.isFinite(Number(ev.reminderCustomTs))) {
     return Number(ev.reminderCustomTs);
   }
@@ -1766,8 +1795,8 @@ function getEventReminderTimestamp(ev, fallbackDateKey) {
       return d.getTime() - mins * 60000;
     }
   }
-  // אם הוגדרה שעת התחלה לאירוע/משימה (גם בלי למלא שדה דקות תזכורת) -> התראה בשעת ההתחלה!
-  if (ev.startTime && dk && dk !== "undated") {
+  // אם הוגדרה שעת התחלה לאירוע/משימה רגילה (גם בלי למלא שדה דקות תזכורת) -> התראה בשעת ההתחלה!
+  if (!isDefaultEvent(ev) && ev.startTime && dk && dk !== "undated") {
     const [h, m] = ev.startTime.split(":").map(Number);
     if (Number.isFinite(h) && Number.isFinite(m)) {
       const d = parseDateKey(dk);
@@ -1778,23 +1807,41 @@ function getEventReminderTimestamp(ev, fallbackDateKey) {
   return null;
 }
 
-function playReminderSound() {
+function getSharedAudioCtx() {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const notes = [523.25, 659.25, 783.99, 1046.5];
+    if (!AudioCtx) return null;
+    if (!window._bnappAudioCtx) {
+      window._bnappAudioCtx = new AudioCtx();
+    }
+    if (window._bnappAudioCtx.state === "suspended") {
+      window._bnappAudioCtx.resume().catch(() => {});
+    }
+    return window._bnappAudioCtx;
+  } catch {
+    return null;
+  }
+}
+
+document.addEventListener("click", () => { getSharedAudioCtx(); }, { passive: true });
+document.addEventListener("touchstart", () => { getSharedAudioCtx(); }, { passive: true });
+
+function playReminderSound() {
+  try {
+    const ctx = getSharedAudioCtx();
+    if (!ctx) return;
+    const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5];
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "sine";
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.18, ctx.currentTime + i * 0.16);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.16 + 0.35);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime + i * 0.18);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.35);
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start(ctx.currentTime + i * 0.16);
-      osc.stop(ctx.currentTime + i * 0.16 + 0.36);
+      osc.start(ctx.currentTime + i * 0.18);
+      osc.stop(ctx.currentTime + i * 0.18 + 0.36);
     });
   } catch (e) {
     console.warn("Audio reminder failed:", e);
@@ -1805,21 +1852,50 @@ function triggerReminderAlert(item) {
   const { id, dateKey, ev } = item;
   playReminderSound();
 
+  try {
+    if (navigator.vibrate) {
+      navigator.vibrate([300, 150, 300, 150, 400]);
+    }
+  } catch {}
+
   const titleText = ev.title || "אירוע / משימה";
   const timeInfo = ev.startTime ? `שעה: ${ev.startTime}` : (ev.reminderTime ? `שעת תזכורת: ${ev.reminderTime}` : "");
+  const notifBody = timeInfo ? `${titleText} • ${timeInfo}` : titleText;
 
   // דיבור קולי
   try {
     gihariSpeak(`תזכורת: ${titleText}`);
   } catch {}
 
-  // התראת דפדפן אם יש הרשאה
+  // התראת מערכת – גם לנייד (ServiceWorker showNotification) וגם למחשב (new Notification)
   try {
     if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("🔔 תזכורת BNAPP", {
-        body: timeInfo ? `${titleText} • ${timeInfo}` : titleText,
-        tag: `bnapp-rem-${dateKey}-${id}`
-      });
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistration().then((reg) => {
+          if (reg && typeof reg.showNotification === "function") {
+            reg.showNotification("🔔 תזכורת BNAPP", {
+              body: notifBody,
+              icon: "./icon-192.png",
+              badge: "./icon-192.png",
+              vibrate: [300, 150, 300],
+              requireInteraction: true,
+              tag: `bnapp-rem-${dateKey}-${id}-${Date.now()}`
+            }).catch(() => {});
+          } else {
+            try {
+              new Notification("🔔 תזכורת BNAPP", {
+                body: notifBody,
+                tag: `bnapp-rem-${dateKey}-${id}-${Date.now()}`
+              });
+            } catch {}
+          }
+        }).catch(() => {});
+      } else {
+        new Notification("🔔 תזכורת BNAPP", {
+          body: notifBody,
+          tag: `bnapp-rem-${dateKey}-${id}-${Date.now()}`
+        });
+      }
     }
   } catch {}
 
@@ -1839,13 +1915,21 @@ function triggerReminderAlert(item) {
       modal.classList.add("hidden");
       const snoozeTs = Date.now() + 10 * 60 * 1000;
       const snoozeDate = new Date(snoozeTs);
+      if (state.cache.events[dateKey]?.[id]) {
+        Object.assign(state.cache.events[dateKey][id], {
+          reminderCustomTs: snoozeTs,
+          reminderDate: dateKeyFromDate(snoozeDate),
+          reminderTime: formatTimeHM(snoozeDate),
+          remindedAt: null
+        });
+      }
+      showToast("⏰ נדחה ב-10 דקות");
       await update(ref(db, `events/${dateKey}/${id}`), {
         reminderCustomTs: snoozeTs,
         reminderDate: dateKeyFromDate(snoozeDate),
         reminderTime: formatTimeHM(snoozeDate),
         remindedAt: null
       });
-      showToast("⏰ נדחה ב-10 דקות");
     };
 
     el("btnReminderDismiss").onclick = () => {
@@ -1862,16 +1946,14 @@ function checkDueReminders() {
 
   Object.entries(allEvents).forEach(([dateKey, dayItems]) => {
     Object.entries(dayItems || {}).forEach(([id, ev]) => {
-      if (!ev || isDefaultEvent(ev) || ev.completed === true) return;
+      if (!ev || ev.completed === true) return;
       if (ev.remindedAt) return;
+
+      const hasExplicitReminder = hasExplicitReminderSet(ev);
+      if (isDefaultEvent(ev) && !hasExplicitReminder) return;
 
       const remindTs = getEventReminderTimestamp(ev, dateKey);
       if (!remindTs) return;
-
-      const hasExplicitReminder =
-        ev.reminderCustomTs != null ||
-        ev.reminderTime != null ||
-        (ev.reminderMinutes !== null && ev.reminderMinutes !== undefined && ev.reminderMinutes !== "");
 
       // עבור תזכורת מפורשת: עד 24 שעות אחורה; עבור שעת התחלה רגילה: עד 5 דקות אחורה
       const maxWindowMs = hasExplicitReminder ? 24 * 60 * 60 * 1000 : 5 * 60 * 1000;
@@ -3010,6 +3092,63 @@ div.querySelector(".edit-goal").onclick = () => {
   });
 }
 // =========================
+// Stats date range helpers (auto vs manual)
+// =========================
+function statsMarkManualDates() {
+  localStorage.setItem("bnapp_stats_manualDates", "1");
+
+  const from = el("completedFromDate")?.value || "";
+  const to   = el("completedToDate")?.value || "";
+  localStorage.setItem("bnapp_stats_from", from);
+  localStorage.setItem("bnapp_stats_to", to);
+}
+
+function statsApplyPresetDates(range) {
+  // אם המשתמש שינה ידנית – לא לדרוס
+  if (localStorage.getItem("bnapp_stats_manualDates") === "1") return;
+
+  const fromInput = el("completedFromDate");
+  const toInput   = el("completedToDate");
+  if (!fromInput || !toInput) return;
+
+  const now = new Date();
+  now.setHours(12, 0, 0, 0);
+
+  let fromDate = null;
+  let toDate = null;
+
+  // תמיד עד אתמול (כדי שלא יהיה "על ההווה")
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (range === "week") {
+    toDate = yesterday;
+    fromDate = new Date(toDate);
+    fromDate.setDate(fromDate.getDate() - 6);
+  } else if (range === "month") {
+    const y = now.getFullYear();
+    const m = now.getMonth(); // החודש הנוכחי (0-11)
+    // חודש שעבר:
+    fromDate = new Date(y, m - 1, 1);
+    toDate = new Date(y, m, 0);
+  } else if (range === "year") {
+    const y = now.getFullYear() - 1;
+    fromDate = new Date(y, 0, 1);
+    toDate = new Date(y, 11, 31);
+  } else {
+    return;
+  }
+
+  fromInput.value = fromDate.toISOString().slice(0, 10);
+  toInput.value   = toDate.toISOString().slice(0, 10);
+
+  localStorage.setItem("bnapp_stats_from", fromInput.value);
+  localStorage.setItem("bnapp_stats_to", toInput.value);
+
+  renderCompletedCards();
+}
+
+// =========================
 // App init
 // =========================
 function initApp() {
@@ -3087,67 +3226,8 @@ if (fromInput && toInput) {
 
   
   renderGoals();
-  updateStats();
+  try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
 };
-
-// =========================
-// Stats date range helpers (auto vs manual)
-// =========================
-function statsMarkManualDates() {
-  localStorage.setItem("bnapp_stats_manualDates", "1");
-
-  const from = el("completedFromDate")?.value || "";
-  const to   = el("completedToDate")?.value || "";
-  localStorage.setItem("bnapp_stats_from", from);
-  localStorage.setItem("bnapp_stats_to", to);
-}
-
-function statsApplyPresetDates(range) {
-  // אם המשתמש שינה ידנית – לא לדרוס
-  if (localStorage.getItem("bnapp_stats_manualDates") === "1") return;
-
-  const fromInput = el("completedFromDate");
-  const toInput   = el("completedToDate");
-  if (!fromInput || !toInput) return;
-
-  const now = new Date();
-  now.setHours(12, 0, 0, 0);
-
-  let fromDate = null;
-  let toDate = null;
-
-  // תמיד עד אתמול (כדי שלא יהיה "על ההווה")
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  if (range === "week") {
-    toDate = yesterday;
-    fromDate = new Date(toDate);
-    fromDate.setDate(fromDate.getDate() - 6);
-  } else if (range === "month") {
-    const y = now.getFullYear();
-    const m = now.getMonth(); // החודש הנוכחי (0-11)
-    // חודש שעבר:
-    fromDate = new Date(y, m - 1, 1);
-    toDate = new Date(y, m, 0); // היום ה-0 של החודש הנוכחי = היום האחרון של החודש הקודם
-  } else if (range === "year") {
-    const y = now.getFullYear() - 1;
-    fromDate = new Date(y, 0, 1);
-    toDate = new Date(y, 11, 31);
-  } else {
-    // אם יש לך עוד טווחים בעתיד – לא עושים כלום
-    return;
-  }
-
-  fromInput.value = fromDate.toISOString().slice(0, 10);
-  toInput.value   = toDate.toISOString().slice(0, 10);
-
-  // לשמור כדי שגם ריענון ישמר
-  localStorage.setItem("bnapp_stats_from", fromInput.value);
-  localStorage.setItem("bnapp_stats_to", toInput.value);
-
-  renderCompletedCards();
-}
 
   
 // =========================
@@ -3209,7 +3289,7 @@ if (userSel) {
   renderCalendar();
   renderTasks();
   renderShoppingList();
-  updateStats();
+  try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
 
   setInterval(checkDueReminders, 2000);
   setTimeout(checkDueReminders, 1000);

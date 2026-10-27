@@ -14,7 +14,7 @@ const messaging = firebase.messaging();
 
 
 
-const CACHE_NAME = 'bnapp-v3-5-6-reminders';
+const CACHE_NAME = 'bnapp-v3-5-7-live';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -47,17 +47,17 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith((async () => {
-    const cached = await caches.match(event.request);
-    if (cached) return cached;
-
     try {
       const response = await fetch(event.request);
-      const copy = response.clone();
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(event.request, copy);
+      if (response && response.ok) {
+        const copy = response.clone();
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(event.request, copy);
+      }
       return response;
     } catch (e) {
-      // offline fallback
+      const cached = await caches.match(event.request);
+      if (cached) return cached;
       if (event.request.mode === 'navigate') {
         const fallback = await caches.match('./index.html');
         if (fallback) return fallback;
