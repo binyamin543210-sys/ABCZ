@@ -8,7 +8,7 @@
 
   <meta name="theme-color" content="#0284c7" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=blue10" />
+  <link rel="stylesheet" href="styles.css?v=blue11" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -27,7 +27,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue10"></script>
+  <script defer src="app.js?v=blue11"></script>
 </head>
 
 <body>
@@ -42,12 +42,6 @@
         <button id="btnThemeToggle" class="icon-btn" title="מצב יום/לילה">☀️/🌙</button>
         <div class="app-title">BNAPP V3.6 🔔</div>
         <button id="btnGihari" class="primary-pill">ג'יחרי</button>
-      </div>
-
-      <div id="apkInstallPromo" style="margin:4px 0;">
-        <a href="./BNAPP.apk" download="BNAPP.apk" class="apk-download-banner">
-          📲 הורד אפליקציית אנדרואיד (APK) – לקריינות והתראות גם כשהאתר סגור!
-        </a>
       </div>
 
       <div class="header-bottom">
@@ -101,12 +95,18 @@
       <section id="shoppingSection" class="screen">
         <div class="section-header">
           <h2>רשימת קניות</h2>
+          <button id="btnRenameShoppingTab" type="button" class="ghost-pill small">✏️ שנה שם לשונית</button>
         </div>
-        <div class="segmented">
+        <div class="segmented" id="shoppingTabs">
           <button data-list="default" class="segmented-btn active">רגיל</button>
           <button data-list="shabbat" class="segmented-btn">קניות לשבת</button>
           <button data-list="pesach" class="segmented-btn">קניות לפסח</button>
           <button data-list="holiday" class="segmented-btn">קניות לחג</button>
+        </div>
+        <div id="shoppingRenameBar" class="shopping-input-row hidden" style="margin-bottom:8px;">
+          <input id="shoppingTabNameInput" type="text" placeholder="שם חדש ללשונית..." />
+          <button id="btnSaveShoppingTabName" type="button" class="primary-pill small">שמור שם</button>
+          <button id="btnCancelShoppingTabName" type="button" class="ghost-pill small">ביטול</button>
         </div>
         <div class="shopping-input-row">
           <input id="shoppingInput" type="text" placeholder="הוסף פריט..." />
@@ -194,7 +194,6 @@
           <button id="btnRequestNotifications" class="primary-pill full-width">🔔 הפעל התראות</button>
           <button id="btnTestNotificationNow" type="button" class="ghost-pill full-width" style="margin-top:6px;">🔊 שלח התראת בדיקה עכשיו</button>
           <button id="btnDisableNotifications" class="ghost-pill full-width" style="margin-top:6px;">כבה התראות</button>
-          <a href="./BNAPP.apk" download="BNAPP.apk" class="primary-pill full-width" style="display:block; text-align:center; text-decoration:none; margin-top:10px; background:linear-gradient(135deg,#0284c7,#0369a1);">📲 הורד אפליקציית אנדרואיד מלאה (BNAPP.apk)</a>
         </div>
       </section>
     </main>

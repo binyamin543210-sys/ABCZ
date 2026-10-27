@@ -1330,6 +1330,9 @@ async function handleEditFormSubmit(ev) {
     reminderTime: remTimeVal,
     reminderCustomTs: reminderCustomTs,
     remindedAt: null,
+    remindedAt_binyamin: null,
+    remindedAt_nana: null,
+    remindedAt_shared: null,
     recurring: data.recurring || "none",
     urgency: data.urgency || "none"
   };
@@ -1572,15 +1575,134 @@ function initTasksFilters() {
   });
 }
 
+const DEFAULT_SHOPPING_TAB_NAMES = {
+  default: "רגיל",
+  shabbat: "קניות לשבת",
+  pesach: "קניות לפסח",
+  holiday: "קניות לחג"
+};
+
+function getSavedShoppingTabNames() {
+  let localNames = {};
+  try {
+    const raw = localStorage.getItem("bnapp_shopping_tab_names");
+    if (raw) localNames = JSON.parse(raw) || {};
+  } catch {}
+  return {
+    ...DEFAULT_SHOPPING_TAB_NAMES,
+    ...localNames,
+    ...(state.settings.shoppingTabNames || {})
+  };
+}
+
+function applyShoppingTabNames() {
+  const names = getSavedShoppingTabNames();
+  const listTabs = qsa("#shoppingSection .segmented-btn");
+  listTabs.forEach((btn) => {
+    const key = btn.dataset.list;
+    if (key && names[key]) {
+      btn.textContent = names[key];
+    }
+  });
+}
+
+function openShoppingTabRenameBar() {
+  const bar = el("shoppingRenameBar");
+  const input = el("shoppingTabNameInput");
+  if (!bar || !input) return;
+  const currentKey = getCurrentShoppingListKey();
+  const names = getSavedShoppingTabNames();
+  input.value = names[currentKey] || "";
+  bar.classList.remove("hidden");
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 50);
+}
+
+async function saveShoppingTabName() {
+  const bar = el("shoppingRenameBar");
+  const input = el("shoppingTabNameInput");
+  if (!input) return;
+  const newName = (input.value || "").trim();
+  if (!newName) {
+    showToast("נא להזין שם ללשונית");
+    return;
+  }
+  const currentKey = getCurrentShoppingListKey();
+  const updated = {
+    ...getSavedShoppingTabNames(),
+    [currentKey]: newName
+  };
+  state.settings.shoppingTabNames = updated;
+  try {
+    localStorage.setItem("bnapp_shopping_tab_names", JSON.stringify(updated));
+  } catch {}
+  applyShoppingTabNames();
+  if (bar) bar.classList.add("hidden");
+  showToast(`✏️ שם הלשונית עודכן ל-"${newName}"`);
+  try {
+    await update(ref(db, "settings/shoppingTabNames"), { [currentKey]: newName });
+  } catch (e) {
+    console.warn("Failed to sync shopping tab name to Firebase", e);
+  }
+}
+
 function initShopping() {
+  applyShoppingTabNames();
   const listTabs = qsa("#shoppingSection .segmented-btn");
   listTabs.forEach((btn) => {
     btn.addEventListener("click", () => {
+      const wasActive = btn.classList.contains("active");
       listTabs.forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       renderShoppingList();
+      const bar = el("shoppingRenameBar");
+      if (bar && !bar.classList.contains("hidden")) {
+        const names = getSavedShoppingTabNames();
+        const input = el("shoppingTabNameInput");
+        if (input) input.value = names[btn.dataset.list] || btn.textContent;
+      } else if (wasActive) {
+        // לחיצה נוספת על הלשונית הפעילה פותחת מיד עריכת שם ללשונית
+        openShoppingTabRenameBar();
+      }
     });
   });
+
+  if (el("btnRenameShoppingTab")) {
+    el("btnRenameShoppingTab").onclick = () => {
+      const bar = el("shoppingRenameBar");
+      if (bar && !bar.classList.contains("hidden")) {
+        bar.classList.add("hidden");
+      } else {
+        openShoppingTabRenameBar();
+      }
+    };
+  }
+  if (el("btnSaveShoppingTabName")) {
+    el("btnSaveShoppingTabName").onclick = saveShoppingTabName;
+  }
+  if (el("btnCancelShoppingTabName")) {
+    el("btnCancelShoppingTabName").onclick = () => {
+      el("shoppingRenameBar")?.classList.add("hidden");
+    };
+  }
+  if (el("shoppingTabNameInput")) {
+    el("shoppingTabNameInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        saveShoppingTabName();
+      }
+    });
+  }
+  if (el("shoppingInput")) {
+    el("shoppingInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addShoppingItem();
+      }
+    });
+  }
   el("btnAddShopping").onclick = addShoppingItem;
 }
 
@@ -1678,6 +1800,16 @@ function initFirebaseListeners() {
     state.settings.cityLat = settings.cityLat || null;
     state.settings.cityLon = settings.cityLon || null;
     state.settings.cityTz = settings.cityTz || null;
+    if (settings.shoppingTabNames) {
+      state.settings.shoppingTabNames = settings.shoppingTabNames;
+      try {
+        localStorage.setItem("bnapp_shopping_tab_names", JSON.stringify({
+          ...getSavedShoppingTabNames(),
+          ...settings.shoppingTabNames
+        }));
+      } catch {}
+      applyShoppingTabNames();
+    }
 
 state.targets = settings.targets || state.targets;
 
@@ -2297,6 +2429,60 @@ function saveDirectRemindersToStorage() {
   } catch {}
 }
 
+// בודק האם האירוע שייך למשתמש הפעיל כרגע במכשיר (בנימין / ננה / משותף)
+function shouldRemindCurrentUser(ev) {
+  if (!ev) return true;
+  const owner = ev.owner || "shared";
+  const currentUser = state.currentUser || "binyamin";
+  if (owner === "shared") return true;
+  return owner === currentUser;
+}
+
+function wasEventRemindedForCurrentUser(ev) {
+  if (!ev) return false;
+  const currentUser = state.currentUser || "binyamin";
+  const owner = ev.owner || "shared";
+  if (owner === "shared") {
+    return Boolean(ev[`remindedAt_${currentUser}`]);
+  }
+  return Boolean(ev.remindedAt || ev[`remindedAt_${currentUser}`]);
+}
+
+function getRemindedUpdatePayload(ev, now) {
+  const currentUser = state.currentUser || "binyamin";
+  const owner = ev?.owner || "shared";
+  if (owner === "shared") {
+    return { [`remindedAt_${currentUser}`]: now };
+  }
+  return {
+    remindedAt: now,
+    [`remindedAt_${currentUser}`]: now
+  };
+}
+
+function getClearRemindedPayload() {
+  return {
+    remindedAt: null,
+    remindedAt_binyamin: null,
+    remindedAt_nana: null,
+    remindedAt_shared: null
+  };
+}
+
+function syncRemindersForCurrentUser() {
+  Object.keys(directReminders).forEach((key) => {
+    const rem = directReminders[key];
+    if (!rem) return;
+    const cachedEv = state.cache.events?.[rem.dateKey]?.[rem.id];
+    const owner = cachedEv?.owner || rem.owner || "shared";
+    if (!shouldRemindCurrentUser({ owner })) {
+      cancelDirectReminder(key);
+    }
+  });
+  checkDueReminders();
+  renderActiveRemindersBar();
+}
+
 function loadDirectRemindersFromStorage() {
   try {
     const raw = localStorage.getItem("bnapp_direct_reminders");
@@ -2305,6 +2491,7 @@ function loadDirectRemindersFromStorage() {
     const now = Date.now();
     Object.entries(parsed || {}).forEach(([key, rem]) => {
       if (!rem || rem.fired) return;
+      if (!shouldRemindCurrentUser({ owner: rem.owner || "shared" })) return;
       if (rem.targetTs > now - 30 * 60 * 1000) {
         directReminders[key] = rem;
         armDirectTimeout(key);
@@ -2334,13 +2521,22 @@ function armDirectTimeout(key) {
 
 function scheduleDirectReminder({ id, dateKey, ev, targetTs }) {
   if (!id || !targetTs) return;
+  const dk = dateKey || "undated";
+  const key = `${dk}/${id}`;
+
+  // אם האירוע שייך למשתמש השני (למשל אירוע של ננה כשבנימין מחובר במכשיר שלו) –
+  // לא מפעילים שעון במכשיר הזה, אלא רק שומרים בענן כדי שהמכשיר של המשתמש השני יקבל את ההתראה!
+  if (ev && !shouldRemindCurrentUser(ev)) {
+    cancelDirectReminder(key);
+    return;
+  }
+
   // הגדרת תזכורת חדשה מפעילה אוטומטית את מצב ההתראות אם היה כבוי
   localStorage.setItem("notificationsEnabled", "true");
 
-  const dk = dateKey || "undated";
-  const key = `${dk}/${id}`;
   const title = ev?.title || "אירוע / משימה";
   const startTime = ev?.startTime || "";
+  const owner = ev?.owner || "shared";
   const timeInfo = startTime ? `שעה: ${startTime}` : `שעת תזכורת: ${formatTimeHM(new Date(targetTs))}`;
 
   getSharedAudioCtx();
@@ -2360,6 +2556,7 @@ function scheduleDirectReminder({ id, dateKey, ev, targetTs }) {
     dateKey: dk,
     title,
     startTime,
+    owner,
     targetTs: Number(targetTs),
     fired: false
   };
@@ -2413,20 +2610,28 @@ function fireDirectReminder(key) {
   saveDirectRemindersToStorage();
   renderActiveRemindersBar();
 
-  const { id, dateKey, title, startTime } = rem;
-  const now = Date.now();
+  const { id, dateKey, title, startTime, owner } = rem;
   const cachedEv = state.cache.events?.[dateKey]?.[id];
+  const effectiveEv = cachedEv || { title, startTime, owner: owner || "shared", _id: id, dateKey };
+
+  // בדיקה כפולה שהתזכורת אכן מיועדת למשתמש הפעיל במכשיר זה
+  if (id !== "test" && id !== "test-manual" && !shouldRemindCurrentUser(effectiveEv)) {
+    return;
+  }
+
+  const now = Date.now();
+  const remPayload = getRemindedUpdatePayload(effectiveEv, now);
   if (cachedEv) {
-    cachedEv.remindedAt = now;
+    Object.assign(cachedEv, remPayload);
   }
   if (id && dateKey && id !== "test" && id !== "test-manual") {
-    update(ref(db, `events/${dateKey}/${id}`), { remindedAt: now }).catch(() => {});
+    update(ref(db, `events/${dateKey}/${id}`), remPayload).catch(() => {});
   }
 
   triggerReminderAlert({
     id,
     dateKey,
-    ev: cachedEv || { title, startTime, _id: id, dateKey }
+    ev: effectiveEv
   });
 }
 
@@ -2453,7 +2658,12 @@ function renderActiveRemindersBar() {
 
   const now = Date.now();
   const activeList = Object.values(directReminders)
-    .filter((r) => r && !r.fired && r.targetTs - now <= 12 * 60 * 60 * 1000)
+    .filter((r) => {
+      if (!r || r.fired || r.targetTs - now > 12 * 60 * 60 * 1000) return false;
+      const cachedEv = state.cache.events?.[r.dateKey]?.[r.id];
+      const owner = cachedEv?.owner || r.owner || "shared";
+      return shouldRemindCurrentUser({ owner });
+    })
     .sort((a, b) => a.targetTs - b.targetTs);
 
   if (activeList.length === 0) {
@@ -2517,6 +2727,9 @@ function tickDirectReminders() {
 function triggerReminderAlert(item) {
   if (!areNotificationsEnabled()) return;
   const { id, dateKey, ev } = item;
+  if (id !== "test" && id !== "test-manual" && ev && !shouldRemindCurrentUser(ev)) {
+    return;
+  }
   const titleText = ev?.title || "אירוע / משימה";
   const timeInfo = ev?.startTime ? `שעה: ${ev.startTime}` : (ev?.reminderTime ? `שעת תזכורת: ${ev.reminderTime}` : "");
   const notifBody = timeInfo ? `${titleText} • ${timeInfo}` : titleText;
@@ -2557,12 +2770,13 @@ function triggerReminderAlert(item) {
         targetTs: snoozeTs
       });
 
+      const clearRem = getClearRemindedPayload();
       if (state.cache.events[targetDk]?.[targetId]) {
         Object.assign(state.cache.events[targetDk][targetId], {
           reminderCustomTs: snoozeTs,
           reminderDate: dateKeyFromDate(snoozeDate),
           reminderTime: formatTimeHM(snoozeDate),
-          remindedAt: null
+          ...clearRem
         });
       }
       showToast("⏰ נדחה ב-10 דקות (ספירה לאחור פעילה למעלה)");
@@ -2571,7 +2785,7 @@ function triggerReminderAlert(item) {
           reminderCustomTs: snoozeTs,
           reminderDate: dateKeyFromDate(snoozeDate),
           reminderTime: formatTimeHM(snoozeDate),
-          remindedAt: null
+          ...clearRem
         });
       }
     };
@@ -2593,7 +2807,18 @@ function checkDueReminders() {
   Object.entries(allEvents).forEach(([dateKey, dayItems]) => {
     Object.entries(dayItems || {}).forEach(([id, ev]) => {
       if (!ev || ev.completed === true) return;
-      if (ev.remindedAt) return;
+
+      const key = `${dateKey}/${id}`;
+
+      // בדיקת שיוך למשתמש (ננה / בנימין / משותף):
+      if (!shouldRemindCurrentUser(ev)) {
+        if (directReminders[key]) {
+          cancelDirectReminder(key);
+        }
+        return;
+      }
+
+      if (wasEventRemindedForCurrentUser(ev)) return;
 
       const hasExplicitReminder = hasExplicitReminderSet(ev);
       if (isDefaultEvent(ev) && !hasExplicitReminder) return;
@@ -2601,29 +2826,32 @@ function checkDueReminders() {
       const remindTs = getEventReminderTimestamp(ev, dateKey);
       if (!remindTs) return;
 
-      const key = `${dateKey}/${id}`;
-
       // אם התזכורת בעתיד הקרוב (עד 12 שעות קדימה) ועדיין לא בסרגל הספירה לאחור – נחבר אותה!
       if (remindTs > now && remindTs - now <= 12 * 60 * 60 * 1000 && hasExplicitReminder) {
         if (!directReminders[key] || directReminders[key].targetTs !== remindTs) {
+          const title = ev.title || "אירוע / משימה";
+          const startTime = ev.startTime || "";
+          const timeInfo = startTime ? `שעה: ${startTime}` : `שעת תזכורת: ${formatTimeHM(new Date(remindTs))}`;
           directReminders[key] = {
             key,
             id,
             dateKey,
-            title: ev.title || "אירוע / משימה",
-            startTime: ev.startTime || "",
+            title,
+            startTime,
+            owner: ev.owner || "shared",
             targetTs: remindTs,
             fired: false
           };
+          saveDirectRemindersToStorage();
           armDirectTimeout(key);
           renderActiveRemindersBar();
           if (hasNativeAndroidBridge()) {
             try {
               window.AndroidBridge.scheduleAlarm(
                 String(key),
-                String(ev.title || "אירוע / משימה"),
-                String(ev.startTime || ""),
-                Number(remindTs)
+                String(title),
+                `${title} • ${timeInfo}`,
+                Math.round(Number(remindTs))
               );
             } catch (e) {}
           }
@@ -2635,13 +2863,14 @@ function checkDueReminders() {
       const maxWindowMs = hasExplicitReminder ? 30 * 60 * 1000 : 5 * 60 * 1000;
 
       if (now >= remindTs && now - remindTs < maxWindowMs) {
-        ev.remindedAt = now;
+        const remPayload = getRemindedUpdatePayload(ev, now);
+        Object.assign(ev, remPayload);
         if (directReminders[key]) {
           delete directReminders[key];
           saveDirectRemindersToStorage();
           renderActiveRemindersBar();
         }
-        update(ref(db, `events/${dateKey}/${id}`), { remindedAt: now }).catch(() => {});
+        update(ref(db, `events/${dateKey}/${id}`), remPayload).catch(() => {});
         triggerReminderAlert({ id, dateKey, ev });
       }
     });
@@ -2676,9 +2905,10 @@ function openQuickReminderModal(task) {
       Notification.requestPermission().catch(() => {});
     }
 
+    const clearRem = getClearRemindedPayload();
     if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
     if (state.cache.events[dateKey][id]) {
-      Object.assign(state.cache.events[dateKey][id], fields, { remindedAt: null });
+      Object.assign(state.cache.events[dateKey][id], fields, clearRem);
     }
 
     const updatedEv = state.cache.events[dateKey]?.[id] || { ...task, ...fields };
@@ -2703,7 +2933,7 @@ function openQuickReminderModal(task) {
     }
     await update(ref(db, `events/${dateKey}/${id}`), {
       ...fields,
-      remindedAt: null
+      ...clearRem
     });
   };
 
@@ -4005,6 +4235,7 @@ if (userSel) {
     // 🔥 שמירה קבועה
     localStorage.setItem("bnapp_currentUser", state.currentUser);
 
+    syncRemindersForCurrentUser();
     renderCalendar();
     renderTasks(
       qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated"
