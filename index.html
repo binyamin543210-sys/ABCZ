@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=blue12" />
-  <link rel="stylesheet" href="theme.css?v=blue12" />
+  <link rel="stylesheet" href="styles.css?v=blue13" />
+  <link rel="stylesheet" href="theme.css?v=blue13" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -31,7 +31,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue12"></script>
+  <script defer src="app.js?v=blue13"></script>
 </head>
 
 <body>
@@ -43,30 +43,30 @@
   <div id="app">
     <header class="app-header">
       <div class="header-top">
-        <button id="btnThemeToggle" class="icon-btn" title="מצב יום/לילה">☀️/🌙</button>
-        <div class="app-title">BNAPP V3.6 🔔</div>
-        <button id="btnGihari" class="primary-pill">ג'יחרי</button>
-      </div>
+        <button id="btnThemeToggle" class="icon-btn" title="מצב יום/לילה">🌓</button>
 
-      <div class="header-bottom">
-        <button id="btnPrevMonth" class="icon-btn">‹</button>
-        <div class="month-label">
-          <span id="gregMonthLabel"></span>
-          <span id="hebrewMonthLabel" class="sub-label"></span>
+        <div class="header-bottom">
+          <button id="btnPrevMonth" class="icon-btn">‹</button>
+          <div class="month-label">
+            <span id="gregMonthLabel"></span>
+            <span id="hebrewMonthLabel" class="sub-label"></span>
+          </div>
+          <button id="btnNextMonth" class="icon-btn">›</button>
         </div>
-        <button id="btnNextMonth" class="icon-btn">›</button>
+
+        <div class="screen-title" id="screenTitle"></div>
+
+        <button id="btnGihari" class="primary-pill gihari-btn">✨ ג'יחרי</button>
       </div>
 
       <div class="header-row">
         <select id="userSelect" class="pill-select" title="משתמש">
-          <option value="binyamin">בנימין</option>
-          <option value="nana">ננה</option>
-          <option value="shared">משותף</option>
+          <option value="binyamin">👤 בנימין</option>
+          <option value="nana">👤 ננה</option>
+          <option value="shared">👥 משותף</option>
         </select>
         <button id="btnToday" class="ghost-pill">היום</button>
-        <button id="btnCity" class="ghost-pill">
-          עיר: <span id="cityLabel">לא נבחרה</span>
-        </button>
+        <button id="btnCity" class="ghost-pill">📍 <span id="cityLabel">לא נבחרה</span></button>
       </div>
     </header>
 
@@ -97,15 +97,14 @@
       </section>
 
       <section id="shoppingSection" class="screen">
-        <div class="section-header">
-          <h2>רשימת קניות</h2>
-          <button id="btnRenameShoppingTab" type="button" class="ghost-pill small" title="שנה שם ללשונית">✏️</button>
-        </div>
+        <div class="tabs-row">
         <div class="segmented" id="shoppingTabs">
           <button data-list="default" class="segmented-btn active">רגיל</button>
           <button data-list="shabbat" class="segmented-btn">קניות לשבת</button>
           <button data-list="pesach" class="segmented-btn">קניות לפסח</button>
           <button data-list="holiday" class="segmented-btn">קניות לחג</button>
+        </div>
+        <button id="btnRenameShoppingTab" type="button" class="ghost-pill small" title="שנה שם ללשונית">✏️</button>
         </div>
         <div id="shoppingRenameBar" class="shopping-input-row hidden" style="margin-bottom:8px;">
           <input id="shoppingTabNameInput" type="text" placeholder="שם חדש ללשונית..." />
@@ -138,7 +137,7 @@
           <h2>סטטיסטיקות</h2>
         </div>
         <div class="card">
-          <canvas id="workFreeChart" height="220"></canvas>
+          <canvas id="workFreeChart" height="150"></canvas>
         </div>
       
 
@@ -164,75 +163,49 @@
       </section>
 
       <section id="settingsSection" class="screen">
-        <div class="section-header">
-          <h2>הגדרות</h2>
-        </div>
+        <div class="settings-list">
 
+          <div class="setting-row">
+            <span class="setting-icon">🎨</span>
+            <span class="setting-label">רקע וצבעים</span>
+            <span class="swatch-current" id="bgCurrentSwatch"></span>
+            <button type="button" id="btnEditBg" class="edit-pencil" title="שנה רקע">✏️</button>
+          </div>
 
-<div class="settings-group">
-  <label>רקע</label>
-  <div id="bgSelector">
-    <button data-bg="1">1</button>
-    <button data-bg="2">2</button>
-    <button data-bg="3">3</button>
-    <button data-bg="4">4</button>
-    <button data-bg="5">5</button>
-    <button data-bg="6">6</button>
-    <button data-bg="7">7</button>
-    <button data-bg="8">8</button>
-    <button data-bg="9">9</button>
-    <button data-bg="10">10</button>
-    <button data-bg="11">11</button>
-    <button data-bg="12">12</button>
-    <button data-bg="13">13</button>
-    <button data-bg="14">14</button>
-    <button data-bg="15">15</button>
-    <button data-bg="16">16</button>
-  </div>
-</div>
+          <div class="setting-row">
+            <span class="setting-icon">🔤</span>
+            <span class="setting-label">סוג כתב</span>
+            <span class="setting-value" id="fontCurrentName">היבו</span>
+            <button type="button" id="btnEditFont" class="edit-pencil" title="שנה כתב">✏️</button>
+          </div>
 
-<div class="settings-group">
-  <label>סוג כתב</label>
-  <div id="fontSelector">
-    <button type="button" data-font="heebo">היבו – Heebo</button>
-    <button type="button" data-font="assistant">אסיסטנט</button>
-    <button type="button" data-font="rubik">רוביק</button>
-    <button type="button" data-font="varela">ורלה עגול</button>
-    <button type="button" data-font="secular">סקולר אחד</button>
-    <button type="button" data-font="suez">סואץ</button>
-    <button type="button" data-font="frank">פרנק רואל</button>
-    <button type="button" data-font="alef">אלף</button>
-    <button type="button" data-font="miriam">מרים</button>
-    <button type="button" data-font="amatic">יד כתובה</button>
-  </div>
-</div>
+          <div class="setting-row">
+            <span class="setting-icon">📍</span>
+            <input id="settingsCityInput" type="text" placeholder="Jerusalem,IL" />
+            <button id="btnSaveCity" class="primary-pill small">שמור</button>
+          </div>
 
+          <div class="setting-row notif-card">
+            <div class="notif-title"><span class="setting-icon">🔔</span><span class="setting-label">התראות</span></div>
+            <div class="notif-grid">
+              <button id="btnRequestNotifications" class="primary-pill">🔔 הפעל</button>
+              <button id="btnTestNotificationNow" type="button" class="ghost-pill">🔊 בדיקה</button>
+              <button id="btnDisableNotifications" class="ghost-pill">🔕 כבה</button>
+            </div>
+          </div>
 
-        
-        <div class="settings-group">
-          <label>עיר:</label>
-          <input id="settingsCityInput" type="text" placeholder="Jerusalem,IL" />
-          <button id="btnSaveCity" class="primary-pill">שמור עיר</button>
-        </div>
-
-        
-        <div class="settings-group">
-          <button id="btnRequestNotifications" class="primary-pill full-width">🔔 הפעל התראות</button>
-          <button id="btnTestNotificationNow" type="button" class="ghost-pill full-width" style="margin-top:6px;">🔊 שלח התראת בדיקה עכשיו</button>
-          <button id="btnDisableNotifications" class="ghost-pill full-width" style="margin-top:6px;">כבה התראות</button>
         </div>
       </section>
     </main>
 
     <nav class="bottom-nav">
-      <button data-target="calendarSection" class="nav-btn active">לוח שנה</button>
-    <button data-target="tasksSection" class="nav-btn">משימות / אירועים</button>
-      <button data-target="shoppingSection" class="nav-btn">קניות</button>
-      <button data-target="statsSection" class="nav-btn">סטטיסטיקות</button>
-      <button data-target="settingsSection" class="nav-btn">הגדרות</button>
+      <button data-target="calendarSection" class="nav-btn active"><span class="nav-ico">📅</span><span class="nav-lbl">לוח שנה</span></button>
+      <button data-target="tasksSection" class="nav-btn"><span class="nav-ico">✅</span><span class="nav-lbl">משימות</span></button>
+      <button id="btnFabAdd" class="fab-btn" aria-label="הוסף אירוע או משימה">+</button>
+      <button data-target="shoppingSection" class="nav-btn"><span class="nav-ico">🛒</span><span class="nav-lbl">קניות</span></button>
+      <button data-target="statsSection" class="nav-btn"><span class="nav-ico">📊</span><span class="nav-lbl">סטטיסטיקה</span></button>
+      <button data-target="settingsSection" class="nav-btn"><span class="nav-ico">⚙️</span><span class="nav-lbl">הגדרות</span></button>
     </nav>
-
-    <button id="btnFabAdd" class="fab-btn">+</button>
   </div>
 
   <!-- ===================== -->
@@ -305,51 +278,23 @@
           <input name="title" required placeholder="לדוגמה: עבודה / אימון / רופא" />
         </div>
 
-        <div class="field">
-          <label>תיאור</label>
-          <textarea name="description" rows="2" placeholder="אופציונלי"></textarea>
-        </div>
-
-        <div class="grid-2">
+        <div class="grid-date-time">
           <div class="field">
-            <label>תאריך (YYYY-MM-DD)</label>
-           <input name="date" type="date" />
+            <label>תאריך</label>
+            <input name="date" type="date" />
           </div>
           <div class="field">
-            <label>דחיפות</label>
-            <select name="urgency">
-              <option value="none">לא דחוף</option>
-              <option value="today">היום</option>
-              <option value="week">השבוע</option>
-              <option value="month">החודש</option>
-            </select>
-          </div>
-        </div>
-
-       <div class="grid-2">
-  <div class="field">
-    <label>שעת התחלה</label>
-    <input type="time" name="startTime" />
-  </div>
-  <div class="field">
-    <label>שעת סיום</label>
-    <input type="time" name="endTime" />
-  </div>
-</div>
-
-        <div class="grid-2">
-          <div class="field">
-            <label>משך (דקות)</label>
-            <input name="duration" type="number" min="0" placeholder="30" />
+            <label>התחלה</label>
+            <input type="time" name="startTime" />
           </div>
           <div class="field">
-            <label>תזכורת (דקות לפני)</label>
-            <input name="reminderMinutes" id="editReminderMinutes" type="number" min="0" placeholder="למשל: 15" />
+            <label>סיום</label>
+            <input type="time" name="endTime" />
           </div>
         </div>
 
         <div class="field">
-          <label>🔔 בחירה מהירה לתזכורת / שעה מדויקת</label>
+          <label>🔔 תזכורת</label>
           <div class="reminder-chips" id="editReminderPresets">
             <button type="button" class="ghost-pill small" data-rem-min="">ללא</button>
             <button type="button" class="ghost-pill small" data-rem-in="1">בעוד דקה (בדיקה)</button>
@@ -371,23 +316,54 @@
           </div>
         </div>
 
-        <div class="field">
-          <label>כתובת (Waze)</label>
-          <input name="address" placeholder="רחוב, עיר" />
-          <div class="task-actions">
-            <button id="btnOpenWaze" type="button" class="ghost-pill small">פתח Waze</button>
-          </div>
-        </div>
+        <details class="more-fields">
+          <summary>⚙️ עוד אפשרויות – תיאור, דחיפות, משך, כתובת, חזרה</summary>
+          <div class="more-body">
+            <div class="field">
+              <label>תיאור</label>
+              <textarea name="description" rows="2" placeholder="אופציונלי"></textarea>
+            </div>
 
-        <div class="field">
-          <label>חזרה</label>
-          <select name="recurring">
-            <option value="none">ללא</option>
-            <option value="weekly">שבועי</option>
-            <option value="monthly_greg">חודשי (לועזי)</option>
-            <option value="yearly_greg">שנתי (לועזי)</option>
-          </select>
-        </div>
+            <div class="grid-2">
+              <div class="field">
+                <label>דחיפות</label>
+                <select name="urgency">
+                  <option value="none">לא דחוף</option>
+                  <option value="today">היום</option>
+                  <option value="week">השבוע</option>
+                  <option value="month">החודש</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>משך (דקות)</label>
+                <input name="duration" type="number" min="0" placeholder="30" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label>תזכורת (דקות לפני)</label>
+              <input name="reminderMinutes" id="editReminderMinutes" type="number" min="0" placeholder="למשל: 15" />
+            </div>
+
+            <div class="field">
+              <label>כתובת (Waze)</label>
+              <input name="address" placeholder="רחוב, עיר" />
+              <div class="task-actions">
+                <button id="btnOpenWaze" type="button" class="ghost-pill small">פתח Waze</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>חזרה</label>
+              <select name="recurring">
+                <option value="none">ללא</option>
+                <option value="weekly">שבועי</option>
+                <option value="monthly_greg">חודשי (לועזי)</option>
+                <option value="yearly_greg">שנתי (לועזי)</option>
+              </select>
+            </div>
+          </div>
+        </details>
 
         <div class="form-actions">
           <button type="submit" class="primary-pill full-width">שמור</button>
@@ -452,6 +428,66 @@
   <!-- ===================== -->
 <!-- Conflict Modal -->
 <!-- ===================== -->
+<!-- ===================== -->
+<!-- Background Picker (נפתח מהעיפרון בהגדרות) -->
+<!-- ===================== -->
+<div id="bgPickerModal" class="modal hidden">
+  <div class="modal-backdrop" data-close-picker></div>
+  <div class="modal-content picker-sheet">
+    <div class="modal-header">
+      <div class="modal-title">🎨 רקע וצבעים</div>
+      <button type="button" class="icon-btn" data-close-picker>✕</button>
+    </div>
+    <div id="bgSelector">
+      <button type="button" data-bg="1" aria-label="ערכה 1"></button>
+      <button type="button" data-bg="2" aria-label="ערכה 2"></button>
+      <button type="button" data-bg="3" aria-label="ערכה 3"></button>
+      <button type="button" data-bg="4" aria-label="ערכה 4"></button>
+      <button type="button" data-bg="5" aria-label="ערכה 5"></button>
+      <button type="button" data-bg="6" aria-label="ערכה 6"></button>
+      <button type="button" data-bg="7" aria-label="ערכה 7"></button>
+      <button type="button" data-bg="8" aria-label="ערכה 8"></button>
+      <button type="button" data-bg="9" aria-label="ערכה 9"></button>
+      <button type="button" data-bg="10" aria-label="ערכה 10"></button>
+      <button type="button" data-bg="11" aria-label="ערכה 11"></button>
+      <button type="button" data-bg="12" aria-label="ערכה 12"></button>
+      <button type="button" data-bg="13" aria-label="ערכה 13"></button>
+      <button type="button" data-bg="14" aria-label="ערכה 14"></button>
+      <button type="button" data-bg="15" aria-label="ערכה 15"></button>
+      <button type="button" data-bg="16" aria-label="ערכה 16"></button>
+    </div>
+    <label class="custom-color-row">
+      <span>🎛️ צבע מותאם אישית – כל גוון שתרצה</span>
+      <input type="color" id="customBgColor" value="#0ea5e9" />
+    </label>
+  </div>
+</div>
+
+<!-- ===================== -->
+<!-- Font Picker -->
+<!-- ===================== -->
+<div id="fontPickerModal" class="modal hidden">
+  <div class="modal-backdrop" data-close-picker></div>
+  <div class="modal-content picker-sheet">
+    <div class="modal-header">
+      <div class="modal-title">🔤 סוג כתב</div>
+      <button type="button" class="icon-btn" data-close-picker>✕</button>
+    </div>
+    <div id="fontSelector">
+      <button type="button" data-font="heebo">היבו</button>
+      <button type="button" data-font="assistant">אסיסטנט</button>
+      <button type="button" data-font="rubik">רוביק</button>
+      <button type="button" data-font="varela">ורלה עגול</button>
+      <button type="button" data-font="secular">סקולר אחד</button>
+      <button type="button" data-font="suez">סואץ</button>
+      <button type="button" data-font="frank">פרנק רואל</button>
+      <button type="button" data-font="alef">אלף</button>
+      <button type="button" data-font="miriam">מרים</button>
+      <button type="button" data-font="amatic">יד כתובה</button>
+    </div>
+  </div>
+</div>
+
 <div id="conflictModal" class="modal hidden">
   <div class="modal-backdrop"></div>
   <div class="modal-content">

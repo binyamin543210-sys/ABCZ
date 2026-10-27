@@ -453,3 +453,217 @@ input:focus, textarea:focus, select:focus {
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.35); border-radius: 99px; }
 .screen.active { animation: bnFade .28s ease; }
 @keyframes bnFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* =====================================================================
+   COMPACT APP SHELL – בלי גלילה של כל העמוד, הכל נכנס במסך הטלפון
+   ===================================================================== */
+:root { --bottom-nav-height: 60px; }
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+#app { height: 100vh; height: 100dvh; min-height: 0 !important; overflow: hidden; }
+
+/* ---------- כותרת דחוסה: 2 שורות בלבד ---------- */
+.app-header {
+  position: relative !important;
+  flex: 0 0 auto;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 8px !important;
+  border-radius: 0 0 22px 22px;
+}
+.header-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px !important; }
+.header-top .header-bottom {
+  flex: 1; min-width: 0; margin: 0 !important;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+}
+.month-label span:first-child { font-size: 1.05rem !important; }
+.sub-label { font-size: .7rem !important; }
+.icon-btn { width: 34px !important; height: 34px !important; font-size: 1rem !important; flex: 0 0 auto; }
+.gihari-btn { padding: 7px 12px !important; font-size: .8rem !important; white-space: nowrap; flex: 0 0 auto; }
+.header-row { display: flex; gap: 6px; margin: 0 !important; padding: 0 !important; overflow: visible !important; }
+.header-row .pill-select, .header-row .ghost-pill {
+  flex: 1 1 0; min-width: 0; padding: 5px 10px !important; font-size: .76rem !important;
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.screen-title {
+  display: none; flex: 1; text-align: center; font-weight: 800; font-size: 1.1rem; color: #fff;
+  text-shadow: 0 2px 10px rgba(0,0,0,.3); white-space: nowrap;
+}
+body:not([data-screen="calendarSection"]) .header-top .header-bottom { display: none; }
+body:not([data-screen="calendarSection"]) .screen-title { display: block; }
+body:not([data-screen="calendarSection"]) #btnToday,
+body:not([data-screen="calendarSection"]) #btnCity { display: none; }
+
+/* ---------- אזור התוכן ממלא את המסך ---------- */
+main {
+  flex: 1 1 auto !important; min-height: 0;
+  padding: 8px 10px calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 8px) !important;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.screen.active {
+  display: flex !important; flex-direction: column;
+  flex: 1 1 auto; min-height: 0; overflow: hidden;
+}
+
+/* ---------- לוח שנה: התאים נמתחים בדיוק לגובה המסך ---------- */
+.weekday-row { flex: 0 0 auto; margin-bottom: 3px !important; font-size: .7rem !important; padding: 0 !important; }
+.calendar-grid {
+  flex: 1 1 auto; min-height: 0;
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: stretch !important;
+  gap: 3px !important;
+}
+.day-cell, .day-cell.outside {
+  min-height: 0 !important; padding: 3px 4px !important;
+  overflow: hidden; border-radius: 12px !important;
+  justify-content: flex-start !important; gap: 1px;
+}
+.day-num { font-size: .95rem !important; line-height: 1.1; }
+.day-hebrew { font-size: .62rem !important; }
+.day-holiday { font-size: .54rem !important; line-height: 1.1; max-height: 2.3em; margin-top: 1px !important; }
+.day-shabbat-block { margin-top: 1px !important; padding: 1px 3px !important; border-radius: 6px !important; }
+.day-shabbat-title { font-size: .55rem !important; }
+.day-shabbat-time { font-size: .5rem !important; }
+.day-points {
+  flex-direction: row !important; flex-wrap: wrap; justify-content: center;
+  gap: 3px !important; margin-top: auto !important;
+}
+.event-dot { width: 6px; height: 6px; }
+
+/* ---------- משימות ---------- */
+#tasksSection .section-header { display: none; }
+.segmented { flex: 0 0 auto; margin-bottom: 8px !important; overflow-x: auto; scrollbar-width: none; }
+.segmented::-webkit-scrollbar { display: none; }
+#tasksSection .segmented-btn { flex: 0 0 auto !important; padding: 7px 12px !important; font-size: .76rem !important; }
+#shoppingSection .segmented-btn { padding: 7px 6px !important; font-size: .76rem !important; }
+
+#tasksList, #shoppingList {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0;
+  padding: 2px 2px 10px; list-style: none; -webkit-overflow-scrolling: touch;
+}
+.list-container > * { flex-shrink: 0; }
+
+/* ---------- קניות ---------- */
+.tabs-row { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; margin-bottom: 8px; }
+.tabs-row .segmented { flex: 1 1 auto; min-width: 0; margin-bottom: 0 !important; }
+#btnRenameShoppingTab {
+  flex: 0 0 auto; width: 40px; height: 40px; padding: 0 !important; border-radius: 50% !important;
+  display: flex; align-items: center; justify-content: center; font-size: 1rem;
+}
+.shopping-input-row { flex: 0 0 auto; margin-bottom: 8px !important; }
+.shopping-item { padding: 8px 12px !important; }
+
+/* ---------- סטטיסטיקות ---------- */
+#statsSection.screen.active, #settingsSection.screen.active { overflow-y: auto; padding-bottom: 6px; }
+#statsSection .section-header { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px !important; }
+#statsSection .section-header h2 { display: none; }
+#statsRangeSelector { display: flex; gap: 4px; flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
+#statsRangeSelector::-webkit-scrollbar { display: none; }
+#statsRangeSelector .segmented-btn {
+  flex: 0 0 auto; padding: 6px 12px; font-size: .74rem; border-radius: 999px;
+  background: rgba(255,255,255,.16); color: #fff !important; border: 1px solid rgba(255,255,255,.22);
+}
+#statsRangeSelector .segmented-btn.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important; color: #fff !important; font-weight: 800;
+}
+#statsSection .card { padding: 8px 10px !important; margin-bottom: 8px; }
+
+/* ---------- הגדרות: שורות קומפקטיות ---------- */
+.settings-list { display: flex; flex-direction: column; gap: 8px; }
+.setting-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-elevated); border: 1px solid rgba(255,255,255,.4);
+  border-radius: 18px; padding: 10px 12px; box-shadow: var(--shadow-soft);
+}
+.setting-icon { font-size: 1.2rem; }
+.setting-label { flex: 1; font-weight: 700; color: var(--text); }
+.setting-value { font-weight: 600; color: var(--text-soft); font-size: .85rem; }
+.swatch-current {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--bg-grad);
+  border: 2px solid #fff; box-shadow: 0 0 0 2px var(--accent), 0 4px 10px rgba(0,0,0,.25);
+}
+.edit-pencil {
+  width: 38px; height: 38px; padding: 0; border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-soft); font-size: 1rem;
+  display: flex; align-items: center; justify-content: center;
+}
+.setting-row input[type="text"] { flex: 1; min-width: 0; }
+.notif-card { flex-direction: column; align-items: stretch; gap: 8px; }
+.notif-title { display: flex; align-items: center; gap: 10px; }
+.notif-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.notif-grid button { border-radius: 14px !important; padding: 10px 4px !important; font-size: .78rem !important; font-weight: 700; line-height: 1.2; }
+.setting-row .ghost-pill, .picker-sheet .ghost-pill {
+  background: var(--accent-soft) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent) !important;
+  color: var(--accent) !important; box-shadow: none;
+}
+body.dark .setting-row .ghost-pill { color: #fff !important; }
+
+/* ---------- חלוניות בחירה (רקע / כתב) ---------- */
+.picker-sheet { max-height: 78vh; max-height: 78dvh; }
+#bgSelector { margin: 6px 0 12px; }
+#bgSelector button { height: 52px !important; font-size: 1.3rem; }
+#bgSelector button.active::after { content: "✓"; }
+.custom-color-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border-radius: 16px; background: var(--accent-soft);
+  font-weight: 700; font-size: .85rem; color: var(--text);
+}
+.custom-color-row input[type="color"] {
+  width: 56px; height: 38px; padding: 2px !important; border-radius: 12px !important;
+  border: 2px solid #fff !important; background: none; flex: 0 0 auto;
+}
+#fontSelector button { min-height: 46px; }
+
+/* ---------- ניווט תחתון עם אייקונים + כפתור הוספה מורם באמצע ---------- */
+.bottom-nav {
+  height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom)) !important;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 6px calc(4px + env(safe-area-inset-bottom)) !important;
+  overflow: visible;
+}
+.nav-btn {
+  flex: 1 1 0; min-width: 0; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  padding: 2px 0 !important; opacity: .68; position: relative;
+}
+.nav-btn.active { background: transparent !important; box-shadow: none !important; opacity: 1; }
+.nav-ico { font-size: 1.3rem; line-height: 1; transition: transform .2s ease; }
+.nav-lbl { font-size: .6rem; font-weight: 700; white-space: nowrap; }
+.nav-btn.active .nav-ico { transform: translateY(-2px) scale(1.15); filter: drop-shadow(0 4px 8px rgba(0,0,0,.45)); }
+.nav-btn.active::after {
+  content: ""; position: absolute; bottom: 3px; width: 18px; height: 3px; border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+.bottom-nav .fab-btn {
+  position: relative !important; left: auto !important; bottom: auto !important; transform: none !important;
+  margin-top: -28px; flex: 0 0 58px; width: 58px !important; height: 58px !important;
+  font-size: 1.9rem !important; z-index: 2;
+}
+.bottom-nav .fab-btn:hover { transform: rotate(90deg) !important; }
+
+/* ---------- חלונות קופצים דחוסים (עריכת אירוע וכו') ---------- */
+.modal-content { padding: 10px 14px 14px !important; max-height: 92vh !important; max-height: 92dvh !important; }
+.form { gap: 6px !important; }
+.form .field { gap: 2px; }
+.form .field label { font-size: .7rem; margin-bottom: 0; }
+.form input, .form select, .form textarea { padding: 7px 10px !important; font-size: .85rem !important; }
+.grid-date-time { display: grid; grid-template-columns: 1.7fr 1fr 1fr; gap: 6px; }
+.reminder-chips { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.reminder-chips::-webkit-scrollbar { display: none; }
+.reminder-chips .ghost-pill { flex: 0 0 auto; white-space: nowrap; }
+.more-fields { border: 1px dashed rgba(148,163,184,.6); border-radius: 14px; padding: 0 10px; }
+.more-fields summary {
+  cursor: pointer; font-weight: 700; font-size: .8rem; padding: 9px 0;
+  color: var(--accent); list-style: none;
+}
+.more-fields summary::-webkit-details-marker { display: none; }
+.more-fields[open] summary { border-bottom: 1px solid rgba(148,163,184,.3); margin-bottom: 6px; }
+.more-body { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
+.form-actions { margin-top: 4px !important; }
+
+/* ---------- טלפונים נמוכים: עוד קצת צמצום ---------- */
+@media (max-height: 700px) {
+  .nav-lbl { display: none; }
+  :root { --bottom-nav-height: 50px; }
+  .bottom-nav .fab-btn { margin-top: -22px; width: 52px !important; height: 52px !important; flex-basis: 52px; }
+  .app-header { padding-top: calc(5px + env(safe-area-inset-top)) !important; padding-bottom: 6px !important; }
+}

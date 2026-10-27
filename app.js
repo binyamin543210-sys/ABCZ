@@ -498,14 +498,18 @@ function showToast(text = "בוצע", durationMs = 2500) {
   window._toastTimer = setTimeout(() => t.classList.add("hidden"), durationMs);
 }
 
-function applyBackground(bg) {
+const CUSTOM_BG_VARS = ["--bg-grad", "--accent", "--accent-2", "--accent-soft", "--glow-a", "--glow-b"];
 
+function clearCustomBgVars() {
+  CUSTOM_BG_VARS.forEach((v) => document.body.style.removeProperty(v));
+}
+
+function applyBackground(bg) {
   // הסרת כל bg-* בלי לגעת בשאר המחלקות (dark וכו')
-  document.body.classList.forEach(cls => {
-    if (cls.startsWith("bg-")) {
-      document.body.classList.remove(cls);
-    }
+  Array.from(document.body.classList).forEach((cls) => {
+    if (cls.startsWith("bg-")) document.body.classList.remove(cls);
   });
+  clearCustomBgVars();
 
   // הוספת הרקע החדש
   document.body.classList.add("bg-" + bg);
@@ -514,14 +518,37 @@ function applyBackground(bg) {
   localStorage.setItem("appBackground", bg);
 
   // סימון כפתור פעיל
-  document.querySelectorAll("#bgSelector button").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.bg === bg);
+  document.querySelectorAll("#bgSelector button").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.bg === String(bg));
   });
+}
+
+// צבע מותאם אישית – כל גוון שהמשתמש בוחר (נבנה ממנו גרדיאנט וצבעי הדגשה)
+function applyCustomBackground(hex) {
+  if (!hex) return;
+  Array.from(document.body.classList).forEach((cls) => {
+    if (cls.startsWith("bg-")) document.body.classList.remove(cls);
+  });
+  document.body.classList.add("bg-custom");
+  const s = document.body.style;
+  s.setProperty("--bg-grad", `linear-gradient(160deg, ${hex} 0%, color-mix(in srgb, ${hex} 58%, #000) 55%, color-mix(in srgb, ${hex} 24%, #000) 100%)`);
+  s.setProperty("--accent", `color-mix(in srgb, ${hex} 80%, #000)`);
+  s.setProperty("--accent-2", `color-mix(in srgb, ${hex} 55%, #7c3aed)`);
+  s.setProperty("--accent-soft", `color-mix(in srgb, ${hex} 18%, transparent)`);
+  s.setProperty("--glow-a", `color-mix(in srgb, ${hex} 40%, transparent)`);
+  s.setProperty("--glow-b", `color-mix(in srgb, ${hex} 28%, transparent)`);
+  try {
+    localStorage.setItem("appBackground", "custom");
+    localStorage.setItem("appBackgroundHex", hex);
+  } catch {}
+  document.querySelectorAll("#bgSelector button").forEach((btn) => btn.classList.remove("active"));
 }
 
 
 const savedBg = localStorage.getItem("appBackground");
-applyBackground(savedBg || "1");
+const savedBgHex = localStorage.getItem("appBackgroundHex");
+if (savedBg === "custom" && savedBgHex) applyCustomBackground(savedBgHex);
+else applyBackground(savedBg || "1");
 
 // ===============================
 // סוג כתב (נשמר במכשיר)
@@ -533,6 +560,9 @@ function applyFont(font) {
   document.querySelectorAll("#fontSelector button").forEach((b) => {
     b.classList.toggle("active", b.dataset.font === f);
   });
+  const fontNameEl = document.getElementById("fontCurrentName");
+  const activeFontBtn = document.querySelector("#fontSelector button.active");
+  if (fontNameEl && activeFontBtn) fontNameEl.textContent = activeFontBtn.textContent.trim();
 }
 applyFont(localStorage.getItem("appFont"));
 const fontSelectorEl = document.getElementById("fontSelector");
@@ -560,6 +590,39 @@ if (bgSelector) {
   });
 }
 
+
+// ===============================
+// חלוניות בחירה (רקע / כתב) – נפתחות רק בלחיצה על ✏️ בהגדרות
+// ===============================
+(function initPickerModals() {
+  const bind = (btnId, modalId) => {
+    const btn = document.getElementById(btnId);
+    const modal = document.getElementById(modalId);
+    if (!btn || !modal) return;
+    btn.addEventListener("click", () => modal.classList.remove("hidden"));
+    modal.querySelectorAll("[data-close-picker]").forEach((x) =>
+      x.addEventListener("click", () => modal.classList.add("hidden"))
+    );
+  };
+  bind("btnEditBg", "bgPickerModal");
+  bind("btnEditFont", "fontPickerModal");
+
+  // בחירת ערכה / כתב סוגרת את החלונית
+  const closeSoon = (modalId) => setTimeout(() => document.getElementById(modalId)?.classList.add("hidden"), 180);
+  document.getElementById("bgSelector")?.addEventListener("click", (e) => {
+    if (e.target.closest("button")) closeSoon("bgPickerModal");
+  });
+  document.getElementById("fontSelector")?.addEventListener("click", (e) => {
+    if (e.target.closest("button")) closeSoon("fontPickerModal");
+  });
+
+  const colorInput = document.getElementById("customBgColor");
+  if (colorInput) {
+    const savedHex = localStorage.getItem("appBackgroundHex");
+    if (savedHex) colorInput.value = savedHex;
+    colorInput.addEventListener("input", () => applyCustomBackground(colorInput.value));
+  }
+})();
 
 const btnDisableNotif = document.getElementById("btnDisableNotifications");
 
@@ -1571,8 +1634,23 @@ async function fetchWeatherForDate(date, autoShowIfEmpty) {
 // =========================
 // Nav + filters + shopping
 // =========================
+const SCREEN_TITLES = {
+  calendarSection: "",
+  tasksSection: "✅ משימות ואירועים",
+  shoppingSection: "🛒 רשימת קניות",
+  statsSection: "📊 סטטיסטיקות",
+  settingsSection: "⚙️ הגדרות"
+};
+
+function setActiveScreenMeta(targetId) {
+  document.body.dataset.screen = targetId;
+  const t = document.getElementById("screenTitle");
+  if (t) t.textContent = SCREEN_TITLES[targetId] || "";
+}
+
 function initBottomNav() {
   const btns = qsa(".bottom-nav .nav-btn");
+  setActiveScreenMeta("calendarSection");
   btns.forEach((btn) => {
     btn.addEventListener("click", () => {
       btns.forEach((b) => b.classList.remove("active"));
@@ -1580,6 +1658,7 @@ function initBottomNav() {
       const targetId = btn.dataset.target;
       qsa(".screen").forEach((s) => s.classList.remove("active"));
       el(targetId)?.classList.add("active");
+      setActiveScreenMeta(targetId);
     });
   });
 }
