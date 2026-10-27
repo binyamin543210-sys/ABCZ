@@ -11,7 +11,7 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-const CACHE_NAME = 'bnapp-v3-6-0-live';
+const CACHE_NAME = 'bnapp-v3-6-1-live';
 const swTimers = new Map();
 const firedKeys = new Set();
 
@@ -148,9 +148,9 @@ self.addEventListener('message', (event) => {
       swTimers.delete(key);
     }
 
-    const delay = Math.max(0, Number(targetTs) - Date.now());
-    // שומרים את ה-Service Worker ער עד שהטיימר יפעל (עד 15 דקות קדימה)
-    if (delay <= 15 * 60 * 1000) {
+    const delay = Math.max(0, Number(targetTs) - Date.now() + 1200);
+    // שומרים את ה-Service Worker ער עד שהטיימר יפעל (עד 30 דקות קדימה)
+    if (delay <= 30 * 60 * 1000) {
       event.waitUntil(new Promise((resolve) => {
         const timerId = setTimeout(async () => {
           swTimers.delete(key);

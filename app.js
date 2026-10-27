@@ -5,7 +5,7 @@
 // - hebcal.noloc.min.js (global Hebcal) - עם fallback אם לא נטען
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue8").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue9").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
@@ -542,7 +542,10 @@ const btnDisableNotif = document.getElementById("btnDisableNotifications");
 if (btnDisableNotif) {
   btnDisableNotif.onclick = () => {
     localStorage.setItem("notificationsEnabled", "false");
-    alert("התראות כובו");
+    state.ui.notificationsGranted = false;
+    if (typeof stopAlarmLoop === "function") stopAlarmLoop();
+    if (typeof stopKeepAliveAudio === "function") stopKeepAliveAudio();
+    showToast("🔕 התראות כובו – לא יופעלו התראות עד להפעלה מחדש", 3500);
   };
 }
 
@@ -1856,6 +1859,10 @@ function getEventReminderTimestamp(ev, fallbackDateKey) {
   return null;
 }
 
+function areNotificationsEnabled() {
+  return localStorage.getItem("notificationsEnabled") !== "false";
+}
+
 function getSharedAudioCtx() {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -1872,12 +1879,197 @@ function getSharedAudioCtx() {
   }
 }
 
-document.addEventListener("click", () => { getSharedAudioCtx(); }, { passive: true });
-document.addEventListener("touchstart", () => { getSharedAudioCtx(); }, { passive: true });
+// ======================================================
+// PERSISTENT HTML5 <AUDIO> ENGINE FOR BACKGROUND & SCREEN-OFF
+// ======================================================
+let _keepAliveWavUrl = null;
+let _alarmMelodyWavUrl = null;
+let _bgAudioEl = null;
+let _isAlarmRinging = false;
+let _alarmCycleIndex = 0;
+let _currentAlarmTitle = "";
 
-// צליל אישור קצר בעת לחיצה על הגדרת תזכורת (פותח את ערוץ השמע בנייד!)
+function getKeepAliveWavUrl() {
+  if (_keepAliveWavUrl) return _keepAliveWavUrl;
+  const sampleRate = 22050;
+  const durationSec = 3;
+  const numSamples = sampleRate * durationSec;
+  const buffer = new ArrayBuffer(44 + numSamples * 2);
+  const view = new DataView(buffer);
+  const writeStr = (off, s) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + numSamples * 2, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, "data");
+  view.setUint32(40, numSamples * 2, true);
+
+  // תדר 30Hz בעוצמה 14 מתוך 32767 – בלתי נשמע לחלוטין לאוזן, אך מונע מאנדרואיד להרדים את הכרטיסייה כשהמסך כבוי!
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const val = Math.sin(2 * Math.PI * 30 * t);
+    view.setInt16(44 + i * 2, Math.floor(val * 14), true);
+  }
+  const blob = new Blob([buffer], { type: "audio/wav" });
+  _keepAliveWavUrl = URL.createObjectURL(blob);
+  return _keepAliveWavUrl;
+}
+
+function getAlarmMelodyWavUrl() {
+  if (_alarmMelodyWavUrl) return _alarmMelodyWavUrl;
+  const sampleRate = 22050;
+  const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5];
+  const noteDur = 0.28;
+  const totalSec = notes.length * noteDur + 0.25;
+  const numSamples = Math.floor(sampleRate * totalSec);
+  const buffer = new ArrayBuffer(44 + numSamples * 2);
+  const view = new DataView(buffer);
+  const writeStr = (off, s) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + numSamples * 2, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, "data");
+  view.setUint32(40, numSamples * 2, true);
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const noteIdx = Math.floor(t / noteDur);
+    let sample = 0;
+    if (noteIdx < notes.length) {
+      const localT = t - noteIdx * noteDur;
+      const freq = notes[noteIdx];
+      const env = Math.exp(-localT * 5.5) * Math.min(1, localT / 0.01);
+      sample = (Math.sin(2 * Math.PI * freq * localT) * 0.75 + Math.sin(4 * Math.PI * freq * localT) * 0.25) * env;
+    }
+    const pcm = Math.max(-32767, Math.min(32767, Math.floor(sample * 24000)));
+    view.setInt16(44 + i * 2, pcm, true);
+  }
+  const blob = new Blob([buffer], { type: "audio/wav" });
+  _alarmMelodyWavUrl = URL.createObjectURL(blob);
+  return _alarmMelodyWavUrl;
+}
+
+function getBgAudioPlayer() {
+  if (_bgAudioEl) return _bgAudioEl;
+  const audio = document.createElement("audio");
+  audio.id = "bnappBgAudio";
+  audio.setAttribute("playsinline", "true");
+  audio.setAttribute("webkit-playsinline", "true");
+  audio.referrerPolicy = "no-referrer";
+  audio.preload = "auto";
+  audio.style.display = "none";
+  document.body.appendChild(audio);
+
+  // אם אנדרואיד מנסה להשהות את האודיו בעת כיבוי המסך כשיש תזכורת פעילה – נחדש מיד!
+  audio.addEventListener("pause", () => {
+    if (_isAlarmRinging) return;
+    if (hasActivePendingReminders() && areNotificationsEnabled()) {
+      audio.play().catch(() => {});
+    }
+  });
+
+  _bgAudioEl = audio;
+  return _bgAudioEl;
+}
+
+function hasActivePendingReminders() {
+  const now = Date.now();
+  return Object.values(directReminders).some((r) => r && !r.fired && r.targetTs > now - 5000);
+}
+
+function startBackgroundKeepAliveAudio() {
+  if (!areNotificationsEnabled()) return;
+  if (_isAlarmRinging) return;
+  try {
+    const audio = getBgAudioPlayer();
+    const keepUrl = getKeepAliveWavUrl();
+    audio.onended = null;
+    audio.onerror = null;
+    if (audio.src !== keepUrl) {
+      audio.src = keepUrl;
+    }
+    audio.loop = true;
+    audio.volume = 0.05;
+    audio.play().catch(() => {});
+
+    if ("mediaSession" in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: "תזכורת פעילה ביומן 🔔",
+          artist: "BNAPP – ג'יחרי מתזכר ברקע",
+          album: "BNAPP"
+        });
+        navigator.mediaSession.playbackState = "playing";
+      } catch {}
+    }
+  } catch {}
+}
+
+function stopKeepAliveAudio() {
+  if (_isAlarmRinging) return;
+  try {
+    if (_bgAudioEl) {
+      _bgAudioEl.onended = null;
+      _bgAudioEl.onerror = null;
+      _bgAudioEl.loop = false;
+      _bgAudioEl.pause();
+    }
+    if ("mediaSession" in navigator) {
+      try { navigator.mediaSession.playbackState = "none"; } catch {}
+    }
+  } catch {}
+}
+
+function warmUpSpeechEngine() {
+  try {
+    if ("speechSynthesis" in window) {
+      speechSynthesis.cancel();
+      speechSynthesis.resume();
+      const warm = new SpeechSynthesisUtterance(" ");
+      warm.lang = "he-IL";
+      warm.volume = 0.01;
+      speechSynthesis.speak(warm);
+    }
+  } catch {}
+}
+
+document.addEventListener("click", () => {
+  getSharedAudioCtx();
+  if (hasActivePendingReminders() && areNotificationsEnabled() && !_isAlarmRinging) {
+    startBackgroundKeepAliveAudio();
+  }
+}, { passive: true });
+
+document.addEventListener("touchstart", () => {
+  getSharedAudioCtx();
+  if (hasActivePendingReminders() && areNotificationsEnabled() && !_isAlarmRinging) {
+    startBackgroundKeepAliveAudio();
+  }
+}, { passive: true });
+
+// צליל אישור קצר בעת לחיצה על הגדרת תזכורת + פתיחת ערוץ שמע ודיבור לרקע/מסך כבוי
 function playConfirmTick() {
   try {
+    warmUpSpeechEngine();
     const ctx = getSharedAudioCtx();
     if (!ctx) return;
     const osc = ctx.createOscillator();
@@ -1894,6 +2086,7 @@ function playConfirmTick() {
 }
 
 function playReminderSound() {
+  if (!areNotificationsEnabled()) return;
   try {
     const ctx = getSharedAudioCtx();
     if (!ctx) return;
@@ -1915,27 +2108,113 @@ function playReminderSound() {
   }
 }
 
-function startAlarmLoop() {
-  stopAlarmLoop();
-  playReminderSound();
-  let count = 0;
-  window._alarmLoopTimer = setInterval(() => {
-    count++;
-    if (count > 8) {
-      stopAlarmLoop();
-      return;
+function speakGihariLoud(text) {
+  if (!areNotificationsEnabled() || !text) return;
+  try {
+    if ("speechSynthesis" in window) {
+      speechSynthesis.cancel();
+      speechSynthesis.resume();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = "he-IL";
+      utter.rate = 1.0;
+      utter.pitch = 1.0;
+      utter.volume = 1.0;
+      if (gihariVoice) utter.voice = gihariVoice;
+      speechSynthesis.speak(utter);
     }
-    playReminderSound();
+  } catch {}
+}
+
+// מפעיל לולאת שעון מעורר + קריינות קולית של ג'יחרי (עובד גם כשהאתר סגור ברקע וגם כשהמסך כבוי!)
+function startAlarmLoop(titleText = "אירוע ביומן") {
+  if (!areNotificationsEnabled()) return;
+  stopAlarmLoop();
+  _isAlarmRinging = true;
+  _alarmCycleIndex = 0;
+  _currentAlarmTitle = titleText;
+
+  const speechText = `תזכורת מג'יחרי: ${titleText}`;
+  const ttsUrl = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=he&q=${encodeURIComponent(speechText)}`;
+  const alarmUrl = getAlarmMelodyWavUrl();
+  const audio = getBgAudioPlayer();
+
+  audio.loop = false;
+  audio.volume = 1.0;
+
+  if ("mediaSession" in navigator) {
     try {
-      if (navigator.vibrate) navigator.vibrate([350, 150, 350]);
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: `🔔 תזכורת: ${titleText}`,
+        artist: "ג'יחרי – BNAPP",
+        album: "BNAPP"
+      });
+      navigator.mediaSession.playbackState = "playing";
     } catch {}
-  }, 3200);
+  }
+
+  const runNextStep = (stepType) => {
+    if (!_isAlarmRinging || !areNotificationsEnabled()) return;
+
+    if (stepType === "chime") {
+      if (_alarmCycleIndex >= 4) {
+        stopAlarmLoop();
+        return;
+      }
+      _alarmCycleIndex++;
+      playReminderSound();
+      try {
+        if (navigator.vibrate) navigator.vibrate([500, 180, 500, 180, 700]);
+      } catch {}
+
+      audio.onended = () => runNextStep("tts");
+      audio.onerror = () => runNextStep("tts");
+      audio.src = alarmUrl;
+      audio.volume = 1.0;
+      audio.play().catch(() => {
+        // אם הניגון נכשל מסיבה כלשהי, נעבור לקריינות אחרי 1.5 שניות
+        window._alarmStepTimer = setTimeout(() => runNextStep("tts"), 1500);
+      });
+    } else if (stepType === "tts") {
+      if (!_isAlarmRinging || !areNotificationsEnabled()) return;
+      // מפעיל גם קריינות Web Speech וגם קריינות בנגן ה-HTML5 (שפועל גם כשהמסך כבוי!)
+      audio.onended = () => {
+        if (!_isAlarmRinging) return;
+        runNextStep("chime");
+      };
+      audio.onerror = () => {
+        speakGihariLoud(speechText);
+        window._alarmStepTimer = setTimeout(() => runNextStep("chime"), 2800);
+      };
+      audio.src = ttsUrl;
+      audio.volume = 1.0;
+      audio.play().catch(() => {
+        speakGihariLoud(speechText);
+        window._alarmStepTimer = setTimeout(() => runNextStep("chime"), 2800);
+      });
+    }
+  };
+
+  runNextStep("chime");
 }
 
 function stopAlarmLoop() {
+  _isAlarmRinging = false;
   if (window._alarmLoopTimer) {
     clearInterval(window._alarmLoopTimer);
     window._alarmLoopTimer = null;
+  }
+  if (window._alarmStepTimer) {
+    clearTimeout(window._alarmStepTimer);
+    window._alarmStepTimer = null;
+  }
+  try {
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+  } catch {}
+
+  if (hasActivePendingReminders() && areNotificationsEnabled()) {
+    startBackgroundKeepAliveAudio();
+  } else {
+    stopKeepAliveAudio();
   }
 }
 
@@ -1951,6 +2230,7 @@ async function postToServiceWorker(message) {
 }
 
 async function showSystemNotification(title, body, tagKey) {
+  if (!areNotificationsEnabled()) return;
   const tag = tagKey || `bnapp-rem-${Date.now()}`;
   try {
     postToServiceWorker({
@@ -1970,7 +2250,7 @@ async function showSystemNotification(title, body, tagKey) {
             body,
             icon: "./icon-192.png",
             badge: "./icon-192.png",
-            vibrate: [400, 150, 400, 150, 600],
+            vibrate: [500, 180, 500, 180, 700],
             requireInteraction: true,
             renotify: true,
             tag
@@ -2015,13 +2295,15 @@ function loadDirectRemindersFromStorage() {
     const now = Date.now();
     Object.entries(parsed || {}).forEach(([key, rem]) => {
       if (!rem || rem.fired) return;
-      // אם עברו פחות מ-30 דקות או שזה בעתיד – נשחזר
       if (rem.targetTs > now - 30 * 60 * 1000) {
         directReminders[key] = rem;
         armDirectTimeout(key);
       }
     });
     renderActiveRemindersBar();
+    if (hasActivePendingReminders()) {
+      startBackgroundKeepAliveAudio();
+    }
   } catch {}
 }
 
@@ -2031,8 +2313,9 @@ function armDirectTimeout(key) {
   if (directTimeouts[key]) clearTimeout(directTimeouts[key]);
 
   const delay = Math.max(0, rem.targetTs - Date.now());
-  if (delay <= 20 * 60 * 1000) {
+  if (delay <= 60 * 60 * 1000) {
     ensureWakeLockForShortReminder();
+    startBackgroundKeepAliveAudio();
   }
   directTimeouts[key] = setTimeout(() => {
     fireDirectReminder(key);
@@ -2041,6 +2324,9 @@ function armDirectTimeout(key) {
 
 function scheduleDirectReminder({ id, dateKey, ev, targetTs }) {
   if (!id || !targetTs) return;
+  // הגדרת תזכורת חדשה מפעילה אוטומטית את מצב ההתראות אם היה כבוי
+  localStorage.setItem("notificationsEnabled", "true");
+
   const dk = dateKey || "undated";
   const key = `${dk}/${id}`;
   const title = ev?.title || "אירוע / משימה";
@@ -2061,6 +2347,7 @@ function scheduleDirectReminder({ id, dateKey, ev, targetTs }) {
 
   saveDirectRemindersToStorage();
   armDirectTimeout(key);
+  startBackgroundKeepAliveAudio();
   renderActiveRemindersBar();
 
   const timeInfo = startTime ? `שעה: ${startTime}` : `שעת תזכורת: ${formatTimeHM(new Date(targetTs))}`;
@@ -2086,6 +2373,9 @@ function cancelDirectReminder(key) {
     type: "CANCEL_SW_NOTIFICATION",
     key
   });
+  if (!hasActivePendingReminders() && !_isAlarmRinging) {
+    stopKeepAliveAudio();
+  }
   renderActiveRemindersBar();
 }
 
@@ -2141,7 +2431,6 @@ function renderActiveRemindersBar() {
   if (!bar) return;
 
   const now = Date.now();
-  // מציגים בסרגל העליון תזכורות שיתרחשו ב-12 השעות הקרובות
   const activeList = Object.values(directReminders)
     .filter((r) => r && !r.fired && r.targetTs - now <= 12 * 60 * 60 * 1000)
     .sort((a, b) => a.targetTs - b.targetTs);
@@ -2205,23 +2494,14 @@ function tickDirectReminders() {
 }
 
 function triggerReminderAlert(item) {
+  if (!areNotificationsEnabled()) return;
   const { id, dateKey, ev } = item;
-  startAlarmLoop();
-
-  try {
-    if (navigator.vibrate) {
-      navigator.vibrate([400, 150, 400, 150, 600]);
-    }
-  } catch {}
-
   const titleText = ev?.title || "אירוע / משימה";
   const timeInfo = ev?.startTime ? `שעה: ${ev.startTime}` : (ev?.reminderTime ? `שעת תזכורת: ${ev.reminderTime}` : "");
   const notifBody = timeInfo ? `${titleText} • ${timeInfo}` : titleText;
 
-  // דיבור קולי
-  try {
-    gihariSpeak(`תזכורת: ${titleText}`);
-  } catch {}
+  // מפעיל גם את מנגנון השעון המעורר וגם קריינות קולית של ג'יחרי (עובד גם ברקע וגם כשהמסך כבוי!)
+  startAlarmLoop(titleText);
 
   // התראת מערכת
   showSystemNotification(`🔔 תזכורת: ${titleText}`, notifBody, `${dateKey}-${id}-${Date.now()}`);
@@ -2285,6 +2565,7 @@ function triggerReminderAlert(item) {
 }
 
 function checkDueReminders() {
+  if (!areNotificationsEnabled()) return;
   const now = Date.now();
   const allEvents = state.cache.events || {};
 

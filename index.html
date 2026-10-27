@@ -8,7 +8,7 @@
 
   <meta name="theme-color" content="#0284c7" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=blue8" />
+  <link rel="stylesheet" href="styles.css?v=blue9" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -27,7 +27,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue8"></script>
+  <script defer src="app.js?v=blue9"></script>
 </head>
 
 <body>
@@ -448,7 +448,7 @@
 <script>
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js?v=blue8').then((reg) => {
+      navigator.serviceWorker.register('./sw.js?v=blue9').then((reg) => {
         try { reg.update(); } catch (e) {}
       }).catch(() => {});
     });
