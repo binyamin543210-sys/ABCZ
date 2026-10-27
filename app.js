@@ -5,7 +5,21 @@
 // - hebcal.noloc.min.js (global Hebcal) - עם fallback אם לא נטען
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  navigator.serviceWorker.register("./sw.js?v=blue8").then((reg) => {
+    try { reg.update(); } catch (e) {}
+  }).catch(() => {});
+
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    const msg = event.data;
+    if (!msg || !msg.type) return;
+    if (msg.type === "SW_FORCE_RELOAD") {
+      window.location.reload();
+    } else if (msg.type === "SW_REMINDER_FIRED" && msg.key) {
+      if (typeof window._onSwReminderFired === "function") {
+        window._onSwReminderFired(msg);
+      }
+    }
+  });
 }
 
 const firebaseConfig = {
@@ -1359,7 +1373,13 @@ if (existingId) {
   renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
   if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
   const rTs = getEventReminderTimestamp(eventObj, dateKey);
-  showToast(rTs && rTs > Date.now() ? `🔔 עודכן! תזכורת ב-${formatTimeHM(new Date(rTs))}` : "עודכן", 3500);
+  if (rTs && rTs > Date.now()) {
+    scheduleDirectReminder({ id: existingId, dateKey, ev: { ...eventObj, _id: existingId }, targetTs: rTs });
+    showToast(`🔔 עודכן! תזכורת ב-${formatTimeHM(new Date(rTs))}`, 3500);
+  } else {
+    cancelDirectReminder(`${dateKey}/${existingId}`);
+    showToast("עודכן", 2500);
+  }
   update(ref(db, `events/${dateKey}/${existingId}`), eventObj);
 } else {
   const newRef = push(ref(db, `events/${dateKey}`));
@@ -1372,7 +1392,12 @@ if (existingId) {
   renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
   if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
   const rTs = getEventReminderTimestamp(fullObj, dateKey);
-  showToast(rTs && rTs > Date.now() ? `🔔 נשמר! תזכורת ב-${formatTimeHM(new Date(rTs))}` : "נשמר", 3500);
+  if (rTs && rTs > Date.now()) {
+    scheduleDirectReminder({ id: newId, dateKey, ev: fullObj, targetTs: rTs });
+    showToast(`🔔 נשמר! תזכורת ב-${formatTimeHM(new Date(rTs))}`, 3500);
+  } else {
+    showToast("נשמר", 2500);
+  }
   await set(newRef, fullObj);
 
   if (eventObj.recurring && eventObj.recurring !== "none") {
@@ -1434,7 +1459,12 @@ function openConflictModal({ newEvent, conflicts, form }) {
     renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
     if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
     const rTs = getEventReminderTimestamp(fullObj, dateKey);
-    showToast(rTs && rTs > Date.now() ? `🔔 נשמר! תזכורת ב-${formatTimeHM(new Date(rTs))}` : "נשמר למרות ההתנגשות", 3500);
+    if (rTs && rTs > Date.now()) {
+      scheduleDirectReminder({ id: newId, dateKey, ev: fullObj, targetTs: rTs });
+      showToast(`🔔 נשמר! תזכורת ב-${formatTimeHM(new Date(rTs))}`, 3500);
+    } else {
+      showToast("נשמר למרות ההתנגשות", 2500);
+    }
     await set(newRef, fullObj);
   };
 
@@ -1698,47 +1728,67 @@ function initTheme() {
 }
 
 async function requestNotifications() {
+  getSharedAudioCtx();
+  playConfirmTick();
+
   if (!("Notification" in window)) {
-    alert("הדפדפן לא תומך בהתראות");
+    showToast("הדפדפן לא תומך בהתראות מערכת – התראות קוליות וחלונות קופצים יפעלו באפליקציה");
+    triggerReminderAlert({
+      id: "test",
+      dateKey: dateKeyFromDate(new Date()),
+      ev: { title: "בדיקת התראה (ללא תמיכת דפדפן)", startTime: formatTimeHM(new Date()) }
+    });
     return;
   }
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") {
     state.ui.notificationsGranted = false;
-    showToast("התראות נחסמו");
+    showToast("התראות מערכת נחסמו בהגדרות הדפדפן – חלון קופץ וצליל עדיין יפעלו");
     return;
   }
 
-  try {
-    // נוודא שיש Service Worker רשום (sw.js + firebase-messaging-sw.js ברקע)
-    const registration = await navigator.serviceWorker.getRegistration();
+  localStorage.setItem("notificationsEnabled", "true");
+  state.ui.notificationsGranted = true;
 
+  // נשלח מיד התראת בדיקה כדי שהמשתמש יראה וישמע שהכל פועל!
+  await showSystemNotification(
+    "🔔 התראות BNAPP הופעלו בהצלחה!",
+    "מעכשיו תקבל תזכורות עם צליל, רטט והתראה בזמן אמת",
+    "bnapp-enabled-test"
+  );
+  showToast("🔔 התראות הופעלו! נשלחה התראת בדיקה", 3500);
+
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
     const token = await getToken(messaging, {
       vapidKey: "BFzkYCDuV_Ij_b3PQtswrDNnPe4xTVUbxYBJKkLx7YEkERrgOSOYC6KeZ1kNUuABeQV1GZ_xYIVnbU27Rseozss",
       serviceWorkerRegistration: registration || undefined
     });
 
-    if (!token) {
-      console.warn("No FCM token returned");
-      showToast("לא התקבל טוקן התראות");
-      return;
+    if (token) {
+      await set(ref(db, "notificationTokens/" + token), {
+        user: state.currentUser,
+        createdAt: Date.now(),
+        userAgent: navigator.userAgent
+      });
+      console.log("FCM TOKEN:", token);
     }
-
-    await set(ref(db, "notificationTokens/" + token), {
-      user: state.currentUser,
-      createdAt: Date.now(),
-      userAgent: navigator.userAgent
-    });
-
-    localStorage.setItem("notificationsEnabled", "true");
-    state.ui.notificationsGranted = true;
-    console.log("FCM TOKEN:", token);
-    showToast("התראות הופעלו");
   } catch (err) {
-    console.error("Failed to get FCM token", err);
-    alert("שגיאה בהפעלת התראות");
+    console.warn("FCM token registration skipped:", err);
   }
+}
+
+function testNotificationNow() {
+  getSharedAudioCtx();
+  triggerReminderAlert({
+    id: "test-manual",
+    dateKey: dateKeyFromDate(new Date()),
+    ev: {
+      title: "בדיקת התראה 🔔 הכל עובד מצוין!",
+      startTime: formatTimeHM(new Date())
+    }
+  });
 }
 
 function formatReminderLabel(ev) {
@@ -1795,7 +1845,6 @@ function getEventReminderTimestamp(ev, fallbackDateKey) {
       return d.getTime() - mins * 60000;
     }
   }
-  // אם הוגדרה שעת התחלה לאירוע/משימה רגילה (גם בלי למלא שדה דקות תזכורת) -> התראה בשעת ההתחלה!
   if (!isDefaultEvent(ev) && ev.startTime && dk && dk !== "undated") {
     const [h, m] = ev.startTime.split(":").map(Number);
     if (Number.isFinite(h) && Number.isFinite(m)) {
@@ -1826,40 +1875,347 @@ function getSharedAudioCtx() {
 document.addEventListener("click", () => { getSharedAudioCtx(); }, { passive: true });
 document.addEventListener("touchstart", () => { getSharedAudioCtx(); }, { passive: true });
 
+// צליל אישור קצר בעת לחיצה על הגדרת תזכורת (פותח את ערוץ השמע בנייד!)
+function playConfirmTick() {
+  try {
+    const ctx = getSharedAudioCtx();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.13);
+  } catch {}
+}
+
 function playReminderSound() {
   try {
     const ctx = getSharedAudioCtx();
     if (!ctx) return;
-    const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5];
+    const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5, 1318.5];
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "sine";
+      osc.type = "triangle";
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.25, ctx.currentTime + i * 0.18);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.35);
+      gain.gain.setValueAtTime(0.32, ctx.currentTime + i * 0.16);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.16 + 0.34);
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start(ctx.currentTime + i * 0.18);
-      osc.stop(ctx.currentTime + i * 0.18 + 0.36);
+      osc.start(ctx.currentTime + i * 0.16);
+      osc.stop(ctx.currentTime + i * 0.16 + 0.35);
     });
   } catch (e) {
     console.warn("Audio reminder failed:", e);
   }
 }
 
+function startAlarmLoop() {
+  stopAlarmLoop();
+  playReminderSound();
+  let count = 0;
+  window._alarmLoopTimer = setInterval(() => {
+    count++;
+    if (count > 8) {
+      stopAlarmLoop();
+      return;
+    }
+    playReminderSound();
+    try {
+      if (navigator.vibrate) navigator.vibrate([350, 150, 350]);
+    } catch {}
+  }, 3200);
+}
+
+function stopAlarmLoop() {
+  if (window._alarmLoopTimer) {
+    clearInterval(window._alarmLoopTimer);
+    window._alarmLoopTimer = null;
+  }
+}
+
+async function postToServiceWorker(message) {
+  try {
+    if (!("serviceWorker" in navigator)) return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    const target = (reg && (reg.active || reg.waiting || reg.installing)) || navigator.serviceWorker.controller;
+    if (target && typeof target.postMessage === "function") {
+      target.postMessage(message);
+    }
+  } catch (e) {}
+}
+
+async function showSystemNotification(title, body, tagKey) {
+  const tag = tagKey || `bnapp-rem-${Date.now()}`;
+  try {
+    postToServiceWorker({
+      type: "TRIGGER_SW_NOTIFICATION_NOW",
+      key: tag,
+      title,
+      body
+    });
+  } catch {}
+
+  try {
+    if ("Notification" in window && Notification.permission === "granted") {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg && typeof reg.showNotification === "function") {
+          await reg.showNotification(title, {
+            body,
+            icon: "./icon-192.png",
+            badge: "./icon-192.png",
+            vibrate: [400, 150, 400, 150, 600],
+            requireInteraction: true,
+            renotify: true,
+            tag
+          });
+          return;
+        }
+      }
+      new Notification(title, { body, tag });
+    }
+  } catch {}
+}
+
+// ======================================================
+// DIRECT REMINDER SCHEDULER + LIVE VISUAL COUNTDOWN BAR
+// ======================================================
+const directReminders = {};
+const directTimeouts = {};
+let activeWakeLock = null;
+
+async function ensureWakeLockForShortReminder() {
+  try {
+    if ("wakeLock" in navigator && !activeWakeLock) {
+      activeWakeLock = await navigator.wakeLock.request("screen");
+      activeWakeLock.addEventListener("release", () => {
+        activeWakeLock = null;
+      });
+    }
+  } catch {}
+}
+
+function saveDirectRemindersToStorage() {
+  try {
+    localStorage.setItem("bnapp_direct_reminders", JSON.stringify(directReminders));
+  } catch {}
+}
+
+function loadDirectRemindersFromStorage() {
+  try {
+    const raw = localStorage.getItem("bnapp_direct_reminders");
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    const now = Date.now();
+    Object.entries(parsed || {}).forEach(([key, rem]) => {
+      if (!rem || rem.fired) return;
+      // אם עברו פחות מ-30 דקות או שזה בעתיד – נשחזר
+      if (rem.targetTs > now - 30 * 60 * 1000) {
+        directReminders[key] = rem;
+        armDirectTimeout(key);
+      }
+    });
+    renderActiveRemindersBar();
+  } catch {}
+}
+
+function armDirectTimeout(key) {
+  const rem = directReminders[key];
+  if (!rem || rem.fired) return;
+  if (directTimeouts[key]) clearTimeout(directTimeouts[key]);
+
+  const delay = Math.max(0, rem.targetTs - Date.now());
+  if (delay <= 20 * 60 * 1000) {
+    ensureWakeLockForShortReminder();
+  }
+  directTimeouts[key] = setTimeout(() => {
+    fireDirectReminder(key);
+  }, delay);
+}
+
+function scheduleDirectReminder({ id, dateKey, ev, targetTs }) {
+  if (!id || !targetTs) return;
+  const dk = dateKey || "undated";
+  const key = `${dk}/${id}`;
+  const title = ev?.title || "אירוע / משימה";
+  const startTime = ev?.startTime || "";
+
+  getSharedAudioCtx();
+  playConfirmTick();
+
+  directReminders[key] = {
+    key,
+    id,
+    dateKey: dk,
+    title,
+    startTime,
+    targetTs: Number(targetTs),
+    fired: false
+  };
+
+  saveDirectRemindersToStorage();
+  armDirectTimeout(key);
+  renderActiveRemindersBar();
+
+  const timeInfo = startTime ? `שעה: ${startTime}` : `שעת תזכורת: ${formatTimeHM(new Date(targetTs))}`;
+  postToServiceWorker({
+    type: "SCHEDULE_SW_NOTIFICATION",
+    key,
+    title: `🔔 תזכורת BNAPP: ${title}`,
+    body: `${title} • ${timeInfo}`,
+    targetTs: Number(targetTs)
+  });
+}
+
+function cancelDirectReminder(key) {
+  if (directTimeouts[key]) {
+    clearTimeout(directTimeouts[key]);
+    delete directTimeouts[key];
+  }
+  if (directReminders[key]) {
+    delete directReminders[key];
+    saveDirectRemindersToStorage();
+  }
+  postToServiceWorker({
+    type: "CANCEL_SW_NOTIFICATION",
+    key
+  });
+  renderActiveRemindersBar();
+}
+
+function fireDirectReminder(key) {
+  const rem = directReminders[key];
+  if (!rem || rem.fired) return;
+  rem.fired = true;
+
+  if (directTimeouts[key]) {
+    clearTimeout(directTimeouts[key]);
+    delete directTimeouts[key];
+  }
+  delete directReminders[key];
+  saveDirectRemindersToStorage();
+  renderActiveRemindersBar();
+
+  const { id, dateKey, title, startTime } = rem;
+  const now = Date.now();
+  const cachedEv = state.cache.events?.[dateKey]?.[id];
+  if (cachedEv) {
+    cachedEv.remindedAt = now;
+  }
+  if (id && dateKey && id !== "test" && id !== "test-manual") {
+    update(ref(db, `events/${dateKey}/${id}`), { remindedAt: now }).catch(() => {});
+  }
+
+  triggerReminderAlert({
+    id,
+    dateKey,
+    ev: cachedEv || { title, startTime, _id: id, dateKey }
+  });
+}
+
+window._onSwReminderFired = (msg) => {
+  if (msg && msg.key && directReminders[msg.key]) {
+    fireDirectReminder(msg.key);
+  }
+};
+
+function formatCountdownMMSS(msRemaining) {
+  const totalSec = Math.max(0, Math.ceil(msRemaining / 1000));
+  const hrs = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  if (hrs > 0) {
+    return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function renderActiveRemindersBar() {
+  const bar = el("activeRemindersBar");
+  if (!bar) return;
+
+  const now = Date.now();
+  // מציגים בסרגל העליון תזכורות שיתרחשו ב-12 השעות הקרובות
+  const activeList = Object.values(directReminders)
+    .filter((r) => r && !r.fired && r.targetTs - now <= 12 * 60 * 60 * 1000)
+    .sort((a, b) => a.targetTs - b.targetTs);
+
+  if (activeList.length === 0) {
+    bar.classList.add("hidden");
+    bar.innerHTML = "";
+    return;
+  }
+
+  bar.classList.remove("hidden");
+  bar.innerHTML = "";
+
+  activeList.slice(0, 3).forEach((rem) => {
+    const remMs = rem.targetTs - now;
+    const row = document.createElement("div");
+    row.className = "active-rem-row";
+
+    const label = document.createElement("span");
+    label.className = "active-rem-text";
+    label.textContent = `🔔 ${rem.title}`;
+
+    const timerBadge = document.createElement("span");
+    timerBadge.className = "active-rem-countdown";
+    timerBadge.textContent = `בעוד ${formatCountdownMMSS(remMs)}`;
+
+    const testNowBtn = document.createElement("button");
+    testNowBtn.type = "button";
+    testNowBtn.className = "active-rem-btn";
+    testNowBtn.textContent = "הפעל עכשיו";
+    testNowBtn.onclick = () => fireDirectReminder(rem.key);
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "active-rem-btn";
+    cancelBtn.textContent = "✕";
+    cancelBtn.onclick = () => {
+      cancelDirectReminder(rem.key);
+      showToast("🔕 התזכורת בוטלה");
+    };
+
+    row.appendChild(label);
+    row.appendChild(timerBadge);
+    row.appendChild(testNowBtn);
+    row.appendChild(cancelBtn);
+    bar.appendChild(row);
+  });
+}
+
+function tickDirectReminders() {
+  const now = Date.now();
+  Object.keys(directReminders).forEach((key) => {
+    const rem = directReminders[key];
+    if (!rem || rem.fired) return;
+    if (now >= rem.targetTs) {
+      fireDirectReminder(key);
+    }
+  });
+  renderActiveRemindersBar();
+  checkDueReminders();
+}
+
 function triggerReminderAlert(item) {
   const { id, dateKey, ev } = item;
-  playReminderSound();
+  startAlarmLoop();
 
   try {
     if (navigator.vibrate) {
-      navigator.vibrate([300, 150, 300, 150, 400]);
+      navigator.vibrate([400, 150, 400, 150, 600]);
     }
   } catch {}
 
-  const titleText = ev.title || "אירוע / משימה";
-  const timeInfo = ev.startTime ? `שעה: ${ev.startTime}` : (ev.reminderTime ? `שעת תזכורת: ${ev.reminderTime}` : "");
+  const titleText = ev?.title || "אירוע / משימה";
+  const timeInfo = ev?.startTime ? `שעה: ${ev.startTime}` : (ev?.reminderTime ? `שעת תזכורת: ${ev.reminderTime}` : "");
   const notifBody = timeInfo ? `${titleText} • ${timeInfo}` : titleText;
 
   // דיבור קולי
@@ -1867,76 +2223,64 @@ function triggerReminderAlert(item) {
     gihariSpeak(`תזכורת: ${titleText}`);
   } catch {}
 
-  // התראת מערכת – גם לנייד (ServiceWorker showNotification) וגם למחשב (new Notification)
-  try {
-    if ("Notification" in window && Notification.permission === "granted") {
-      if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.getRegistration().then((reg) => {
-          if (reg && typeof reg.showNotification === "function") {
-            reg.showNotification("🔔 תזכורת BNAPP", {
-              body: notifBody,
-              icon: "./icon-192.png",
-              badge: "./icon-192.png",
-              vibrate: [300, 150, 300],
-              requireInteraction: true,
-              tag: `bnapp-rem-${dateKey}-${id}-${Date.now()}`
-            }).catch(() => {});
-          } else {
-            try {
-              new Notification("🔔 תזכורת BNAPP", {
-                body: notifBody,
-                tag: `bnapp-rem-${dateKey}-${id}-${Date.now()}`
-              });
-            } catch {}
-          }
-        }).catch(() => {});
-      } else {
-        new Notification("🔔 תזכורת BNAPP", {
-          body: notifBody,
-          tag: `bnapp-rem-${dateKey}-${id}-${Date.now()}`
-        });
-      }
-    }
-  } catch {}
+  // התראת מערכת
+  showSystemNotification(`🔔 תזכורת: ${titleText}`, notifBody, `${dateKey}-${id}-${Date.now()}`);
 
-  // חלון התראה קופץ באפליקציה
+  // חלון התראה קופץ באפליקציה (מעל כל המודאלים!)
   const modal = el("reminderAlertModal");
   if (modal) {
     el("reminderAlertTitle").textContent = titleText;
-    el("reminderAlertMeta").textContent = timeInfo || "הגיע זמן התזכורת שהגדרת";
+    el("reminderAlertMeta").textContent = timeInfo || "הגיע זמן התזכורת שהגדרת!";
     modal.classList.remove("hidden");
 
     el("btnReminderDone").onclick = () => {
+      stopAlarmLoop();
       modal.classList.add("hidden");
-      toggleTaskDone({ ...ev, id, _id: id, dateKey });
+      if (id && id !== "test" && id !== "test-manual") {
+        toggleTaskDone({ ...ev, id, _id: id, dateKey });
+      }
     };
 
     el("btnReminderSnooze").onclick = async () => {
+      stopAlarmLoop();
       modal.classList.add("hidden");
       const snoozeTs = Date.now() + 10 * 60 * 1000;
       const snoozeDate = new Date(snoozeTs);
-      if (state.cache.events[dateKey]?.[id]) {
-        Object.assign(state.cache.events[dateKey][id], {
+      const targetId = id || "snooze";
+      const targetDk = dateKey || dateKeyFromDate(new Date());
+
+      scheduleDirectReminder({
+        id: targetId,
+        dateKey: targetDk,
+        ev: ev || { title: titleText },
+        targetTs: snoozeTs
+      });
+
+      if (state.cache.events[targetDk]?.[targetId]) {
+        Object.assign(state.cache.events[targetDk][targetId], {
           reminderCustomTs: snoozeTs,
           reminderDate: dateKeyFromDate(snoozeDate),
           reminderTime: formatTimeHM(snoozeDate),
           remindedAt: null
         });
       }
-      showToast("⏰ נדחה ב-10 דקות");
-      await update(ref(db, `events/${dateKey}/${id}`), {
-        reminderCustomTs: snoozeTs,
-        reminderDate: dateKeyFromDate(snoozeDate),
-        reminderTime: formatTimeHM(snoozeDate),
-        remindedAt: null
-      });
+      showToast("⏰ נדחה ב-10 דקות (ספירה לאחור פעילה למעלה)");
+      if (targetId !== "test" && targetId !== "test-manual") {
+        await update(ref(db, `events/${targetDk}/${targetId}`), {
+          reminderCustomTs: snoozeTs,
+          reminderDate: dateKeyFromDate(snoozeDate),
+          reminderTime: formatTimeHM(snoozeDate),
+          remindedAt: null
+        });
+      }
     };
 
     el("btnReminderDismiss").onclick = () => {
+      stopAlarmLoop();
       modal.classList.add("hidden");
     };
   } else {
-    showToast(`🔔 תזכורת: ${titleText}`);
+    showToast(`🔔 תזכורת: ${titleText}`, 6000);
   }
 }
 
@@ -1955,12 +2299,37 @@ function checkDueReminders() {
       const remindTs = getEventReminderTimestamp(ev, dateKey);
       if (!remindTs) return;
 
-      // עבור תזכורת מפורשת: עד 24 שעות אחורה; עבור שעת התחלה רגילה: עד 5 דקות אחורה
-      const maxWindowMs = hasExplicitReminder ? 24 * 60 * 60 * 1000 : 5 * 60 * 1000;
+      const key = `${dateKey}/${id}`;
+
+      // אם התזכורת בעתיד הקרוב (עד 12 שעות קדימה) ועדיין לא בסרגל הספירה לאחור – נחבר אותה!
+      if (remindTs > now && remindTs - now <= 12 * 60 * 60 * 1000 && hasExplicitReminder) {
+        if (!directReminders[key] || directReminders[key].targetTs !== remindTs) {
+          directReminders[key] = {
+            key,
+            id,
+            dateKey,
+            title: ev.title || "אירוע / משימה",
+            startTime: ev.startTime || "",
+            targetTs: remindTs,
+            fired: false
+          };
+          armDirectTimeout(key);
+          renderActiveRemindersBar();
+        }
+        return;
+      }
+
+      // עבור תזכורת מפורשת: עד 30 דקות אחורה; עבור שעת התחלה רגילה: עד 5 דקות אחורה
+      const maxWindowMs = hasExplicitReminder ? 30 * 60 * 1000 : 5 * 60 * 1000;
 
       if (now >= remindTs && now - remindTs < maxWindowMs) {
         ev.remindedAt = now;
-        update(ref(db, `events/${dateKey}/${id}`), { remindedAt: now });
+        if (directReminders[key]) {
+          delete directReminders[key];
+          saveDirectRemindersToStorage();
+          renderActiveRemindersBar();
+        }
+        update(ref(db, `events/${dateKey}/${id}`), { remindedAt: now }).catch(() => {});
         triggerReminderAlert({ id, dateKey, ev });
       }
     });
@@ -1971,11 +2340,13 @@ function openQuickReminderModal(task) {
   const modal = el("reminderModal");
   if (!modal || !task) return;
 
+  getSharedAudioCtx();
+
   const id = task._id || task.id;
   const dateKey = task.dateKey || dateKeyFromDate(state.currentDate);
 
   el("reminderModalItemTitle").textContent = `${task.title || "(ללא כותרת)"}${task.startTime ? " • " + task.startTime : ""}`;
-  el("quickReminderMinutes").value = task.reminderMinutes != null ? String(task.reminderMinutes) : "";
+  el("quickReminderMinutes").value = "";
   el("quickReminderDate").value = task.reminderDate || (dateKey !== "undated" ? dateKey : dateKeyFromDate(new Date()));
   el("quickReminderTime").value = task.reminderTime || "";
 
@@ -1985,14 +2356,33 @@ function openQuickReminderModal(task) {
     b.onclick = () => modal.classList.add("hidden");
   });
 
-  const saveReminderFields = async (fields, toastMsg) => {
+  const saveReminderFields = async (fields, toastMsg, directTargetTs) => {
+    getSharedAudioCtx();
+    playConfirmTick();
+
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
     }
+
     if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
     if (state.cache.events[dateKey][id]) {
       Object.assign(state.cache.events[dateKey][id], fields, { remindedAt: null });
     }
+
+    const updatedEv = state.cache.events[dateKey]?.[id] || { ...task, ...fields };
+    const effectiveTs = directTargetTs || getEventReminderTimestamp(updatedEv, dateKey);
+
+    if (effectiveTs && effectiveTs > Date.now()) {
+      scheduleDirectReminder({
+        id,
+        dateKey,
+        ev: updatedEv,
+        targetTs: effectiveTs
+      });
+    } else if (fields.reminderCustomTs === null && fields.reminderMinutes === null && fields.reminderTime === null) {
+      cancelDirectReminder(`${dateKey}/${id}`);
+    }
+
     modal.classList.add("hidden");
     showToast(toastMsg || "🔔 תזכורת נשמרה", 3500);
     renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
@@ -2008,6 +2398,22 @@ function openQuickReminderModal(task) {
   qsa("[data-quick-rem]", modal).forEach((btn) => {
     btn.onclick = () => {
       const mode = btn.dataset.quickRem;
+      if (mode === "now") {
+        modal.classList.add("hidden");
+        triggerReminderAlert({ id, dateKey, ev: task });
+        return;
+      }
+      if (mode === "sec10") {
+        const targetTs = Date.now() + 10 * 1000;
+        const dt = new Date(targetTs);
+        saveReminderFields({
+          reminderCustomTs: targetTs,
+          reminderDate: dateKeyFromDate(dt),
+          reminderTime: formatTimeHM(dt),
+          reminderMinutes: null
+        }, "🔔 התראה תופעל בעוד 10 שניות!", targetTs);
+        return;
+      }
       if (mode.startsWith("in")) {
         const addMins = Number(mode.replace("in", ""));
         const targetTs = Date.now() + addMins * 60000;
@@ -2017,38 +2423,48 @@ function openQuickReminderModal(task) {
           reminderDate: dateKeyFromDate(dt),
           reminderTime: formatTimeHM(dt),
           reminderMinutes: null
-        }, `🔔 תזכורת בעוד ${addMins} דק׳`);
+        }, `🔔 תזכורת בעוד ${addMins} דק׳ (ראה ספירה לאחור למעלה)`, targetTs);
       } else if (mode.startsWith("before")) {
         const beforeMins = Number(mode.replace("before", ""));
-        saveReminderFields({
-          reminderMinutes: beforeMins,
-          reminderCustomTs: null,
-          reminderDate: null,
-          reminderTime: null
-        }, `🔔 תזכורת ${beforeMins} דק׳ לפני`);
+        let calcTs = null;
+        if (task.startTime && dateKey && dateKey !== "undated") {
+          const [h, m] = task.startTime.split(":").map(Number);
+          const d = parseDateKey(dateKey);
+          d.setHours(Number.isFinite(h) ? h : 9, Number.isFinite(m) ? m : 0, 0, 0);
+          calcTs = d.getTime() - beforeMins * 60000;
+        }
+        // אם שעת ההתחלה של האירוע היום כבר עברה, נתזכר בעוד beforeMins דקות מעכשיו!
+        if (!calcTs || calcTs <= Date.now()) {
+          const fallbackMins = beforeMins > 0 ? beforeMins : 1;
+          const targetTs = Date.now() + fallbackMins * 60000;
+          const dt = new Date(targetTs);
+          saveReminderFields({
+            reminderCustomTs: targetTs,
+            reminderDate: dateKeyFromDate(dt),
+            reminderTime: formatTimeHM(dt),
+            reminderMinutes: beforeMins
+          }, `🔔 שעת האירוע חלפה – תזכורת הוגדרה לעוד ${fallbackMins} דק׳ מעכשיו!`, targetTs);
+        } else {
+          saveReminderFields({
+            reminderMinutes: beforeMins,
+            reminderCustomTs: calcTs,
+            reminderDate: dateKey,
+            reminderTime: formatTimeHM(new Date(calcTs))
+          }, `🔔 תזכורת ${beforeMins === 0 ? "בזמן האירוע" : beforeMins + " דק׳ לפני"}`, calcTs);
+        }
       }
     };
   });
 
   el("btnSaveQuickReminder").onclick = () => {
-    const minsVal = el("quickReminderMinutes").value;
+    const minsVal = el("quickReminderMinutes").value.trim();
     const dateVal = el("quickReminderDate").value;
     const timeVal = el("quickReminderTime").value;
 
-    if (timeVal) {
-      const baseDk = dateVal || (dateKey !== "undated" ? dateKey : dateKeyFromDate(new Date()));
-      const dObj = parseDateKey(baseDk);
-      const [h, m] = timeVal.split(":").map(Number);
-      dObj.setHours(h || 0, m || 0, 0, 0);
-      saveReminderFields({
-        reminderCustomTs: dObj.getTime(),
-        reminderDate: baseDk,
-        reminderTime: timeVal,
-        reminderMinutes: minsVal !== "" ? Number(minsVal) : null
-      }, `🔔 תזכורת הוגדרה ל-${timeVal}`);
-    } else if (minsVal !== "") {
+    // אם המשתמש הזין מספר דקות בתיבת "הזכר לי בעוד X דקות מעכשיו" -> תמיד בעוד X דקות מעכשיו!
+    if (minsVal !== "") {
       const mNum = Number(minsVal);
-      if (!task.startTime) {
+      if (!Number.isNaN(mNum) && mNum > 0) {
         const targetTs = Date.now() + mNum * 60000;
         const dt = new Date(targetTs);
         saveReminderFields({
@@ -2056,17 +2472,29 @@ function openQuickReminderModal(task) {
           reminderCustomTs: targetTs,
           reminderDate: dateKeyFromDate(dt),
           reminderTime: formatTimeHM(dt)
-        }, `🔔 תזכורת בעוד ${mNum} דק׳`);
-      } else {
-        saveReminderFields({
-          reminderMinutes: mNum,
-          reminderCustomTs: null,
-          reminderDate: null,
-          reminderTime: null
-        }, `🔔 תזכורת ${minsVal} דק׳ לפני`);
+        }, `🔔 תזכורת בעוד ${mNum} דק׳ (ספירה לאחור פעילה למעלה)`, targetTs);
+        return;
       }
+    }
+
+    if (timeVal) {
+      const baseDk = dateVal || (dateKey !== "undated" ? dateKey : dateKeyFromDate(new Date()));
+      const dObj = parseDateKey(baseDk);
+      const [h, m] = timeVal.split(":").map(Number);
+      dObj.setHours(h || 0, m || 0, 0, 0);
+      let targetTs = dObj.getTime();
+      // אם בחר את השעה של הדקה הנוכחית שרק התחילה, נתזכר בעוד 10 שניות
+      if (targetTs <= Date.now() && Date.now() - targetTs < 60000) {
+        targetTs = Date.now() + 10000;
+      }
+      saveReminderFields({
+        reminderCustomTs: targetTs,
+        reminderDate: baseDk,
+        reminderTime: timeVal,
+        reminderMinutes: null
+      }, `🔔 תזכורת הוגדרה ל-${timeVal}`, targetTs);
     } else {
-      showToast("בחר זמן לתזכורת");
+      showToast("בחר זמן לתזכורת או הזן דקות מעכשיו");
     }
   };
 
@@ -2076,7 +2504,7 @@ function openQuickReminderModal(task) {
       reminderCustomTs: null,
       reminderDate: null,
       reminderTime: null
-    }, "🔕 התזכורת בוטלה");
+    }, "🔕 התזכורת בוטלה", null);
   };
 }
 
@@ -3282,6 +3710,9 @@ if (userSel) {
   el("btnSaveCity").onclick = saveCitySettings;
   el("btnThemeToggle").onclick = toggleTheme;
   el("btnRequestNotifications").onclick = requestNotifications;
+  if (el("btnTestNotificationNow")) {
+    el("btnTestNotificationNow").onclick = testNotificationNow;
+  }
   el("btnOpenWaze").onclick = openWazeFromForm;
 
   el("editForm").addEventListener("submit", handleEditFormSubmit);
@@ -3291,8 +3722,15 @@ if (userSel) {
   renderShoppingList();
   try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
 
-  setInterval(checkDueReminders, 2000);
-  setTimeout(checkDueReminders, 1000);
+  loadDirectRemindersFromStorage();
+  setInterval(tickDirectReminders, 1000);
+  setTimeout(tickDirectReminders, 500);
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) tickDirectReminders();
+  });
+  window.addEventListener("focus", tickDirectReminders);
+  window.addEventListener("pageshow", tickDirectReminders);
 
   // ===== expose functions for inline HTML handlers =====
 window.toggleCompletedSection = toggleCompletedSection;

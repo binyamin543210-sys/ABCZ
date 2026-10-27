@@ -8,7 +8,7 @@
 
   <meta name="theme-color" content="#0284c7" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=blue7" />
+  <link rel="stylesheet" href="styles.css?v=blue8" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -27,18 +27,20 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue7"></script>
+  <script defer src="app.js?v=blue8"></script>
 </head>
 
 <body>
   <!-- Toast -->
   <div id="toast" class="toast hidden">בוצע</div>
+  <!-- סרגל ספירה לאחור חיה לתזכורות פעילות -->
+  <div id="activeRemindersBar" class="active-reminders-bar hidden"></div>
 
   <div id="app">
     <header class="app-header">
       <div class="header-top">
         <button id="btnThemeToggle" class="icon-btn" title="מצב יום/לילה">☀️/🌙</button>
-        <div class="app-title">BNAPP V3.5.2</div>
+        <div class="app-title">BNAPP V3.6 🔔</div>
         <button id="btnGihari" class="primary-pill">ג'יחרי</button>
       </div>
 
@@ -183,11 +185,9 @@
 
         
         <div class="settings-group">
-          <button id="btnRequestNotifications" class="ghost-pill full-width">הפעל התראות</button>
-
-<button id="btnDisableNotifications" class="ghost-pill full-width">כבה התראות</button>
-
-          
+          <button id="btnRequestNotifications" class="primary-pill full-width">🔔 הפעל התראות</button>
+          <button id="btnTestNotificationNow" type="button" class="ghost-pill full-width" style="margin-top:6px;">🔊 שלח התראת בדיקה עכשיו</button>
+          <button id="btnDisableNotifications" class="ghost-pill full-width" style="margin-top:6px;">כבה התראות</button>
         </div>
       </section>
     </main>
@@ -448,7 +448,9 @@
 <script>
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=blue8').then((reg) => {
+        try { reg.update(); } catch (e) {}
+      }).catch(() => {});
     });
   }
 </script>
@@ -519,7 +521,9 @@
       <div class="field">
         <label>תזכורת מהירה</label>
         <div class="reminder-chips">
-          <button type="button" class="ghost-pill small" data-quick-rem="in1">בעוד דקה (בדיקה)</button>
+          <button type="button" class="primary-pill small" data-quick-rem="now">🔊 בדוק התראה עכשיו</button>
+          <button type="button" class="ghost-pill small" data-quick-rem="sec10">בעוד 10 שניות</button>
+          <button type="button" class="ghost-pill small" data-quick-rem="in1">בעוד דקה</button>
           <button type="button" class="ghost-pill small" data-quick-rem="in5">בעוד 5 דק׳</button>
           <button type="button" class="ghost-pill small" data-quick-rem="in15">בעוד 15 דק׳</button>
           <button type="button" class="ghost-pill small" data-quick-rem="in60">בעוד שעה</button>
@@ -531,8 +535,8 @@
       </div>
 
       <div class="field">
-        <label>דקות לפני שעת ההתחלה</label>
-        <input id="quickReminderMinutes" type="number" min="0" placeholder="למשל: 15" />
+        <label>הזכר לי בעוד X דקות מעכשיו</label>
+        <input id="quickReminderMinutes" type="number" min="1" placeholder="הזן מספר דקות מעכשיו (למשל: 1, 5, 10)" />
       </div>
 
       <div class="grid-2">
@@ -555,11 +559,11 @@
 </div>
 
 <!-- REMINDER ALERT POPUP MODAL -->
-<div id="reminderAlertModal" class="modal hidden">
+<div id="reminderAlertModal" class="modal reminder-alert-modal hidden">
   <div class="modal-backdrop"></div>
-  <div class="modal-content confirm-modal">
-    <div class="confirm-title" style="font-size:1.2rem;">🔔 תזכורת!</div>
-    <div id="reminderAlertTitle" class="task-title" style="font-size:1.05rem; margin:8px 0 4px;"></div>
+  <div class="modal-content confirm-modal reminder-alert-box">
+    <div class="confirm-title" style="font-size:1.3rem;">🔔 הגיע זמן התזכורת!</div>
+    <div id="reminderAlertTitle" class="task-title" style="font-size:1.15rem; margin:10px 0 4px;"></div>
     <div id="reminderAlertMeta" class="confirm-text"></div>
     <div class="confirm-actions" style="flex-direction:column; gap:8px;">
       <button id="btnReminderDone" class="primary-pill full-width">✔ סמן כבוצע</button>

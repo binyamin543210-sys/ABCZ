@@ -1263,3 +1263,77 @@ body.dark .ghost-pill.reminder-set {
   border-color: #38bdf8;
   color: #38bdf8;
 }
+
+#reminderModal {
+  z-index: 99995 !important;
+}
+
+#reminderAlertModal,
+.reminder-alert-modal {
+  z-index: 999999 !important;
+  align-items: center;
+  padding: 16px;
+}
+
+.reminder-alert-box {
+  border-radius: 22px !important;
+  border: 2px solid #0284c7;
+  box-shadow: 0 20px 50px rgba(2, 132, 199, 0.65) !important;
+  text-align: center;
+}
+
+.active-reminders-bar {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 20px);
+  max-width: 460px;
+  z-index: 99990;
+  background: linear-gradient(135deg, #0369a1, #0284c7);
+  color: #ffffff;
+  border: 1.5px solid #7dd3fc;
+  border-radius: 14px;
+  padding: 8px 12px;
+  box-shadow: 0 10px 28px rgba(2, 132, 199, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.active-reminders-bar.hidden {
+  display: none !important;
+}
+
+.active-rem-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.active-rem-text {
+  font-weight: 700;
+  flex: 1;
+}
+
+.active-rem-countdown {
+  background: rgba(255, 255, 255, 0.22);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: monospace;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.active-rem-btn {
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
