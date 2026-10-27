@@ -521,7 +521,27 @@ function applyBackground(bg) {
 
 
 const savedBg = localStorage.getItem("appBackground");
-if (savedBg) applyBackground(savedBg);
+applyBackground(savedBg || "1");
+
+// ===============================
+// סוג כתב (נשמר במכשיר)
+// ===============================
+function applyFont(font) {
+  const f = font || "heebo";
+  document.body.setAttribute("data-font", f);
+  try { localStorage.setItem("appFont", f); } catch {}
+  document.querySelectorAll("#fontSelector button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.font === f);
+  });
+}
+applyFont(localStorage.getItem("appFont"));
+const fontSelectorEl = document.getElementById("fontSelector");
+if (fontSelectorEl) {
+  fontSelectorEl.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (b && b.dataset.font) applyFont(b.dataset.font);
+  });
+}
 
 // ===============================
 // BG SELECTOR – FIX (REAL)
@@ -1662,9 +1682,6 @@ function initShopping() {
         const names = getSavedShoppingTabNames();
         const input = el("shoppingTabNameInput");
         if (input) input.value = names[btn.dataset.list] || btn.textContent;
-      } else if (wasActive) {
-        // לחיצה נוספת על הלשונית הפעילה פותחת מיד עריכת שם ללשונית
-        openShoppingTabRenameBar();
       }
     });
   });

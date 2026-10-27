@@ -8,7 +8,11 @@
 
   <meta name="theme-color" content="#0284c7" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=blue11" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
+  <link rel="stylesheet" href="styles.css?v=blue12" />
+  <link rel="stylesheet" href="theme.css?v=blue12" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -27,7 +31,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue11"></script>
+  <script defer src="app.js?v=blue12"></script>
 </head>
 
 <body>
@@ -95,7 +99,7 @@
       <section id="shoppingSection" class="screen">
         <div class="section-header">
           <h2>רשימת קניות</h2>
-          <button id="btnRenameShoppingTab" type="button" class="ghost-pill small">✏️ שנה שם לשונית</button>
+          <button id="btnRenameShoppingTab" type="button" class="ghost-pill small" title="שנה שם ללשונית">✏️</button>
         </div>
         <div class="segmented" id="shoppingTabs">
           <button data-list="default" class="segmented-btn active">רגיל</button>
@@ -178,6 +182,28 @@
     <button data-bg="8">8</button>
     <button data-bg="9">9</button>
     <button data-bg="10">10</button>
+    <button data-bg="11">11</button>
+    <button data-bg="12">12</button>
+    <button data-bg="13">13</button>
+    <button data-bg="14">14</button>
+    <button data-bg="15">15</button>
+    <button data-bg="16">16</button>
+  </div>
+</div>
+
+<div class="settings-group">
+  <label>סוג כתב</label>
+  <div id="fontSelector">
+    <button type="button" data-font="heebo">היבו – Heebo</button>
+    <button type="button" data-font="assistant">אסיסטנט</button>
+    <button type="button" data-font="rubik">רוביק</button>
+    <button type="button" data-font="varela">ורלה עגול</button>
+    <button type="button" data-font="secular">סקולר אחד</button>
+    <button type="button" data-font="suez">סואץ</button>
+    <button type="button" data-font="frank">פרנק רואל</button>
+    <button type="button" data-font="alef">אלף</button>
+    <button type="button" data-font="miriam">מרים</button>
+    <button type="button" data-font="amatic">יד כתובה</button>
   </div>
 </div>
 

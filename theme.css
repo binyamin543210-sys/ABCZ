@@ -1,0 +1,455 @@
+/* =====================================================================
+   BNAPP – PREMIUM THEME LAYER (נטען אחרי styles.css ודורס אותו בעדינות)
+   - 16 ערכות רקע/צבעים (גרדיאנטים)
+   - 10 סוגי כתב לבחירה בהגדרות
+   - כפתורים, כרטיסים, ניווט ומודאלים ברמת אפליקציית יוקרה
+   ===================================================================== */
+
+/* ---------- בסיס: .hidden תמיד מסתיר (תיקון בועת שינוי שם הלשונית) ---------- */
+.hidden { display: none !important; }
+
+/* ---------- ערכות צבע (גם כפתורי הדוגמה בהגדרות) ---------- */
+:root,
+body.bg-1, #bgSelector button[data-bg="1"] {
+  --bg-grad: linear-gradient(160deg, #0ea5e9 0%, #0369a1 48%, #0c4a6e 100%);
+  --accent: #0ea5e9; --accent-2: #6366f1; --accent-soft: rgba(14,165,233,.16);
+  --glow-a: rgba(125,211,252,.35); --glow-b: rgba(99,102,241,.28);
+}
+body.bg-2, #bgSelector button[data-bg="2"] {
+  --bg-grad: linear-gradient(160deg, #6366f1 0%, #4338ca 50%, #1e1b4b 100%);
+  --accent: #6366f1; --accent-2: #a855f7; --accent-soft: rgba(99,102,241,.16);
+  --glow-a: rgba(165,180,252,.35); --glow-b: rgba(192,132,252,.28);
+}
+body.bg-3, #bgSelector button[data-bg="3"] {
+  --bg-grad: linear-gradient(160deg, #10b981 0%, #047857 50%, #064e3b 100%);
+  --accent: #10b981; --accent-2: #06b6d4; --accent-soft: rgba(16,185,129,.16);
+  --glow-a: rgba(110,231,183,.35); --glow-b: rgba(6,182,212,.25);
+}
+body.bg-4, #bgSelector button[data-bg="4"] {
+  --bg-grad: linear-gradient(160deg, #22c55e 0%, #15803d 50%, #14532d 100%);
+  --accent: #16a34a; --accent-2: #84cc16; --accent-soft: rgba(22,163,74,.16);
+  --glow-a: rgba(134,239,172,.35); --glow-b: rgba(132,204,22,.25);
+}
+body.bg-5, #bgSelector button[data-bg="5"] {
+  --bg-grad: linear-gradient(160deg, #fb923c 0%, #ea580c 48%, #9a3412 100%);
+  --accent: #f97316; --accent-2: #f43f5e; --accent-soft: rgba(249,115,22,.16);
+  --glow-a: rgba(253,186,116,.4); --glow-b: rgba(244,63,94,.25);
+}
+body.bg-6, #bgSelector button[data-bg="6"] {
+  --bg-grad: linear-gradient(160deg, #f43f5e 0%, #be123c 50%, #4c0519 100%);
+  --accent: #e11d48; --accent-2: #f97316; --accent-soft: rgba(225,29,72,.16);
+  --glow-a: rgba(253,164,175,.35); --glow-b: rgba(249,115,22,.25);
+}
+body.bg-7, #bgSelector button[data-bg="7"] {
+  --bg-grad: linear-gradient(160deg, #a855f7 0%, #7e22ce 50%, #3b0764 100%);
+  --accent: #9333ea; --accent-2: #ec4899; --accent-soft: rgba(147,51,234,.16);
+  --glow-a: rgba(216,180,254,.35); --glow-b: rgba(236,72,153,.28);
+}
+body.bg-8, #bgSelector button[data-bg="8"] {
+  --bg-grad: linear-gradient(160deg, #64748b 0%, #334155 52%, #0f172a 100%);
+  --accent: #475569; --accent-2: #0ea5e9; --accent-soft: rgba(71,85,105,.18);
+  --glow-a: rgba(203,213,225,.28); --glow-b: rgba(14,165,233,.2);
+}
+body.bg-9, #bgSelector button[data-bg="9"] {
+  --bg-grad: linear-gradient(160deg, #1e293b 0%, #0f172a 55%, #020617 100%);
+  --accent: #38bdf8; --accent-2: #818cf8; --accent-soft: rgba(56,189,248,.18);
+  --glow-a: rgba(56,189,248,.22); --glow-b: rgba(129,140,248,.2);
+}
+body.bg-10, #bgSelector button[data-bg="10"] {
+  --bg-grad: linear-gradient(160deg, #18181b 0%, #09090b 60%, #000000 100%);
+  --accent: #e4e4e7; --accent-2: #a1a1aa; --accent-soft: rgba(228,228,231,.16);
+  --glow-a: rgba(255,255,255,.1); --glow-b: rgba(161,161,170,.12);
+}
+body.bg-11, #bgSelector button[data-bg="11"] {
+  --bg-grad: linear-gradient(160deg, #fda4af 0%, #e879a0 45%, #9d4a6b 100%);
+  --accent: #db2777; --accent-2: #f59e0b; --accent-soft: rgba(219,39,119,.15);
+  --glow-a: rgba(255,228,230,.45); --glow-b: rgba(245,158,11,.22);
+}
+body.bg-12, #bgSelector button[data-bg="12"] {
+  --bg-grad: linear-gradient(160deg, #2dd4bf 0%, #0d9488 50%, #134e4a 100%);
+  --accent: #0d9488; --accent-2: #0ea5e9; --accent-soft: rgba(13,148,136,.16);
+  --glow-a: rgba(153,246,228,.35); --glow-b: rgba(14,165,233,.25);
+}
+body.bg-13, #bgSelector button[data-bg="13"] {
+  --bg-grad: linear-gradient(160deg, #3b2a14 0%, #1f1609 55%, #0d0903 100%);
+  --accent: #d4a017; --accent-2: #f5d76e; --accent-soft: rgba(212,160,23,.2);
+  --glow-a: rgba(245,215,110,.22); --glow-b: rgba(212,160,23,.18);
+}
+body.bg-14, #bgSelector button[data-bg="14"] {
+  --bg-grad: linear-gradient(160deg, #34d399 0%, #6366f1 52%, #7c3aed 100%);
+  --accent: #6366f1; --accent-2: #10b981; --accent-soft: rgba(99,102,241,.16);
+  --glow-a: rgba(167,243,208,.35); --glow-b: rgba(196,181,253,.3);
+}
+body.bg-15, #bgSelector button[data-bg="15"] {
+  --bg-grad: linear-gradient(160deg, #f9a8d4 0%, #c084fc 55%, #6d28d9 100%);
+  --accent: #c026d3; --accent-2: #f472b6; --accent-soft: rgba(192,38,211,.15);
+  --glow-a: rgba(251,207,232,.45); --glow-b: rgba(192,132,252,.3);
+}
+body.bg-16, #bgSelector button[data-bg="16"] {
+  --bg-grad: linear-gradient(160deg, #d6a46c 0%, #a16207 50%, #422006 100%);
+  --accent: #b45309; --accent-2: #eab308; --accent-soft: rgba(180,83,9,.16);
+  --glow-a: rgba(253,230,138,.4); --glow-b: rgba(180,83,9,.25);
+}
+
+/* ---------- סוגי כתב ---------- */
+body                         { --font-main: "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif; }
+body[data-font="heebo"]      { --font-main: "Heebo", system-ui, sans-serif; }
+body[data-font="assistant"]  { --font-main: "Assistant", system-ui, sans-serif; }
+body[data-font="rubik"]      { --font-main: "Rubik", system-ui, sans-serif; }
+body[data-font="varela"]     { --font-main: "Varela Round", system-ui, sans-serif; }
+body[data-font="secular"]    { --font-main: "Secular One", system-ui, sans-serif; }
+body[data-font="suez"]       { --font-main: "Suez One", "Frank Ruhl Libre", serif; }
+body[data-font="frank"]      { --font-main: "Frank Ruhl Libre", "David Libre", serif; }
+body[data-font="alef"]       { --font-main: "Alef", system-ui, sans-serif; }
+body[data-font="miriam"]     { --font-main: "Miriam Libre", serif; }
+body[data-font="amatic"]     { --font-main: "Amatic SC", "Heebo", cursive; letter-spacing: .02em; }
+
+html, body, button, input, select, textarea { font-family: var(--font-main) !important; }
+body[data-font="amatic"] { font-size: 1.12em; }
+
+/* ---------- רקע כללי ---------- */
+html, body {
+  background: var(--bg-grad) !important;
+  background-attachment: fixed !important;
+  min-height: 100%;
+}
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(520px 380px at 12% -4%, var(--glow-a), transparent 70%),
+    radial-gradient(480px 360px at 92% 108%, var(--glow-b), transparent 70%);
+}
+#app { position: relative; z-index: 1; background: transparent !important; }
+
+:root {
+  --bg-elevated: rgba(255,255,255,.95);
+  --bg-elevated-soft: rgba(255,255,255,.2);
+  --radius-lg: 20px;
+  --shadow-soft: 0 10px 30px rgba(8,15,35,.18), 0 2px 6px rgba(8,15,35,.08);
+}
+body.dark {
+  --bg-elevated: rgba(18,23,36,.93);
+  --bg-elevated-soft: rgba(255,255,255,.1);
+  --border-subtle: rgba(255,255,255,.08);
+}
+/* במצב לילה נעמיק את הגרדיאנט */
+body.dark::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background: rgba(2,6,23,.45);
+}
+
+/* ---------- כותרת עליונה ---------- */
+.app-header {
+  background: linear-gradient(180deg, rgba(0,0,0,.34), rgba(0,0,0,.14)) !important;
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  border-bottom: 1px solid rgba(255,255,255,.14);
+  border-radius: 0 0 26px 26px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+}
+.app-title {
+  font-size: 1rem !important;
+  letter-spacing: .14em !important;
+  background: linear-gradient(90deg, #fff, var(--accent-2));
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  opacity: 1 !important;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.25));
+}
+.month-label span:first-child { font-size: 1.2rem !important; font-weight: 800; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.3); }
+.sub-label { color: rgba(255,255,255,.85); }
+
+/* ---------- כפתורים ---------- */
+.icon-btn {
+  background: rgba(255,255,255,.14) !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+  color: #fff !important;
+  width: 38px; height: 38px; padding: 0 !important;
+  font-size: 1.05rem !important;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
+}
+.icon-btn:hover { background: rgba(255,255,255,.26) !important; }
+
+.primary-pill {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,.28) !important;
+  padding: 9px 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: .01em;
+  box-shadow: 0 10px 24px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.35) !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,.25);
+}
+.primary-pill:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.primary-pill.small { padding: 6px 12px !important; font-size: .78rem; }
+
+.ghost-pill {
+  background: rgba(255,255,255,.14) !important;
+  border: 1px solid rgba(255,255,255,.3) !important;
+  color: #fff !important;
+  backdrop-filter: blur(8px);
+  padding: 7px 14px !important;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+}
+.ghost-pill:hover { background: rgba(255,255,255,.26) !important; border-color: #fff !important; }
+
+/* כפתורים בתוך כרטיסים / מודאלים / רשימות (על רקע בהיר) */
+.card .ghost-pill, .task-item .ghost-pill, .shopping-item .ghost-pill,
+.modal-content .ghost-pill, .settings-group .ghost-pill {
+  background: var(--accent-soft) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent) !important;
+  color: var(--accent) !important;
+  box-shadow: none;
+}
+body.dark .card .ghost-pill, body.dark .task-item .ghost-pill, body.dark .shopping-item .ghost-pill,
+body.dark .modal-content .ghost-pill, body.dark .settings-group .ghost-pill { color: #fff !important; }
+.card .ghost-pill:hover, .task-item .ghost-pill:hover, .shopping-item .ghost-pill:hover,
+.modal-content .ghost-pill:hover, .settings-group .ghost-pill:hover {
+  background: color-mix(in srgb, var(--accent) 28%, transparent) !important;
+}
+
+.pill-select {
+  background: rgba(255,255,255,.16) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,.3) !important;
+  padding: 7px 14px !important;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+}
+.pill-select option { color: #111827; background: #fff; }
+
+.fab-btn {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+  color: #fff !important;
+  border: 2px solid rgba(255,255,255,.4) !important;
+  box-shadow: 0 14px 30px rgba(0,0,0,.35), 0 0 0 6px rgba(255,255,255,.08) !important;
+  font-weight: 300;
+}
+.fab-btn:hover { transform: scale(1.06) rotate(90deg); }
+
+/* ---------- לשוניות (segmented) ---------- */
+.segmented {
+  background: rgba(255,255,255,.16) !important;
+  border: 1px solid rgba(255,255,255,.22);
+  backdrop-filter: blur(12px);
+  border-radius: 999px;
+  padding: 4px !important;
+  gap: 2px;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,.12);
+  overflow-x: auto;
+}
+.segmented-btn { color: rgba(255,255,255,.9) !important; font-weight: 600; white-space: nowrap; padding: 8px 10px !important; }
+.segmented-btn.active {
+  background: var(--bg-elevated) !important;
+  color: var(--accent) !important;
+  font-weight: 800;
+  box-shadow: 0 6px 16px rgba(0,0,0,.25) !important;
+}
+body.dark .segmented-btn.active { color: #fff !important; background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important; }
+
+/* ---------- לוח שנה ---------- */
+.weekday-row { color: rgba(255,255,255,.92) !important; font-weight: 700; letter-spacing: .03em; text-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.day-cell {
+  background: var(--bg-elevated) !important;
+  border: 1px solid rgba(255,255,255,.5) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 6px 16px rgba(8,15,35,.16) !important;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.day-cell:active { transform: scale(.96); }
+.day-cell .day-num { color: var(--text); }
+body.dark .day-cell { background: var(--bg-elevated) !important; border-color: rgba(255,255,255,.08) !important; }
+.day-cell-today {
+  border: 2px solid var(--accent) !important;
+  background: linear-gradient(160deg, var(--accent-soft), var(--bg-elevated)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent), 0 10px 24px rgba(0,0,0,.25) !important;
+}
+.day-cell-today .day-num { color: var(--accent); font-weight: 800; }
+
+/* ---------- כותרות מקטעים ---------- */
+.section-header h2 { color: #fff !important; font-size: 1.15rem !important; font-weight: 800; text-shadow: 0 2px 10px rgba(0,0,0,.28); }
+.section-header { margin-bottom: 12px !important; }
+
+/* ---------- כרטיסים / משימות / קניות ---------- */
+.card, .task-item, .gihari-msg, .shopping-item {
+  background: var(--bg-elevated) !important;
+  border: 1px solid rgba(255,255,255,.45) !important;
+  border-radius: 20px !important;
+  padding: 12px 14px !important;
+  box-shadow: var(--shadow-soft) !important;
+  backdrop-filter: blur(14px);
+  transition: transform .15s ease, box-shadow .2s ease;
+}
+body.dark .card, body.dark .task-item, body.dark .gihari-msg, body.dark .shopping-item { border-color: rgba(255,255,255,.07) !important; }
+.task-item:hover, .shopping-item:hover { transform: translateY(-2px); box-shadow: 0 16px 34px rgba(8,15,35,.24) !important; }
+.task-title { font-weight: 700 !important; font-size: .98rem !important; }
+.shopping-item { display: flex; align-items: center; gap: 8px; }
+.shopping-item span { flex: 1; font-weight: 600; }
+.shopping-item.completed span { text-decoration: line-through; opacity: .55; }
+.badge { padding: 3px 10px !important; font-weight: 700; background: var(--accent-soft) !important; color: var(--accent); }
+body.dark .badge { color: #fff; }
+
+/* ---------- שדות קלט ---------- */
+input[type="text"], input[type="date"], input[type="time"], input[type="number"],
+input:not([type]), textarea, select {
+  border-radius: 14px !important;
+  border: 1.5px solid rgba(148,163,184,.45) !important;
+  padding: 10px 14px !important;
+  background: rgba(255,255,255,.96);
+  color: #111827;
+  outline: none;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+body.dark input, body.dark textarea { background: rgba(255,255,255,.07); color: #f8fafc; }
+body.dark select { background: rgba(255,255,255,.07); color: #f8fafc; }
+body.dark select option { color: #111827; }
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.shopping-input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.shopping-input-row input { flex: 1; min-width: 0; }
+.shopping-input-row .primary-pill { min-width: 46px; font-size: 1.1rem; }
+
+/* ---------- בועת שינוי שם לשונית: מופיעה רק אחרי לחיצה על ✏️ ---------- */
+#shoppingRenameBar:not(.hidden) {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(92vw, 400px);
+  z-index: 100000;
+  padding: 18px;
+  border-radius: 24px;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255,255,255,.4);
+  box-shadow: 0 0 0 100vmax rgba(2,6,23,.55), 0 30px 70px rgba(0,0,0,.5);
+  display: flex; flex-wrap: wrap; gap: 10px;
+  animation: bnPop .22s ease;
+}
+#shoppingRenameBar:not(.hidden)::before {
+  content: "✏️ שינוי שם לשונית";
+  flex: 1 1 100%;
+  font-weight: 800; font-size: 1.05rem; color: var(--text);
+}
+#shoppingRenameBar input { flex: 1 1 100%; }
+#shoppingRenameBar .primary-pill, #shoppingRenameBar .ghost-pill { flex: 1; }
+@keyframes bnPop { from { opacity: 0; transform: translate(-50%, -46%) scale(.94); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+
+/* ---------- ניווט תחתון ---------- */
+.bottom-nav {
+  background: rgba(10,15,30,.55) !important;
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border-top: 1px solid rgba(255,255,255,.14) !important;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -10px 30px rgba(0,0,0,.28);
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+}
+.nav-btn {
+  color: rgba(255,255,255,.72) !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 16px !important;
+  font-weight: 600; font-size: .72rem !important;
+  transition: all .2s ease;
+}
+.nav-btn.active {
+  color: #fff !important; font-weight: 800;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+  box-shadow: 0 6px 16px rgba(0,0,0,.35);
+}
+
+/* ---------- מודאלים ---------- */
+.modal-backdrop { background: rgba(2,6,23,.6) !important; backdrop-filter: blur(6px); }
+.modal-content {
+  background: var(--bg-elevated) !important;
+  border: 1px solid rgba(255,255,255,.35) !important;
+  border-radius: 26px !important;
+  box-shadow: 0 30px 80px rgba(0,0,0,.5) !important;
+  color: var(--text);
+}
+.modal-title { font-weight: 800 !important; font-size: 1.1rem; }
+.modal-header .icon-btn { background: var(--accent-soft) !important; color: var(--text) !important; border-color: transparent !important; box-shadow: none; }
+.field label { font-weight: 700; font-size: .8rem; color: var(--text-soft); margin-bottom: 4px; display: block; }
+.reminder-alert-box { border: 2px solid var(--accent) !important; box-shadow: 0 20px 60px color-mix(in srgb, var(--accent) 55%, transparent) !important; }
+
+/* ---------- סרגל תזכורות פעילות ---------- */
+.active-reminders-bar {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+  border: 1px solid rgba(255,255,255,.45) !important;
+  box-shadow: 0 14px 34px rgba(0,0,0,.4) !important;
+  border-radius: 18px !important;
+}
+
+/* ---------- הגדרות ---------- */
+.settings-group {
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255,255,255,.4);
+  border-radius: 20px;
+  padding: 14px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-soft);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.settings-group > label { font-weight: 800; font-size: .95rem; color: var(--text); }
+#bgSelector { grid-template-columns: repeat(4, 1fr) !important; gap: 10px !important; }
+#bgSelector button {
+  height: 46px !important;
+  border-radius: 14px !important;
+  border: 2px solid rgba(255,255,255,.6) !important;
+  background: var(--bg-grad) !important;
+  color: #fff !important;
+  font-weight: 800;
+  text-shadow: 0 1px 3px rgba(0,0,0,.5);
+  box-shadow: 0 4px 12px rgba(0,0,0,.25);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+#bgSelector button:hover { transform: translateY(-2px); }
+#bgSelector button.active {
+  outline: none !important;
+  border-color: #fff !important;
+  box-shadow: 0 0 0 3px var(--accent), 0 8px 18px rgba(0,0,0,.35);
+  transform: scale(1.06);
+}
+#fontSelector { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+#fontSelector button {
+  border-radius: 14px; padding: 12px 8px;
+  border: 1.5px solid rgba(148,163,184,.45);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 1rem; font-weight: 600;
+  text-align: center;
+}
+#fontSelector button.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff; border-color: transparent;
+  box-shadow: 0 8px 18px rgba(0,0,0,.25);
+}
+#fontSelector button[data-font="heebo"]     { font-family: "Heebo" !important; }
+#fontSelector button[data-font="assistant"] { font-family: "Assistant" !important; }
+#fontSelector button[data-font="rubik"]     { font-family: "Rubik" !important; }
+#fontSelector button[data-font="varela"]    { font-family: "Varela Round" !important; }
+#fontSelector button[data-font="secular"]   { font-family: "Secular One" !important; }
+#fontSelector button[data-font="suez"]      { font-family: "Suez One" !important; }
+#fontSelector button[data-font="frank"]     { font-family: "Frank Ruhl Libre" !important; }
+#fontSelector button[data-font="alef"]      { font-family: "Alef" !important; }
+#fontSelector button[data-font="miriam"]    { font-family: "Miriam Libre" !important; }
+#fontSelector button[data-font="amatic"]    { font-family: "Amatic SC" !important; font-size: 1.25rem; }
+
+/* ---------- גלילה, טוסט ---------- */
+.toast {
+  background: rgba(10,15,30,.9) !important;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 999px !important;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 30px rgba(0,0,0,.4);
+  font-weight: 600;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.35); border-radius: 99px; }
+.screen.active { animation: bnFade .28s ease; }
+@keyframes bnFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
