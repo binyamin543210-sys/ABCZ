@@ -43,13 +43,11 @@ function timeToMinutes(hhmm) {
 function eventStartEpochIsrael(dateKey, startTime) {
   // dateKey: YYYY-MM-DD
   const [y, mo, da] = dateKey.split("-").map(Number);
-  const [hh, mm] = (startTime || "00:00").split(":").map(Number);
+  const [hh, mm] = (startTime || "09:00").split(":").map(Number);
 
-  // טריק: בונים תאריך "מקומי" ואז מתקנים לפי timezone דרך formatToParts.
-  // בפועל: לתזכורת דקה-דקה זה מספיק.
-  const dt = new Date(Date.UTC(y, mo - 1, da, hh, mm, 0, 0));
+  // נניח תחילה שהשעה היא ב-UTC ונבדוק מה השעה בישראל עבור אותו רגע
+  const guessUtc = Date.UTC(y, mo - 1, da, hh, mm, 0, 0);
 
-  // נחשב את offset של Israel באותו רגע:
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Jerusalem",
     hour12: false,
@@ -59,19 +57,21 @@ function eventStartEpochIsrael(dateKey, startTime) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit"
-  }).formatToParts(dt);
+  }).formatToParts(new Date(guessUtc));
 
   const get = (type) => Number(parts.find(p => p.type === type)?.value);
   const iy = get("year");
   const im = get("month");
   const id = get("day");
-  const ih = get("hour");
+  const ih = get("hour") === 24 ? 0 : get("hour");
   const imin = get("minute");
   const isec = get("second");
 
-  // תאריך "ישראל" → epoch ע"י בניית Date מקומי ואז UTC תיקון
-  // נבנה Date ב־UTC עם אותם רכיבים ונשתמש בו כקירוב.
-  return Date.UTC(iy, im - 1, id, ih, imin, isec, 0);
+  const israelAsUtc = Date.UTC(iy, im - 1, id, ih, imin, isec, 0);
+  const offsetMs = israelAsUtc - guessUtc; // +2h או +3h בישראל
+
+  // זמן האירוע האמיתי ב-UTC הוא השעה המבוקשת פחות ה-offset של ישראל
+  return guessUtc - offsetMs;
 }
 
 /**
@@ -126,14 +126,16 @@ exports.remindersTick = onSchedule(
     const todayKey = dateKeyIsrael(new Date());
     const tomorrowKey = dateKeyTomorrowIsrael();
 
-    const [todaySnap, tomorrowSnap] = await Promise.all([
+    const [todaySnap, tomorrowSnap, undatedSnap] = await Promise.all([
       admin.database().ref(`events/${todayKey}`).get(),
-      admin.database().ref(`events/${tomorrowKey}`).get()
+      admin.database().ref(`events/${tomorrowKey}`).get(),
+      admin.database().ref(`events/undated`).get()
     ]);
 
     const all = [
       { dateKey: todayKey, data: todaySnap.val() || {} },
-      { dateKey: tomorrowKey, data: tomorrowSnap.val() || {} }
+      { dateKey: tomorrowKey, data: tomorrowSnap.val() || {} },
+      { dateKey: "undated", data: undatedSnap.val() || {} }
     ];
 
     const due = [];
@@ -143,21 +145,26 @@ exports.remindersTick = onSchedule(
       for (const [id, ev] of Object.entries(items)) {
         if (!ev) continue;
 
-        // חייב להיות תזכורת + שעה
-        const reminderMinutes = Number(ev.reminderMinutes);
-        if (!Number.isFinite(reminderMinutes) || reminderMinutes <= 0) continue;
-        if (!ev.startTime) continue;
-
-        // לא שולחים אם בוצע
+        // לא שולחים אם בוצע או כבר נשלח
         if (ev.completed === true) continue;
-
-        // לא שולחים פעמיים
         if (ev.remindedAt) continue;
 
-        const startEpoch = eventStartEpochIsrael(day.dateKey, ev.startTime);
-        const remindAt = startEpoch - reminderMinutes * 60 * 1000;
+        let remindAt = null;
 
-        if (remindAt >= from && remindAt < to) {
+        if (ev.reminderCustomTs && Number.isFinite(Number(ev.reminderCustomTs))) {
+          remindAt = Number(ev.reminderCustomTs);
+        } else if (ev.reminderTime && (ev.reminderDate || day.dateKey !== "undated")) {
+          const targetDateKey = ev.reminderDate || day.dateKey;
+          remindAt = eventStartEpochIsrael(targetDateKey, ev.reminderTime);
+        } else if (ev.reminderMinutes !== null && ev.reminderMinutes !== undefined && ev.reminderMinutes !== "" && day.dateKey !== "undated") {
+          const reminderMinutes = Number(ev.reminderMinutes);
+          if (Number.isFinite(reminderMinutes) && reminderMinutes >= 0) {
+            const startEpoch = eventStartEpochIsrael(day.dateKey, ev.startTime || "09:00");
+            remindAt = startEpoch - reminderMinutes * 60 * 1000;
+          }
+        }
+
+        if (remindAt && remindAt >= from && remindAt < to) {
           due.push({ id, dateKey: day.dateKey, ev, remindAt });
         }
       }
@@ -179,11 +186,28 @@ exports.remindersTick = onSchedule(
       const payload = {
         notification: { title, body },
         data: {
-          url: "/" // אצלך sw.js פותח את זה בלחיצה
+          title,
+          body,
+          url: "./"
+        },
+        android: {
+          priority: "high"
         },
         webpush: {
+          headers: {
+            Urgency: "high",
+            TTL: "86400"
+          },
+          notification: {
+            title,
+            body,
+            icon: "./icon-192.png",
+            badge: "./icon-192.png",
+            requireInteraction: true,
+            vibrate: [200, 100, 200]
+          },
           fcmOptions: {
-            link: "/" // למובייל/כרום
+            link: "./"
           }
         }
       };

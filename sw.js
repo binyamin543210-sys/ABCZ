@@ -14,7 +14,7 @@ const messaging = firebase.messaging();
 
 
 
-const CACHE_NAME = 'bnapp-v3-5-2';
+const CACHE_NAME = 'bnapp-v3-5-6-reminders';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -73,16 +73,27 @@ self.addEventListener('fetch', (event) => {
 // PUSH NOTIFICATIONS
 // ===============================
 self.addEventListener("push", (event) => {
-  const data = event.data ? event.data.json() : {};
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
 
-  self.registration.showNotification(
-    data.title || "BNAPP",
-    {
-      body: data.body || "יש תזכורת חדשה",
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
-      data: data.url || "/"
-    }
+  const notif = data.notification || {};
+  const d = data.data || {};
+  const title = notif.title || d.title || data.title || "BNAPP – תזכורת";
+  const body = notif.body || d.body || data.body || "יש תזכורת חדשה";
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "./icon-192.png",
+      badge: "./icon-192.png",
+      vibrate: [200, 100, 200],
+      requireInteraction: true,
+      data: d.url || data.url || "./"
+    })
   );
 });
 

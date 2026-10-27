@@ -4,21 +4,65 @@
 // - Chart.js (global Chart)
 // - hebcal.noloc.min.js (global Hebcal) - עם fallback אם לא נטען
 
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js");
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
 
+const firebaseConfig = {
+  apiKey: "AIzaSyCa808qwjJ8bayhjkTqZ8P9fRhfgi19xtY",
+  authDomain: "bnapp-ddcbf.firebaseapp.com",
+  databaseURL: "https://bnapp-ddcbf-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "bnapp-ddcbf",
+  storageBucket: "bnapp-ddcbf.firebasedatabase.app",
+  messagingSenderId: "523128255450",
+  appId: "1:523128255450:web:d29cdda3f21435f96686e3",
+  measurementId: "G-61DKZ1B5L2"
+};
 
-import { ref, onValue, set, push, update, remove } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
-import { db } from "./firebase-config.js";
-import {
-  getMessaging,
-  getToken
-} from "https://www.gstatic.com/firebasejs/9.22.2/firebase-messaging.js";
+const firebaseApp = (window.firebase && firebase.apps && firebase.apps.length)
+  ? firebase.app()
+  : (window.firebase ? firebase.initializeApp(firebaseConfig) : null);
 
-import { firebaseApp } from "./firebase-config.js";
+const db = firebaseApp && firebase.database ? firebase.database() : null;
 
-const messaging = getMessaging(firebaseApp);
+const ref = (dbInst, path) => dbInst ? dbInst.ref(path) : null;
+const onValue = (refObj, cb) => refObj ? refObj.on("value", cb) : null;
+const set = (refObj, val) => refObj ? refObj.set(val) : Promise.resolve();
+const push = (refObj) => refObj ? refObj.push() : { key: String(Date.now()) };
+const update = (refObj, val) => refObj ? refObj.update(val) : Promise.resolve();
+const remove = (refObj) => refObj ? refObj.remove() : Promise.resolve();
+
+let messaging = null;
+try {
+  if (firebaseApp && firebase.messaging && (location.protocol === "https:" || location.hostname === "localhost")) {
+    messaging = firebase.messaging();
+  }
+} catch (e) {
+  console.warn("FCM not available:", e);
+}
+
+const onMessage = (msgInst, cb) => (msgInst && typeof msgInst.onMessage === "function") ? msgInst.onMessage(cb) : null;
+const getToken = (msgInst, opts) => (msgInst && typeof msgInst.getToken === "function") ? msgInst.getToken(opts) : Promise.resolve(null);
+
+// ===============================
+// FCM – foreground messages (in-app toast)
+// ===============================
+if (messaging && typeof onMessage === "function") {
+  onMessage(messaging, (payload) => {
+    try {
+      const title = payload.notification?.title || "BNAPP";
+      const body =
+        payload.notification?.body ||
+        payload.data?.body ||
+        "יש התראה חדשה";
+
+      // מציג טוסט קטן בתוך האפליקציה
+      showToast(`${title}: ${body}`);
+    } catch (e) {
+      console.warn("Failed to handle foreground FCM message", e);
+    }
+  });
+}
 
 
 const state = {
@@ -427,12 +471,13 @@ function wrapGihariHumor(html) {
   return `${line}<br>${html}`;
 }
 
-function showToast(text = "בוצע") {
+function showToast(text = "בוצע", durationMs = 2500) {
   const t = el("toast");
   if (!t) return;
   t.textContent = text;
   t.classList.remove("hidden");
-setTimeout(() => t.classList.add("hidden"), 500);
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => t.classList.add("hidden"), durationMs);
 }
 
 function applyBackground(bg) {
@@ -457,11 +502,6 @@ function applyBackground(bg) {
 }
 
 
-// ===============================
-// Notifications – Request Permission
-// ===============================
-const btnNotif = document.getElementById("btnRequestNotifications");
-
 const savedBg = localStorage.getItem("appBackground");
 if (savedBg) applyBackground(savedBg);
 
@@ -483,33 +523,6 @@ if (bgSelector) {
 }
 
 
-
-if (btnNotif) {
-  btnNotif.onclick = async () => {
-    const permission = await Notification.requestPermission();
-
-    if (permission !== "granted") {
-      alert("חייב לאשר התראות כדי שזה יעבוד");
-      return;
-    }
-
-    const token = await getToken(messaging, {
-      vapidKey: "BFzkYCDuV_Ij_b3PQtswrDNnPe4xTVUbxYBJKkLx7YEkERrgOSOYC6KeZ1kNUuABeQV1GZ_xYIVnbU27Rseozss"
-    });
-
-await set(ref(db, "notificationTokens/" + token), {
-  user: state.currentUser,
-  createdAt: Date.now(),
-  userAgent: navigator.userAgent
-});
-
-    
-    console.log("FCM TOKEN:", token);
-    alert("התראות הופעלו בהצלחה");
-  };
-
-  
-}
 const btnDisableNotif = document.getElementById("btnDisableNotifications");
 
 if (btnDisableNotif) {
@@ -866,6 +879,8 @@ case "dated-events":
       const map = { today: "היום", week: "השבוע", month: "החודש", none: "לא דחוף" };
       parts.push(`דחיפות: ${map[task.urgency] || task.urgency}`);
     }
+    const remLabel = formatReminderLabel(task);
+    if (remLabel) parts.push(remLabel);
     meta.textContent = parts.join(" • ");
 
     const actions = document.createElement("div");
@@ -894,12 +909,24 @@ if (filter !== "recurring") {
   doneBtn.textContent = task.completed ? "↩ בטל בוצע" : "✔ בוצע";
 doneBtn.onclick = () => toggleTaskDone(task);
 
+    const remBtn = document.createElement("button");
+    remBtn.className = "ghost-pill small" + (remLabel ? " reminder-set" : "");
+    remBtn.textContent = remLabel ? "🔔 ערוך תזכורת" : "🔔 תזכורת";
+    remBtn.onclick = () => openQuickReminderModal(task);
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "ghost-pill small";
+    editBtn.textContent = "עריכה";
+    editBtn.onclick = () => openEditModal({ dateKey: task.dateKey, id: task._id || task.id });
+
     const postponeBtn = document.createElement("button");
     postponeBtn.className = "ghost-pill small";
     postponeBtn.textContent = "דחיה";
     postponeBtn.onclick = () => openPostponeModal(task);
 
     actions.appendChild(doneBtn);
+    actions.appendChild(remBtn);
+    actions.appendChild(editBtn);
     actions.appendChild(postponeBtn);
 
     item.appendChild(header);
@@ -1038,6 +1065,8 @@ const list = Object.entries(events)
     }
     if (ev.duration) parts.push(`${ev.duration} דק'`);
     parts.push(ev.type === "task" ? "משימה" : "אירוע");
+    const remLabel = formatReminderLabel(ev);
+    if (remLabel) parts.push(remLabel);
     meta.textContent = parts.join(" • ");
 
     const desc = document.createElement("div");
@@ -1063,6 +1092,12 @@ doneBtn.onclick = () => {
 };
 
 actions.appendChild(doneBtn);
+
+    const remBtn = document.createElement("button");
+    remBtn.className = "ghost-pill small" + (remLabel ? " reminder-set" : "");
+    remBtn.textContent = remLabel ? "🔔 ערוך תזכורת" : "🔔 תזכורת";
+    remBtn.onclick = () => openQuickReminderModal({ ...ev, dateKey, id: ev._id || ev.id });
+    actions.appendChild(remBtn);
 
 
     const editBtn = document.createElement("button");
@@ -1138,9 +1173,45 @@ function openEditModal({ dateKey, id } = {}) {
     form.elements["duration"].value = ev.duration != null ? String(ev.duration) : "";
     form.elements["address"].value = ev.address || "";
     form.elements["reminderMinutes"].value = ev.reminderMinutes != null ? String(ev.reminderMinutes) : "";
+    if (form.elements["reminderDate"]) form.elements["reminderDate"].value = ev.reminderDate || "";
+    if (form.elements["reminderTime"]) form.elements["reminderTime"].value = ev.reminderTime || "";
     form.elements["recurring"].value = ev.recurring || "none";
     form.elements["urgency"].value = ev.urgency || "none";
   }
+
+  // כפתורי בחירה מהירה של תזכורת בטופס עריכה
+  const presetBtns = qsa("#editReminderPresets button");
+  const remMinInput = form.elements["reminderMinutes"];
+  const remDateInput = form.elements["reminderDate"];
+  const remTimeInput = form.elements["reminderTime"];
+  const syncPresetHighlight = () => {
+    const val = remMinInput ? remMinInput.value : "";
+    presetBtns.forEach((b) => {
+      if (b.dataset.remMin !== undefined) {
+        b.classList.toggle("active", b.dataset.remMin === val && val !== "");
+      }
+    });
+  };
+  syncPresetHighlight();
+  presetBtns.forEach((b) => {
+    b.onclick = () => {
+      if (b.dataset.remIn) {
+        const minsFromNow = Number(b.dataset.remIn);
+        const dt = new Date(Date.now() + minsFromNow * 60000);
+        if (remDateInput) remDateInput.value = dateKeyFromDate(dt);
+        if (remTimeInput) remTimeInput.value = formatTimeHM(dt);
+        if (remMinInput) remMinInput.value = "";
+        presetBtns.forEach((btn) => btn.classList.remove("active"));
+        b.classList.add("active");
+      } else {
+        if (remMinInput) remMinInput.value = b.dataset.remMin;
+        if (remDateInput) remDateInput.value = "";
+        if (remTimeInput) remTimeInput.value = "";
+        syncPresetHighlight();
+      }
+    };
+  });
+  if (remMinInput) remMinInput.oninput = syncPresetHighlight;
 
   qsa("[data-close-modal]", modal).forEach((btn) => (btn.onclick = () => modal.classList.add("hidden")));
   const bd = qs(".modal-backdrop", modal);
@@ -1173,6 +1244,35 @@ async function handleEditFormSubmit(ev) {
 
   const data = Object.fromEntries(new FormData(form).entries());
 
+  const remMinRaw = data.reminderMinutes !== undefined && data.reminderMinutes !== "" ? Number(data.reminderMinutes) : null;
+  const remDateVal = (data.reminderDate || "").trim() || null;
+  const remTimeVal = (data.reminderTime || "").trim() || null;
+
+  let reminderCustomTs = null;
+  if (remTimeVal) {
+    const baseDk = remDateVal || (data.date && data.date !== "undated" ? data.date : dateKeyFromDate(new Date()));
+    const dObj = parseDateKey(baseDk);
+    const [rh, rm] = remTimeVal.split(":").map(Number);
+    dObj.setHours(rh || 0, rm || 0, 0, 0);
+    reminderCustomTs = dObj.getTime();
+  } else if (remMinRaw != null && !data.startTime) {
+    // אם לא הוזנה שעת התחלה (למשל משימה) והוזנו דקות תזכורת -> תזכורת בעוד X דקות מעכשיו!
+    reminderCustomTs = Date.now() + remMinRaw * 60000;
+  } else if (data.startTime && data.date && data.date !== "undated") {
+    const dObj = parseDateKey(data.date);
+    const [sh, sm] = data.startTime.split(":").map(Number);
+    dObj.setHours(sh || 0, sm || 0, 0, 0);
+    const startTs = dObj.getTime();
+    const minsBefore = remMinRaw != null ? remMinRaw : 0;
+    const calcTs = startTs - minsBefore * 60000;
+    // אם זמן ה-"לפני" כבר עבר אבל שעת האירוע עצמה עוד לפנינו -> נתזכר בשעת האירוע!
+    if (calcTs < Date.now() && startTs > Date.now() - 30000) {
+      reminderCustomTs = startTs;
+    } else {
+      reminderCustomTs = calcTs;
+    }
+  }
+
   const eventObj = {
     type: data.type,
     owner: data.owner,
@@ -1183,10 +1283,18 @@ async function handleEditFormSubmit(ev) {
     endTime: data.endTime || null,
     duration: data.duration ? Number(data.duration) : null,
     address: data.address || "",
-    reminderMinutes: data.reminderMinutes ? Number(data.reminderMinutes) : null,
+    reminderMinutes: remMinRaw,
+    reminderDate: remDateVal,
+    reminderTime: remTimeVal,
+    reminderCustomTs: reminderCustomTs,
+    remindedAt: null,
     recurring: data.recurring || "none",
     urgency: data.urgency || "none"
   };
+
+  if ((remMinRaw != null || reminderCustomTs) && "Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission().catch(() => {});
+  }
 
 // =========================
   // Time sanity check
@@ -1226,21 +1334,35 @@ async function handleEditFormSubmit(ev) {
   }
   
 if (existingId) {
-  await update(ref(db, `events/${dateKey}/${existingId}`), eventObj);
-  showToast("עודכן");
+  if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
+  state.cache.events[dateKey][existingId] = { ...eventObj, _id: existingId };
   el("editModal").classList.add("hidden");
+  renderCalendar();
+  renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
+  if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
+  const rTs = getEventReminderTimestamp(eventObj, dateKey);
+  showToast(rTs && rTs > Date.now() ? `🔔 עודכן! תזכורת ב-${formatTimeHM(new Date(rTs))}` : "עודכן", 3500);
+  update(ref(db, `events/${dateKey}/${existingId}`), eventObj);
 } else {
   const newRef = push(ref(db, `events/${dateKey}`));
-  await set(newRef, { ...eventObj, _id: newRef.key });
+  const newId = newRef.key || String(Date.now());
+  const fullObj = { ...eventObj, _id: newId };
+  if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
+  state.cache.events[dateKey][newId] = fullObj;
+  el("editModal").classList.add("hidden");
+  renderCalendar();
+  renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
+  if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
+  const rTs = getEventReminderTimestamp(fullObj, dateKey);
+  showToast(rTs && rTs > Date.now() ? `🔔 נשמר! תזכורת ב-${formatTimeHM(new Date(rTs))}` : "נשמר", 3500);
+  await set(newRef, fullObj);
 
   if (eventObj.recurring && eventObj.recurring !== "none") {
-    const parentTask = { ...eventObj, _id: newRef.key, parentId: null, isRecurringParent: true };
+    const parentTask = { ...fullObj, parentId: null, isRecurringParent: true };
+    state.cache.events[dateKey][newId] = parentTask;
     await update(newRef, parentTask);
     await materializeRecurringTask(parentTask);
   }
-
-  showToast("נשמר");
-  el("editModal").classList.add("hidden");
 }
 }
 function openWazeFromForm() {
@@ -1285,10 +1407,17 @@ function openConflictModal({ newEvent, conflicts, form }) {
 
     const dateKey = newEvent.dateKey;
     const newRef = push(ref(db, `events/${dateKey}`));
-    await set(newRef, { ...newEvent, _id: newRef.key });
-
-    showToast("נשמר למרות ההתנגשות");
+    const newId = newRef.key || String(Date.now());
+    const fullObj = { ...newEvent, _id: newId };
+    if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
+    state.cache.events[dateKey][newId] = fullObj;
     el("editModal").classList.add("hidden");
+    renderCalendar();
+    renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
+    if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
+    const rTs = getEventReminderTimestamp(fullObj, dateKey);
+    showToast(rTs && rTs > Date.now() ? `🔔 נשמר! תזכורת ב-${formatTimeHM(new Date(rTs))}` : "נשמר למרות ההתנגשות", 3500);
+    await set(newRef, fullObj);
   };
 
   qsa("[data-close-conflict]", modal).forEach(
@@ -1471,6 +1600,7 @@ function initFirebaseListeners() {
     renderCalendar();
     renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
     updateStats();
+    checkDueReminders();
   });
 
   onValue(ref(db, "goals"), snap => {
@@ -1549,30 +1679,323 @@ function initTheme() {
   applyTheme(dark);
 }
 
-function requestNotifications() {
-  if (!("Notification" in window)) return;
-  Notification.requestPermission().then((perm) => {
-    state.ui.notificationsGranted = perm === "granted";
-    showToast(state.ui.notificationsGranted ? "התראות הופעלו" : "התראות נחסמו");
+async function requestNotifications() {
+  if (!("Notification" in window)) {
+    alert("הדפדפן לא תומך בהתראות");
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    state.ui.notificationsGranted = false;
+    showToast("התראות נחסמו");
+    return;
+  }
+
+  try {
+    // נוודא שיש Service Worker רשום (sw.js + firebase-messaging-sw.js ברקע)
+    const registration = await navigator.serviceWorker.getRegistration();
+
+    const token = await getToken(messaging, {
+      vapidKey: "BFzkYCDuV_Ij_b3PQtswrDNnPe4xTVUbxYBJKkLx7YEkERrgOSOYC6KeZ1kNUuABeQV1GZ_xYIVnbU27Rseozss",
+      serviceWorkerRegistration: registration || undefined
+    });
+
+    if (!token) {
+      console.warn("No FCM token returned");
+      showToast("לא התקבל טוקן התראות");
+      return;
+    }
+
+    await set(ref(db, "notificationTokens/" + token), {
+      user: state.currentUser,
+      createdAt: Date.now(),
+      userAgent: navigator.userAgent
+    });
+
+    localStorage.setItem("notificationsEnabled", "true");
+    state.ui.notificationsGranted = true;
+    console.log("FCM TOKEN:", token);
+    showToast("התראות הופעלו");
+  } catch (err) {
+    console.error("Failed to get FCM token", err);
+    alert("שגיאה בהפעלת התראות");
+  }
+}
+
+function formatReminderLabel(ev) {
+  if (!ev) return "";
+  if (ev.reminderTime) {
+    const dPart = ev.reminderDate ? ` (${ev.reminderDate.slice(8, 10)}/${ev.reminderDate.slice(5, 7)})` : "";
+    return `🔔 תזכורת ב-${ev.reminderTime}${dPart}`;
+  }
+  if (ev.reminderCustomTs) {
+    const dt = new Date(ev.reminderCustomTs);
+    return `🔔 תזכורת ב-${formatTimeHM(dt)}`;
+  }
+  if (ev.reminderMinutes !== null && ev.reminderMinutes !== undefined && ev.reminderMinutes !== "") {
+    const mins = Number(ev.reminderMinutes);
+    if (!Number.isNaN(mins) && mins >= 0) {
+      if (mins === 0) return "🔔 תזכורת בזמן האירוע";
+      if (mins === 60) return "🔔 תזכורת שעה לפני";
+      return `🔔 תזכורת ${mins} דק׳ לפני`;
+    }
+  }
+  return "";
+}
+
+function getEventReminderTimestamp(ev, fallbackDateKey) {
+  if (!ev || isDefaultEvent(ev)) return null;
+  if (ev.reminderCustomTs && Number.isFinite(Number(ev.reminderCustomTs))) {
+    return Number(ev.reminderCustomTs);
+  }
+  const dk = (ev.dateKey && ev.dateKey !== "undated") ? ev.dateKey : fallbackDateKey;
+  if (ev.reminderTime) {
+    const targetDk = ev.reminderDate || (dk && dk !== "undated" ? dk : dateKeyFromDate(new Date()));
+    const d = parseDateKey(targetDk);
+    const [h, m] = ev.reminderTime.split(":").map(Number);
+    d.setHours(Number.isFinite(h) ? h : 0, Number.isFinite(m) ? m : 0, 0, 0);
+    return d.getTime();
+  }
+  if (ev.reminderMinutes !== null && ev.reminderMinutes !== undefined && ev.reminderMinutes !== "") {
+    const mins = Number(ev.reminderMinutes);
+    if (!Number.isNaN(mins) && mins >= 0 && dk && dk !== "undated") {
+      const [h, m] = (ev.startTime || "09:00").split(":").map(Number);
+      const d = parseDateKey(dk);
+      d.setHours(Number.isFinite(h) ? h : 9, Number.isFinite(m) ? m : 0, 0, 0);
+      return d.getTime() - mins * 60000;
+    }
+  }
+  // אם הוגדרה שעת התחלה לאירוע/משימה (גם בלי למלא שדה דקות תזכורת) -> התראה בשעת ההתחלה!
+  if (ev.startTime && dk && dk !== "undated") {
+    const [h, m] = ev.startTime.split(":").map(Number);
+    if (Number.isFinite(h) && Number.isFinite(m)) {
+      const d = parseDateKey(dk);
+      d.setHours(h, m, 0, 0);
+      return d.getTime();
+    }
+  }
+  return null;
+}
+
+function playReminderSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.18, ctx.currentTime + i * 0.16);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.16 + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.16);
+      osc.stop(ctx.currentTime + i * 0.16 + 0.36);
+    });
+  } catch (e) {
+    console.warn("Audio reminder failed:", e);
+  }
+}
+
+function triggerReminderAlert(item) {
+  const { id, dateKey, ev } = item;
+  playReminderSound();
+
+  const titleText = ev.title || "אירוע / משימה";
+  const timeInfo = ev.startTime ? `שעה: ${ev.startTime}` : (ev.reminderTime ? `שעת תזכורת: ${ev.reminderTime}` : "");
+
+  // דיבור קולי
+  try {
+    gihariSpeak(`תזכורת: ${titleText}`);
+  } catch {}
+
+  // התראת דפדפן אם יש הרשאה
+  try {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("🔔 תזכורת BNAPP", {
+        body: timeInfo ? `${titleText} • ${timeInfo}` : titleText,
+        tag: `bnapp-rem-${dateKey}-${id}`
+      });
+    }
+  } catch {}
+
+  // חלון התראה קופץ באפליקציה
+  const modal = el("reminderAlertModal");
+  if (modal) {
+    el("reminderAlertTitle").textContent = titleText;
+    el("reminderAlertMeta").textContent = timeInfo || "הגיע זמן התזכורת שהגדרת";
+    modal.classList.remove("hidden");
+
+    el("btnReminderDone").onclick = () => {
+      modal.classList.add("hidden");
+      toggleTaskDone({ ...ev, id, _id: id, dateKey });
+    };
+
+    el("btnReminderSnooze").onclick = async () => {
+      modal.classList.add("hidden");
+      const snoozeTs = Date.now() + 10 * 60 * 1000;
+      const snoozeDate = new Date(snoozeTs);
+      await update(ref(db, `events/${dateKey}/${id}`), {
+        reminderCustomTs: snoozeTs,
+        reminderDate: dateKeyFromDate(snoozeDate),
+        reminderTime: formatTimeHM(snoozeDate),
+        remindedAt: null
+      });
+      showToast("⏰ נדחה ב-10 דקות");
+    };
+
+    el("btnReminderDismiss").onclick = () => {
+      modal.classList.add("hidden");
+    };
+  } else {
+    showToast(`🔔 תזכורת: ${titleText}`);
+  }
+}
+
+function checkDueReminders() {
+  const now = Date.now();
+  const allEvents = state.cache.events || {};
+
+  Object.entries(allEvents).forEach(([dateKey, dayItems]) => {
+    Object.entries(dayItems || {}).forEach(([id, ev]) => {
+      if (!ev || isDefaultEvent(ev) || ev.completed === true) return;
+      if (ev.remindedAt) return;
+
+      const remindTs = getEventReminderTimestamp(ev, dateKey);
+      if (!remindTs) return;
+
+      const hasExplicitReminder =
+        ev.reminderCustomTs != null ||
+        ev.reminderTime != null ||
+        (ev.reminderMinutes !== null && ev.reminderMinutes !== undefined && ev.reminderMinutes !== "");
+
+      // עבור תזכורת מפורשת: עד 24 שעות אחורה; עבור שעת התחלה רגילה: עד 5 דקות אחורה
+      const maxWindowMs = hasExplicitReminder ? 24 * 60 * 60 * 1000 : 5 * 60 * 1000;
+
+      if (now >= remindTs && now - remindTs < maxWindowMs) {
+        ev.remindedAt = now;
+        update(ref(db, `events/${dateKey}/${id}`), { remindedAt: now });
+        triggerReminderAlert({ id, dateKey, ev });
+      }
+    });
   });
 }
 
-function scheduleLocalReminder(ev) {
-  if (!state.ui.notificationsGranted) return;
-  if (!ev.dateKey || !ev.reminderMinutes || !ev.title) return;
+function openQuickReminderModal(task) {
+  const modal = el("reminderModal");
+  if (!modal || !task) return;
 
-  const [h, m] = (ev.startTime || "09:00").split(":").map(Number);
-  const d = parseDateKey(ev.dateKey);
-  d.setHours(h, m, 0, 0);
-  const reminderTime = new Date(d.getTime() - ev.reminderMinutes * 60000);
-  const delay = reminderTime.getTime() - Date.now();
-  if (delay <= 0) return;
+  const id = task._id || task.id;
+  const dateKey = task.dateKey || dateKeyFromDate(state.currentDate);
 
-  setTimeout(() => {
-    if (Notification.permission === "granted") {
-      new Notification("תזכורת BNAPP", { body: ev.title, tag: `bnapp-${ev.dateKey}-${ev.title}` });
+  el("reminderModalItemTitle").textContent = `${task.title || "(ללא כותרת)"}${task.startTime ? " • " + task.startTime : ""}`;
+  el("quickReminderMinutes").value = task.reminderMinutes != null ? String(task.reminderMinutes) : "";
+  el("quickReminderDate").value = task.reminderDate || (dateKey !== "undated" ? dateKey : dateKeyFromDate(new Date()));
+  el("quickReminderTime").value = task.reminderTime || "";
+
+  modal.classList.remove("hidden");
+
+  qsa("[data-close-reminder]", modal).forEach((b) => {
+    b.onclick = () => modal.classList.add("hidden");
+  });
+
+  const saveReminderFields = async (fields, toastMsg) => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
     }
-  }, Math.min(delay, 2147483647));
+    if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
+    if (state.cache.events[dateKey][id]) {
+      Object.assign(state.cache.events[dateKey][id], fields, { remindedAt: null });
+    }
+    modal.classList.add("hidden");
+    showToast(toastMsg || "🔔 תזכורת נשמרה", 3500);
+    renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
+    if (!el("dayModal")?.classList.contains("hidden")) {
+      renderDayEvents(dateKey);
+    }
+    await update(ref(db, `events/${dateKey}/${id}`), {
+      ...fields,
+      remindedAt: null
+    });
+  };
+
+  qsa("[data-quick-rem]", modal).forEach((btn) => {
+    btn.onclick = () => {
+      const mode = btn.dataset.quickRem;
+      if (mode.startsWith("in")) {
+        const addMins = Number(mode.replace("in", ""));
+        const targetTs = Date.now() + addMins * 60000;
+        const dt = new Date(targetTs);
+        saveReminderFields({
+          reminderCustomTs: targetTs,
+          reminderDate: dateKeyFromDate(dt),
+          reminderTime: formatTimeHM(dt),
+          reminderMinutes: null
+        }, `🔔 תזכורת בעוד ${addMins} דק׳`);
+      } else if (mode.startsWith("before")) {
+        const beforeMins = Number(mode.replace("before", ""));
+        saveReminderFields({
+          reminderMinutes: beforeMins,
+          reminderCustomTs: null,
+          reminderDate: null,
+          reminderTime: null
+        }, `🔔 תזכורת ${beforeMins} דק׳ לפני`);
+      }
+    };
+  });
+
+  el("btnSaveQuickReminder").onclick = () => {
+    const minsVal = el("quickReminderMinutes").value;
+    const dateVal = el("quickReminderDate").value;
+    const timeVal = el("quickReminderTime").value;
+
+    if (timeVal) {
+      const baseDk = dateVal || (dateKey !== "undated" ? dateKey : dateKeyFromDate(new Date()));
+      const dObj = parseDateKey(baseDk);
+      const [h, m] = timeVal.split(":").map(Number);
+      dObj.setHours(h || 0, m || 0, 0, 0);
+      saveReminderFields({
+        reminderCustomTs: dObj.getTime(),
+        reminderDate: baseDk,
+        reminderTime: timeVal,
+        reminderMinutes: minsVal !== "" ? Number(minsVal) : null
+      }, `🔔 תזכורת הוגדרה ל-${timeVal}`);
+    } else if (minsVal !== "") {
+      const mNum = Number(minsVal);
+      if (!task.startTime) {
+        const targetTs = Date.now() + mNum * 60000;
+        const dt = new Date(targetTs);
+        saveReminderFields({
+          reminderMinutes: mNum,
+          reminderCustomTs: targetTs,
+          reminderDate: dateKeyFromDate(dt),
+          reminderTime: formatTimeHM(dt)
+        }, `🔔 תזכורת בעוד ${mNum} דק׳`);
+      } else {
+        saveReminderFields({
+          reminderMinutes: mNum,
+          reminderCustomTs: null,
+          reminderDate: null,
+          reminderTime: null
+        }, `🔔 תזכורת ${minsVal} דק׳ לפני`);
+      }
+    } else {
+      showToast("בחר זמן לתזכורת");
+    }
+  };
+
+  el("btnClearQuickReminder").onclick = () => {
+    saveReminderFields({
+      reminderMinutes: null,
+      reminderCustomTs: null,
+      reminderDate: null,
+      reminderTime: null
+    }, "🔕 התזכורת בוטלה");
+  };
 }
 
 // =========================
@@ -2024,11 +2447,14 @@ function updateStats() {
   const canvas = el("workFreeChart");
   if (!canvas || !window.Chart) return;
 
+  // ננקה תקציר וקטגוריות קודמות
+  canvas.parentElement.querySelector("#statsSummary")?.remove();
+  canvas.parentElement.querySelector("#statsLegend")?.remove();
+
   const sleep = stats.sleepMinutes / 60;
   const work  = stats.workMinutes / 60;
 
   // ---- סיכום יעדים ----
-  el("statsSummary")?.remove();
   const summary = document.createElement("div");
   summary.id = "statsSummary";
   summary.style.marginTop = "10px";
@@ -2074,18 +2500,64 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
   const data = [sleep, work, ...otherValues, freeHours];
   const total = data.reduce((a, b) => a + b, 0);
 
+  // צבעים ברורים לכל קטגוריה
+  const fallbackPalette = [
+    "#22c55e", // ירוק
+    "#a855f7", // סגול
+    "#f97316", // כתום
+    "#ec4899", // ורוד
+    "#0ea5e9", // טורקיז
+    "#64748b"  // אפור-כחלחל
+  ];
+  let fallbackIndex = 0;
+  const colors = labels.map((l) => {
+    if (GOAL_COLORS[l]) return GOAL_COLORS[l];
+    const c = fallbackPalette[fallbackIndex % fallbackPalette.length];
+    fallbackIndex++;
+    return c;
+  });
+
+  // ---- מקרא צבעים (Legend) ----
+  const legend = document.createElement("div");
+  legend.id = "statsLegend";
+  legend.style.display = "flex";
+  legend.style.flexWrap = "wrap";
+  legend.style.gap = "8px 16px";
+  legend.style.marginTop = "10px";
+
+  legend.innerHTML = labels.map((label, idx) => {
+    const hours = data[idx] || 0;
+    const pct = total > 0 ? ((hours / total) * 100).toFixed(1) : "0.0";
+    const color = colors[idx];
+    return `
+      <div style="display:flex;align-items:center;gap:6px;font-size:0.9rem;">
+        <span style="
+          width:12px;
+          height:12px;
+          border-radius:50%;
+          background:${color};
+          display:inline-block;
+        "></span>
+        <span><strong>${label}</strong> – ${hours.toFixed(2)} ש׳ (${pct}%)</span>
+      </div>
+    `;
+  }).join("");
+
+  canvas.parentElement.appendChild(legend);
+  canvas.parentElement.appendChild(summary);
+
   const ctx = canvas.getContext("2d");
 
   if (!workFreeChart) {
     workFreeChart = new Chart(ctx, {
       type: "doughnut",
       data: {
-  labels,
-  datasets: [{
-    data,
-    backgroundColor: labels.map(l => GOAL_COLORS[l] || "#9ca3af")
-  }]
-},
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors
+        }]
+      },
       options: {
         cutout: "65%",
         plugins: {
@@ -2112,6 +2584,7 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
   } else {
     workFreeChart.data.labels = labels;
     workFreeChart.data.datasets[0].data = data;
+    workFreeChart.data.datasets[0].backgroundColor = colors;
     workFreeChart.update();
    
 
@@ -2738,13 +3211,20 @@ if (userSel) {
   renderShoppingList();
   updateStats();
 
+  setInterval(checkDueReminders, 2000);
+  setTimeout(checkDueReminders, 1000);
+
   // ===== expose functions for inline HTML handlers =====
 window.toggleCompletedSection = toggleCompletedSection;
 window.toggleTaskDone = toggleTaskDone;
 
 }
 
-document.addEventListener("DOMContentLoaded", initApp);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}
 
 
 

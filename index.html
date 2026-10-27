@@ -6,9 +6,9 @@
 
   <title>BNAPP V3.5.2</title>
 
-  <meta name="theme-color" content="#ffffff" />
+  <meta name="theme-color" content="#0284c7" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=blue6" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -21,12 +21,13 @@
 
   
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-messaging-compat.js"></script>
 
 
   
   <!-- App -->
-  <script type="module" src="app.js"></script>
+  <script defer src="app.js?v=blue6"></script>
 </head>
 
 <body>
@@ -311,7 +312,30 @@
           </div>
           <div class="field">
             <label>תזכורת (דקות לפני)</label>
-            <input name="reminderMinutes" type="number" min="0" placeholder="15" />
+            <input name="reminderMinutes" id="editReminderMinutes" type="number" min="0" placeholder="למשל: 15" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>🔔 בחירה מהירה לתזכורת / שעה מדויקת</label>
+          <div class="reminder-chips" id="editReminderPresets">
+            <button type="button" class="ghost-pill small" data-rem-min="">ללא</button>
+            <button type="button" class="ghost-pill small" data-rem-in="1">בעוד דקה (בדיקה)</button>
+            <button type="button" class="ghost-pill small" data-rem-min="0">בזמן האירוע (0)</button>
+            <button type="button" class="ghost-pill small" data-rem-min="5">5 דק׳ לפני</button>
+            <button type="button" class="ghost-pill small" data-rem-min="15">15 דק׳ לפני</button>
+            <button type="button" class="ghost-pill small" data-rem-min="30">30 דק׳ לפני</button>
+            <button type="button" class="ghost-pill small" data-rem-min="60">שעה לפני</button>
+          </div>
+          <div class="grid-2" style="margin-top:4px;">
+            <div class="field">
+              <label>תאריך תזכורת (אופציונלי)</label>
+              <input name="reminderDate" id="editReminderDate" type="date" />
+            </div>
+            <div class="field">
+              <label>שעת תזכורת מדויקת</label>
+              <input name="reminderTime" id="editReminderTime" type="time" />
+            </div>
           </div>
         </div>
 
@@ -422,9 +446,9 @@
 
   <!-- Service Worker (פעם אחת!) -->
 <script>
-  if ('serviceWorker' in navigator) {
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js');
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
     });
   }
 </script>
@@ -477,6 +501,70 @@
     <div class="confirm-actions">
       <button id="confirmCancel" class="ghost-pill full-width">ביטול</button>
       <button id="confirmOk" class="primary-pill full-width danger">מחיקה</button>
+    </div>
+  </div>
+</div>
+
+<!-- QUICK REMINDER MODAL -->
+<div id="reminderModal" class="modal hidden">
+  <div class="modal-backdrop" data-close-reminder></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">🔔 הגדרת תזכורת</div>
+      <button class="icon-btn" data-close-reminder>✕</button>
+    </div>
+    <div id="reminderModalItemTitle" class="task-title" style="margin-bottom:8px;"></div>
+
+    <div class="form">
+      <div class="field">
+        <label>תזכורת מהירה</label>
+        <div class="reminder-chips">
+          <button type="button" class="ghost-pill small" data-quick-rem="in1">בעוד דקה (בדיקה)</button>
+          <button type="button" class="ghost-pill small" data-quick-rem="in5">בעוד 5 דק׳</button>
+          <button type="button" class="ghost-pill small" data-quick-rem="in15">בעוד 15 דק׳</button>
+          <button type="button" class="ghost-pill small" data-quick-rem="in60">בעוד שעה</button>
+          <button type="button" class="ghost-pill small" data-quick-rem="before0">בזמן האירוע</button>
+          <button type="button" class="ghost-pill small" data-quick-rem="before15">15 דק׳ לפני</button>
+          <button type="button" class="ghost-pill small" data-quick-rem="before30">30 דק׳ לפני</button>
+          <button type="button" class="ghost-pill small" data-quick-rem="before60">שעה לפני</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>דקות לפני שעת ההתחלה</label>
+        <input id="quickReminderMinutes" type="number" min="0" placeholder="למשל: 15" />
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label>או בתאריך מדויק</label>
+          <input id="quickReminderDate" type="date" />
+        </div>
+        <div class="field">
+          <label>בשעה מדויקת</label>
+          <input id="quickReminderTime" type="time" />
+        </div>
+      </div>
+
+      <div class="task-actions" style="margin-top:8px;">
+        <button id="btnSaveQuickReminder" type="button" class="primary-pill full-width">שמור תזכורת</button>
+        <button id="btnClearQuickReminder" type="button" class="ghost-pill full-width">בטל תזכורת</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REMINDER ALERT POPUP MODAL -->
+<div id="reminderAlertModal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content confirm-modal">
+    <div class="confirm-title" style="font-size:1.2rem;">🔔 תזכורת!</div>
+    <div id="reminderAlertTitle" class="task-title" style="font-size:1.05rem; margin:8px 0 4px;"></div>
+    <div id="reminderAlertMeta" class="confirm-text"></div>
+    <div class="confirm-actions" style="flex-direction:column; gap:8px;">
+      <button id="btnReminderDone" class="primary-pill full-width">✔ סמן כבוצע</button>
+      <button id="btnReminderSnooze" class="ghost-pill full-width">⏰ הזכר לי שוב בעוד 10 דקות</button>
+      <button id="btnReminderDismiss" class="ghost-pill full-width">סגור</button>
     </div>
   </div>
 </div>

@@ -12,11 +12,16 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
+  const notif = payload.notification || {};
+  const d = payload.data || {};
   self.registration.showNotification(
-    payload.notification.title,
+    notif.title || d.title || "BNAPP – תזכורת",
     {
-      body: payload.notification.body,
-      icon: "/icon-192.png"
+      body: notif.body || d.body || "יש לך תזכורת",
+      icon: "./icon-192.png",
+      badge: "./icon-192.png",
+      vibrate: [200, 100, 200],
+      requireInteraction: true
     }
   );
 });
