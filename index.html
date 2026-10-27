@@ -8,7 +8,7 @@
 
   <meta name="theme-color" content="#0284c7" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=blue9" />
+  <link rel="stylesheet" href="styles.css?v=blue10" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -27,7 +27,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue9"></script>
+  <script defer src="app.js?v=blue10"></script>
 </head>
 
 <body>
@@ -42,6 +42,12 @@
         <button id="btnThemeToggle" class="icon-btn" title="מצב יום/לילה">☀️/🌙</button>
         <div class="app-title">BNAPP V3.6 🔔</div>
         <button id="btnGihari" class="primary-pill">ג'יחרי</button>
+      </div>
+
+      <div id="apkInstallPromo" style="margin:4px 0;">
+        <a href="./BNAPP.apk" download="BNAPP.apk" class="apk-download-banner">
+          📲 הורד אפליקציית אנדרואיד (APK) – לקריינות והתראות גם כשהאתר סגור!
+        </a>
       </div>
 
       <div class="header-bottom">
@@ -188,6 +194,7 @@
           <button id="btnRequestNotifications" class="primary-pill full-width">🔔 הפעל התראות</button>
           <button id="btnTestNotificationNow" type="button" class="ghost-pill full-width" style="margin-top:6px;">🔊 שלח התראת בדיקה עכשיו</button>
           <button id="btnDisableNotifications" class="ghost-pill full-width" style="margin-top:6px;">כבה התראות</button>
+          <a href="./BNAPP.apk" download="BNAPP.apk" class="primary-pill full-width" style="display:block; text-align:center; text-decoration:none; margin-top:10px; background:linear-gradient(135deg,#0284c7,#0369a1);">📲 הורד אפליקציית אנדרואיד מלאה (BNAPP.apk)</a>
         </div>
       </section>
     </main>
@@ -448,7 +455,7 @@
 <script>
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js?v=blue9').then((reg) => {
+      navigator.serviceWorker.register('./sw.js?v=blue10').then((reg) => {
         try { reg.update(); } catch (e) {}
       }).catch(() => {});
     });

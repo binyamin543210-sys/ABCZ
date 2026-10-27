@@ -4,8 +4,12 @@
 // - Chart.js (global Chart)
 // - hebcal.noloc.min.js (global Hebcal) - עם fallback אם לא נטען
 
+function hasNativeAndroidBridge() {
+  return typeof window.AndroidBridge !== "undefined" && window.AndroidBridge !== null;
+}
+
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue9").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue10").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
@@ -543,6 +547,9 @@ if (btnDisableNotif) {
   btnDisableNotif.onclick = () => {
     localStorage.setItem("notificationsEnabled", "false");
     state.ui.notificationsGranted = false;
+    if (hasNativeAndroidBridge()) {
+      try { window.AndroidBridge.setNotificationsEnabled(false); } catch (e) {}
+    }
     if (typeof stopAlarmLoop === "function") stopAlarmLoop();
     if (typeof stopKeepAliveAudio === "function") stopKeepAliveAudio();
     showToast("🔕 התראות כובו – לא יופעלו התראות עד להפעלה מחדש", 3500);
@@ -2199,6 +2206,9 @@ function startAlarmLoop(titleText = "אירוע ביומן") {
 
 function stopAlarmLoop() {
   _isAlarmRinging = false;
+  if (hasNativeAndroidBridge()) {
+    try { window.AndroidBridge.stopAlarm(); } catch (e) {}
+  }
   if (window._alarmLoopTimer) {
     clearInterval(window._alarmLoopTimer);
     window._alarmLoopTimer = null;
@@ -2331,9 +2341,18 @@ function scheduleDirectReminder({ id, dateKey, ev, targetTs }) {
   const key = `${dk}/${id}`;
   const title = ev?.title || "אירוע / משימה";
   const startTime = ev?.startTime || "";
+  const timeInfo = startTime ? `שעה: ${startTime}` : `שעת תזכורת: ${formatTimeHM(new Date(targetTs))}`;
 
   getSharedAudioCtx();
   playConfirmTick();
+
+  // אם אנחנו בתוך אפליקציית האנדרואיד המותקנת (BNAPP.apk) – רושמים שעון מעורר אמיתי של מערכת ההפעלה!
+  if (hasNativeAndroidBridge()) {
+    try {
+      window.AndroidBridge.setNotificationsEnabled(true);
+      window.AndroidBridge.scheduleAlarm(key, title, `${title} • ${timeInfo}`, Math.round(Number(targetTs)));
+    } catch (e) {}
+  }
 
   directReminders[key] = {
     key,
@@ -2350,7 +2369,6 @@ function scheduleDirectReminder({ id, dateKey, ev, targetTs }) {
   startBackgroundKeepAliveAudio();
   renderActiveRemindersBar();
 
-  const timeInfo = startTime ? `שעה: ${startTime}` : `שעת תזכורת: ${formatTimeHM(new Date(targetTs))}`;
   postToServiceWorker({
     type: "SCHEDULE_SW_NOTIFICATION",
     key,
@@ -2361,6 +2379,9 @@ function scheduleDirectReminder({ id, dateKey, ev, targetTs }) {
 }
 
 function cancelDirectReminder(key) {
+  if (hasNativeAndroidBridge()) {
+    try { window.AndroidBridge.cancelAlarm(key); } catch (e) {}
+  }
   if (directTimeouts[key]) {
     clearTimeout(directTimeouts[key]);
     delete directTimeouts[key];
@@ -2596,6 +2617,16 @@ function checkDueReminders() {
           };
           armDirectTimeout(key);
           renderActiveRemindersBar();
+          if (hasNativeAndroidBridge()) {
+            try {
+              window.AndroidBridge.scheduleAlarm(
+                String(key),
+                String(ev.title || "אירוע / משימה"),
+                String(ev.startTime || ""),
+                Number(remindTs)
+              );
+            } catch (e) {}
+          }
         }
         return;
       }
@@ -3993,6 +4024,10 @@ if (userSel) {
   el("btnRequestNotifications").onclick = requestNotifications;
   if (el("btnTestNotificationNow")) {
     el("btnTestNotificationNow").onclick = testNotificationNow;
+  }
+  if (hasNativeAndroidBridge() || window.location.search.includes("native=1")) {
+    const promo = el("apkInstallPromo");
+    if (promo) promo.style.display = "none";
   }
   el("btnOpenWaze").onclick = openWazeFromForm;
 
