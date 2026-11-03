@@ -86,7 +86,7 @@ if (messaging && typeof onMessage === "function") {
 const state = {
   currentUser: "binyamin",
   currentDate: new Date(),
-  statsRange: "week",
+  statsRange: "day",
 
   settings: {
     city: null,
@@ -106,7 +106,8 @@ const state = {
 ui: {
   darkMode: false,
   notificationsGranted: false,
-  statsManualRange: false
+  statsManualRange: false,
+  openStatsTabs: { completedEvents: true }
 },
 
 
@@ -118,9 +119,11 @@ goals: {
 };
 
 const GOAL_COLORS = {
-  "שינה": "#60a5fa",   // תכלת
-  "עבודה": "#ef4444", // אדום
-  "אוכל + מקלחת": "#f59e0b" // כתום
+  "שינה": "#60a5fa",          // תכלת (7 שעות: 00:00–07:00)
+  "עבודה": "#ef4444",         // אדום (10 שעות: 07:00–17:00)
+  "אוכל ומקלחת": "#f59e0b",   // כתום (שעה: 17:00–18:00)
+  "אוכל + מקלחת": "#f59e0b",  // כתום
+  "זמן פנוי": "#22c55e"       // ירוק (6 שעות: 18:00–00:00)
 };
 
 let editingGoalId = null;
@@ -139,14 +142,14 @@ function isDefaultEvent(ev) {
     ev.isDefault === "1"
   ) return true;
 
-  // גיבוי לדאטה ישן
+  // גיבוי לדאטה ישן וחדש
   const t = (ev.title || "").trim();
   const owner = ev.owner || "";
 
   if (ev.type === "event" && owner === "shared") {
-    if (t === "שינה" && ev.startTime === "00:00" && ev.endTime === "08:00") return true;
-    if (t === "עבודה" && ev.startTime === "08:00" && ev.endTime === "17:00") return true;
-    if (t === "אוכל + מקלחת" && ev.startTime === "17:00" && ev.endTime === "18:30") return true;
+    if (t === "שינה" && ev.startTime === "00:00" && (ev.endTime === "08:00" || ev.endTime === "07:00")) return true;
+    if (t === "עבודה" && (ev.startTime === "08:00" || ev.startTime === "07:00") && ev.endTime === "17:00") return true;
+    if ((t === "אוכל + מקלחת" || t === "אוכל ומקלחת") && ev.startTime === "17:00" && (ev.endTime === "18:30" || ev.endTime === "18:00")) return true;
   }
 
   return false;
@@ -304,47 +307,46 @@ async function ensureDefaultDayEvents(date) {
   const day = date.getDay();
 
   const existing = state.cache.events[dateKey] || {};
-  const titles = Object.values(existing).map(e => e.title);
+  const titles = Object.values(existing).map(e => (e.title || "").trim());
 
   const toCreate = [];
 
-  // שינה – תמיד
+  // שינה – 00:00 עד 07:00 (7 שעות)
   if (!titles.includes("שינה")) {
     toCreate.push({
       type: "event",
       owner: "shared",
       title: "שינה",
       startTime: "00:00",
-      endTime: "08:00",
+      endTime: "07:00",
       dateKey,
       isDefault: true
     });
   }
 
-  // ימי חול
+  // ימי חול: עבודה (07:00 עד 17:00 – 10 שעות) ואוכל ומקלחת (17:00 עד 18:00 – שעה)
   if (day >= 0 && day <= 4) {
     if (!titles.includes("עבודה")) {
       toCreate.push({
         type: "event",
         owner: "shared",
         title: "עבודה",
-        startTime: "08:00",
+        startTime: "07:00",
         endTime: "17:00",
         dateKey,
         isDefault: true
       });
     }
 
-    if (!titles.includes("אוכל + מקלחת")) {
+    if (!titles.includes("אוכל + מקלחת") && !titles.includes("אוכל ומקלחת")) {
       toCreate.push({
         type: "event",
         owner: "shared",
-        title: "אוכל + מקלחת",
+        title: "אוכל ומקלחת",
         startTime: "17:00",
-        endTime: "18:30",
+        endTime: "18:00",
         dateKey,
-
-      isDefault: true
+        isDefault: true
       });
     }
   }
@@ -1048,12 +1050,24 @@ function toggleTaskDone(task) {
   const id = task._id || task.id;
   if (!id || !task.dateKey) return;
 
-  const isDone = !!task.completed;
+  const isDone = !!(task.completed || task.completedAt);
+  const nextDone = !isDone;
+  const nextCompletedAt = nextDone ? Date.now() : null;
+
+  if (state.cache.events?.[task.dateKey]?.[id]) {
+    state.cache.events[task.dateKey][id].completed = nextDone;
+    state.cache.events[task.dateKey][id].completedAt = nextCompletedAt;
+  }
 
   update(ref(db, `events/${task.dateKey}/${id}`), {
-    completed: !isDone,
-    completedAt: isDone ? null : Date.now()
+    completed: nextDone,
+    completedAt: nextCompletedAt
   });
+
+  renderCalendar();
+  renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
+  if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(task.dateKey);
+  try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
 
   showToast(isDone ? "בוטל סימון בוצע" : "סומן כבוצע ✔");
 }
@@ -1184,21 +1198,23 @@ const list = Object.entries(events)
     actions.className = "task-actions";
 
     // =========================
-// DONE BUTTON (DAY MODAL)
-// =========================
-const doneBtn = document.createElement("button");
-doneBtn.className = "ghost-pill small";
-doneBtn.textContent = ev.completed ? "↩ בטל בוצע" : "✔ בוצע";
+    // DONE BUTTON (DAY MODAL)
+    // =========================
+    if (!isDefaultEvent(ev)) {
+      const doneBtn = document.createElement("button");
+      doneBtn.className = "ghost-pill small";
+      doneBtn.textContent = (ev.completed || ev.completedAt) ? "↩ בטל בוצע" : "✔ בוצע";
 
-doneBtn.onclick = () => {
-  toggleTaskDone({
-    ...ev,
-    dateKey,
-    id: ev._id || ev.id
-  });
-};
+      doneBtn.onclick = () => {
+        toggleTaskDone({
+          ...ev,
+          dateKey,
+          id: ev._id || ev.id
+        });
+      };
 
-actions.appendChild(doneBtn);
+      actions.appendChild(doneBtn);
+    }
 
     const remBtn = document.createElement("button");
     remBtn.className = "ghost-pill small" + (remLabel ? " reminder-set" : "");
@@ -1659,6 +1675,17 @@ function initBottomNav() {
       qsa(".screen").forEach((s) => s.classList.remove("active"));
       el(targetId)?.classList.add("active");
       setActiveScreenMeta(targetId);
+      if (targetId === "statsSection") {
+        try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
+        setTimeout(() => {
+          try {
+            if (workFreeChart) {
+              workFreeChart.resize();
+              workFreeChart.update();
+            }
+          } catch {}
+        }, 60);
+      }
     });
   });
 }
@@ -2749,62 +2776,11 @@ function formatCountdownMMSS(msRemaining) {
 }
 
 function renderActiveRemindersBar() {
+  // ביטול הצגת סרגל הספירה לאחור על המסך (ההתראות ממשיכות לפעול ברקע כרגיל)
   const bar = el("activeRemindersBar");
   if (!bar) return;
-
-  const now = Date.now();
-  const activeList = Object.values(directReminders)
-    .filter((r) => {
-      if (!r || r.fired || r.targetTs - now > 12 * 60 * 60 * 1000) return false;
-      const cachedEv = state.cache.events?.[r.dateKey]?.[r.id];
-      const owner = cachedEv?.owner || r.owner || "shared";
-      return shouldRemindCurrentUser({ owner });
-    })
-    .sort((a, b) => a.targetTs - b.targetTs);
-
-  if (activeList.length === 0) {
-    bar.classList.add("hidden");
-    bar.innerHTML = "";
-    return;
-  }
-
-  bar.classList.remove("hidden");
+  bar.classList.add("hidden");
   bar.innerHTML = "";
-
-  activeList.slice(0, 3).forEach((rem) => {
-    const remMs = rem.targetTs - now;
-    const row = document.createElement("div");
-    row.className = "active-rem-row";
-
-    const label = document.createElement("span");
-    label.className = "active-rem-text";
-    label.textContent = `🔔 ${rem.title}`;
-
-    const timerBadge = document.createElement("span");
-    timerBadge.className = "active-rem-countdown";
-    timerBadge.textContent = `בעוד ${formatCountdownMMSS(remMs)}`;
-
-    const testNowBtn = document.createElement("button");
-    testNowBtn.type = "button";
-    testNowBtn.className = "active-rem-btn";
-    testNowBtn.textContent = "הפעל עכשיו";
-    testNowBtn.onclick = () => fireDirectReminder(rem.key);
-
-    const cancelBtn = document.createElement("button");
-    cancelBtn.type = "button";
-    cancelBtn.className = "active-rem-btn";
-    cancelBtn.textContent = "✕";
-    cancelBtn.onclick = () => {
-      cancelDirectReminder(rem.key);
-      showToast("🔕 התזכורת בוטלה");
-    };
-
-    row.appendChild(label);
-    row.appendChild(timerBadge);
-    row.appendChild(testNowBtn);
-    row.appendChild(cancelBtn);
-    bar.appendChild(row);
-  });
 }
 
 function tickDirectReminders() {
@@ -3366,208 +3342,259 @@ function moveTaskToDate(task, newDateKey) {
   showToast("המשימה נדחתה");
 }
 
-function getRangeDates(range) {
-  const base = new Date(state.currentDate);
-  base.setHours(12, 0, 0, 0);
+const ROUTINE_STAT_TITLES = [
+  "שינה",
+  "עבודה",
+  "אוכל ומקלחת",
+  "אוכל + מקלחת",
+  "זמן פנוי"
+];
 
-  // 🔥 תמיד מסתכלים אחורה
-  if (range === "day") {
-    base.setDate(base.getDate() - 1);
+function isRoutineStatEvent(ev) {
+  if (!ev) return false;
+  if (isDefaultEvent(ev)) return true;
+  const t = (ev.title || "").trim();
+  return ROUTINE_STAT_TITLES.includes(t);
+}
+
+function normalizeStatCategoryTitle(rawTitle) {
+  const t = (rawTitle || "").trim();
+  if (!t) return "משימה";
+  if (t === "אוכל + מקלחת" || t === "אוכל" || t === "מקלחת") return "אוכל ומקלחת";
+  return t;
+}
+
+function isEventRelevantForUser(ev, user) {
+  if (!ev) return false;
+  const owner = ev.owner || "shared";
+  if (owner === "shared") return true;
+  return owner === user;
+}
+
+function getEffectiveDurationMinutes(ev) {
+  if (!ev) return 60;
+  if (ev.startTime && ev.endTime) {
+    const s = timeToMinutes(ev.startTime);
+    const e = timeToMinutes(ev.endTime);
+    if (e > s) return e - s;
+  }
+  if (ev.duration && Number(ev.duration) > 0) {
+    return Number(ev.duration);
+  }
+  return 60; // ברירת מחדל: שעה אחת (60 דקות)
+}
+
+function getStatsDates(range) {
+  const fromInput = el("completedFromDate");
+  const toInput = el("completedToDate");
+
+  if (fromInput && toInput && (!fromInput.value || !toInput.value)) {
+    statsApplyPresetDates(range || state.statsRange || "day", true);
   }
 
-  if (range === "week" || range === "2weeks") {
-    // קופצים לשבוע הקודם
-    base.setDate(base.getDate() - 7);
+  const fromVal = fromInput?.value;
+  const toVal = toInput?.value;
+
+  if (fromVal && toVal) {
+    const start = parseDateKey(fromVal);
+    const end = parseDateKey(toVal);
+    start.setHours(12, 0, 0, 0);
+    end.setHours(12, 0, 0, 0);
+    if (start <= end) {
+      const dates = [];
+      const cur = new Date(start);
+      let safety = 0;
+      while (cur <= end && safety < 1500) {
+        dates.push(new Date(cur));
+        cur.setDate(cur.getDate() + 1);
+        safety++;
+      }
+      if (dates.length > 0) return dates;
+    }
   }
 
-  if (range === "month") {
-    // קופצים לחודש הקודם
-    base.setMonth(base.getMonth() - 1);
-  }
-
-  if (range === "year") {
-    // קופצים לשנה הקודמת
-    base.setFullYear(base.getFullYear() - 1);
-  }
-
-
+  // Fallback calculation if inputs are missing
+  const now = new Date();
+  now.setHours(12, 0, 0, 0);
   const dates = [];
 
-  const addDays = (count) => {
-    for (let i = 0; i < count; i++) {
-      const d = new Date(base);
-      d.setDate(base.getDate() + i);
+  if (range === "day") {
+    dates.push(new Date(now));
+  } else if (range === "week") {
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
       dates.push(d);
     }
-  };
-
-  switch (range) {
-    case "day": addDays(1); break;
-    case "week": addDays(7); break;
-    case "2weeks": addDays(14); break;
-
-    case "month": {
-      const y = base.getFullYear();
-      const m = base.getMonth();
+  } else if (range === "2weeks") {
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      dates.push(d);
+    }
+  } else if (range === "month") {
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const days = new Date(y, m + 1, 0).getDate();
+    for (let d = 1; d <= days; d++) {
+      dates.push(new Date(y, m, d, 12, 0, 0, 0));
+    }
+  } else if (range === "year") {
+    const y = now.getFullYear();
+    for (let m = 0; m < 12; m++) {
       const days = new Date(y, m + 1, 0).getDate();
-      for (let i = 1; i <= days; i++) {
-        dates.push(new Date(y, m, i, 12));
+      for (let d = 1; d <= days; d++) {
+        dates.push(new Date(y, m, d, 12, 0, 0, 0));
       }
-      break;
     }
-
-    case "year": {
-      const y = base.getFullYear();
-      for (let m = 0; m < 12; m++) {
-        const days = new Date(y, m + 1, 0).getDate();
-        for (let d = 1; d <= days; d++) {
-          dates.push(new Date(y, m, d, 12));
-        }
-      }
-      break;
-    }
-
-    default:
-      addDays(7);
+  } else {
+    dates.push(new Date(now));
   }
 
   return dates;
 }
 
-function isEventRelevantForUser(ev, user) {
-  if (!ev || !ev.owner) return false;
-  if (ev.owner === "shared") return true;
-  return ev.owner === user;
-}
-
 function computeStats({ user, range }) {
-  const dates = getRangeDates(range);
-
-  const totalMinutesCapacity = dates.length * 24 * 60;
+  const dates = getStatsDates(range);
+  const totalDays = Math.max(1, dates.length);
+  const totalHours = totalDays * 24;
 
   let sleepMinutes = 0;
   let workMinutes = 0;
-  let otherMap = {};
+  let foodShowerMinutes = 0;
+  let freeMinutes = 0;
+  const otherMap = {};
 
-  dates.forEach(date => {
+  const undatedEvents = state.cache.events?.["undated"] || {};
+
+  dates.forEach((date) => {
     const dk = dateKeyFromDate(date);
-    const events = state.cache.events[dk] || {};
+    // 1440 דקות ביממה (24 שעות = 100%)
+    // 00:00-07:00 (0..419) -> 7 שעות שינה
+    // 07:00-17:00 (420..1019) -> 10 שעות עבודה
+    // 17:00-18:00 (1020..1079) -> 1 שעה אוכל ומקלחת
+    // 18:00-00:00 (1080..1439) -> 6 שעות זמן פנוי
+    const dayTimeline = new Array(1440);
+    for (let m = 0; m < 420; m++) dayTimeline[m] = "שינה";
+    for (let m = 420; m < 1020; m++) dayTimeline[m] = "עבודה";
+    for (let m = 1020; m < 1080; m++) dayTimeline[m] = "אוכל ומקלחת";
+    for (let m = 1080; m < 1440; m++) dayTimeline[m] = "זמן פנוי";
+
+    const dayEventsObj = state.cache.events?.[dk] || {};
+    const dayItems = Object.entries(dayEventsObj).map(([id, ev]) => ({
+      ...ev,
+      _id: ev._id || id,
+      dateKey: dk
+    }));
+
+    // הוספת משימות ללא תאריך שסומנו כבוצעו ביום זה
+    Object.entries(undatedEvents).forEach(([id, ev]) => {
+      if (!ev || (!ev.completed && !ev.completedAt)) return;
+      if (ev.completedAt) {
+        const compDk = dateKeyFromDate(new Date(ev.completedAt));
+        if (compDk === dk) {
+          dayItems.push({ ...ev, _id: ev._id || id, dateKey: "undated" });
+        }
+      }
+    });
+
     const seen = new Set();
+    const untimedCompleted = [];
 
-    Object.values(events).forEach(ev => {
+    dayItems.forEach((ev) => {
+      if (!ev) return;
       if (!isEventRelevantForUser(ev, user)) return;
-      if (!ev.startTime || !ev.endTime) return;
+      if (isDefaultEvent(ev)) return; // כבר מוגדר כבסיס היומי ב-dayTimeline
 
-      const ALWAYS_COUNT = ["שינה", "עבודה", "אוכל", "מקלחת"];
-const title = (ev.title || "").trim();
+      const isRoutine = isRoutineStatEvent(ev);
+      const isDone = Boolean(ev.completed || ev.completedAt);
 
-// אם זה לא אחד מהקבועים – חייב להיות בוצע
-if (
-  !ALWAYS_COUNT.includes(title) &&
-  !ev.completed &&
-  !ev.completedAt
-) return;
+      // רק משימות ואירועים שסומנו כבוצעו נכנסים לעוגה (למעט אירועי שגרה)
+      if (!isRoutine && !isDone) return;
 
-
-      const s = timeToMinutes(ev.startTime);
-      const e = timeToMinutes(ev.endTime);
-      if (e <= s) return;
-
-      const sig = `${ev.title}|${ev.owner}|${s}-${e}|${ev.isDefault}`;
+      const label = normalizeStatCategoryTitle(ev.title);
+      const sig = `${label}|${ev.owner || "shared"}|${ev.startTime || ""}|${ev.endTime || ""}|${ev.type || ""}`;
       if (seen.has(sig)) return;
       seen.add(sig);
 
-      const dur = e - s;
-     
-
-      if (title === "שינה") sleepMinutes += dur;
-      else if (title === "עבודה") workMinutes += dur;
-      else otherMap[title] = (otherMap[title] || 0) + dur;
+      if (ev.startTime) {
+        const startMin = Math.max(0, Math.min(1439, timeToMinutes(ev.startTime)));
+        let dur = getEffectiveDurationMinutes(ev);
+        if (dur <= 0) dur = 60;
+        const endMin = Math.max(startMin + 1, Math.min(1440, startMin + dur));
+        for (let m = startMin; m < endMin; m++) {
+          dayTimeline[m] = label;
+        }
+      } else {
+        let dur = getEffectiveDurationMinutes(ev);
+        if (dur <= 0) dur = 60;
+        untimedCompleted.push({ label, dur });
+      }
     });
+
+    // משימות/אירועים שבוצעו ללא שעת התחלה מקזזים מזמן פנוי (או משאר היום אם נגמר הזמן הפנוי)
+    untimedCompleted.forEach(({ label, dur }) => {
+      let remaining = dur;
+      const replaceOrder = ["זמן פנוי", "עבודה", "אוכל ומקלחת", "שינה"];
+      for (const targetCat of replaceOrder) {
+        if (remaining <= 0) break;
+        for (let m = 1439; m >= 0 && remaining > 0; m--) {
+          if (dayTimeline[m] === targetCat) {
+            dayTimeline[m] = label;
+            remaining--;
+          }
+        }
+      }
+    });
+
+    for (let m = 0; m < 1440; m++) {
+      const cat = dayTimeline[m];
+      if (cat === "שינה") sleepMinutes++;
+      else if (cat === "עבודה") workMinutes++;
+      else if (cat === "אוכל ומקלחת") foodShowerMinutes++;
+      else if (cat === "זמן פנוי") freeMinutes++;
+      else otherMap[cat] = (otherMap[cat] || 0) + 1;
+    }
   });
 
-  const used =
-    sleepMinutes +
-    workMinutes +
-    Object.values(otherMap).reduce((a, b) => a + b, 0);
+  const fromKey = dateKeyFromDate(dates[0]);
+  const toKey = dateKeyFromDate(dates[dates.length - 1]);
 
   return {
-    totalDays: dates.length,
+    dates,
+    fromKey,
+    toKey,
+    totalDays,
+    totalHours,
     sleepMinutes,
     workMinutes,
-    otherMap,
-    freeMinutes: Math.max(0, totalMinutesCapacity - used)
+    foodShowerMinutes,
+    freeMinutes,
+    otherMap
   };
-}
-
-function getCompletedItemsInRange(range, from, to) {
-  const tasks = [];
-  const events = [];
-
-  // טווח תאריכים ידני (אם קיים)
-  const fromTs = from
-    ? new Date(from).setHours(0, 0, 0, 0)
-    : null;
-
-  const toTs = to
-    ? new Date(to).setHours(23, 59, 59, 999)
-    : null;
-
-  Object.values(state.cache.events || {}).forEach(dayEvents => {
-    Object.values(dayEvents || {}).forEach(ev => {
-  if (!ev.completed && !ev.completedAt) return;
-
-
-      // פילטר לפי משתמש
-      if (
-        ev.owner !== "shared" &&
-        ev.owner !== state.currentUser
-      ) return;
-
-// אם זה מופע חוזר – סופרים רק את המופע עצמו
-if (ev.isRecurringParent) return;
-
-      
-      const completedTs = ev.completedAt || 0;
-
-      // פילטר לפי תאריך ביצוע
-      if (fromTs && completedTs < fromTs) return;
-      if (toTs && completedTs > toTs) return;
-
-      const isEvent = ev.startTime && ev.endTime;
-      const item = { ...ev };
-
-      if (isEvent) events.push(item);
-      else tasks.push(item);
-    });
-  });
-
-  return { tasks, events };
 }
 
 function computeTargetStatuses(stats) {
   const results = [];
-
-  const weeks =
-    state.statsRange === "week" ? 1 :
-    state.statsRange === "month" ? 4.345 :
-    state.statsRange === "year" ? 52 :
-    1;
-
-  // 🔥 כאן התיקון הקריטי
+  const weeks = (stats.totalDays || 1) / 7;
   const userGoals = state.goals?.[state.currentUser] || {};
 
-  Object.values(userGoals).forEach(g => {
+  Object.values(userGoals).forEach((g) => {
     if (!g || !g.title || !g.weeklyHours) return;
 
     let actualHours = 0;
+    const normGoal = normalizeStatCategoryTitle(g.title);
 
-    if (g.title === "שינה") {
+    if (normGoal === "שינה") {
       actualHours = stats.sleepMinutes / 60;
-    } else if (g.title === "עבודה") {
+    } else if (normGoal === "עבודה") {
       actualHours = stats.workMinutes / 60;
+    } else if (normGoal === "אוכל ומקלחת") {
+      actualHours = stats.foodShowerMinutes / 60;
+    } else if (normGoal === "זמן פנוי") {
+      actualHours = stats.freeMinutes / 60;
     } else {
-      actualHours = (stats.otherMap[g.title] || 0) / 60;
+      actualHours = (stats.otherMap[normGoal] || 0) / 60;
     }
 
     const target = g.weeklyHours * weeks;
@@ -3586,76 +3613,204 @@ function computeTargetStatuses(stats) {
 
   return results;
 }
+
+function formatShortDateHe(dk) {
+  if (!dk || dk === "undated") return "ללא תאריך";
+  const parts = dk.split("-");
+  if (parts.length !== 3) return dk;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function formatHoursClean(hours) {
+  const rounded = Math.round(hours * 100) / 100;
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(1).replace(/\.0$/, "");
+}
+
+function getCategorizedStatsItems(dates, user) {
+  const completedEvents = [];
+  const completedTasks = [];
+  const missedEvents = [];
+  const missedTasks = [];
+
+  if (!dates || !dates.length) {
+    return { completedEvents, completedTasks, missedEvents, missedTasks };
+  }
+
+  const now = new Date();
+  const todayKey = dateKeyFromDate(now);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const fromKey = dateKeyFromDate(dates[0]);
+  const toKey = dateKeyFromDate(dates[dates.length - 1]);
+  const fromTs = parseDateKey(fromKey).setHours(0, 0, 0, 0);
+  const toTs = parseDateKey(toKey).setHours(23, 59, 59, 999);
+
+  const seenIds = new Set();
+
+  dates.forEach((date) => {
+    const dk = dateKeyFromDate(date);
+    const dayEvents = state.cache.events?.[dk] || {};
+
+    Object.entries(dayEvents).forEach(([id, ev]) => {
+      if (!ev) return;
+      if (!isEventRelevantForUser(ev, user)) return;
+      if (isRoutineStatEvent(ev)) return;
+
+      // אם זה אב של סדרה חוזרת ויש לו מופע באותו יום, נדלג על האב כדי לא לספור פעמיים
+      if (ev.isRecurringParent && ev.recurring && ev.recurring !== "none") {
+        const instanceId = `${id}_${dk}`;
+        if (dayEvents[instanceId]) return;
+      }
+
+      const uniqueKey = `${dk}|${id}`;
+      if (seenIds.has(uniqueKey)) return;
+      seenIds.add(uniqueKey);
+
+      const item = {
+        ...ev,
+        _id: ev._id || id,
+        dateKey: dk,
+        effectiveDuration: getEffectiveDurationMinutes(ev)
+      };
+
+      const isDone = Boolean(ev.completed || ev.completedAt);
+      const isTask = ev.type === "task";
+
+      if (isDone) {
+        if (isTask) completedTasks.push(item);
+        else completedEvents.push(item);
+      } else {
+        // בדיקה אם האירוע/משימה כבר חלפו ללא ביצוע
+        let hasPassed = false;
+        if (dk < todayKey) {
+          hasPassed = true;
+        } else if (dk === todayKey) {
+          if (ev.startTime) {
+            const startMin = timeToMinutes(ev.startTime);
+            const endMin = ev.endTime
+              ? timeToMinutes(ev.endTime)
+              : startMin + getEffectiveDurationMinutes(ev);
+            hasPassed = endMin <= nowMinutes || startMin <= nowMinutes;
+          } else {
+            hasPassed = true;
+          }
+        }
+
+        if (hasPassed) {
+          if (isTask) missedTasks.push(item);
+          else missedEvents.push(item);
+        }
+      }
+    });
+  });
+
+  // משימות ללא תאריך ("undated") של המשתמש
+  const undatedEvents = state.cache.events?.["undated"] || {};
+  Object.entries(undatedEvents).forEach(([id, ev]) => {
+    if (!ev) return;
+    if (!isEventRelevantForUser(ev, user)) return;
+    if (isRoutineStatEvent(ev)) return;
+
+    const isDone = Boolean(ev.completed || ev.completedAt);
+    const isTask = (ev.type || "task") === "task";
+    const item = {
+      ...ev,
+      _id: ev._id || id,
+      dateKey: "undated",
+      effectiveDuration: getEffectiveDurationMinutes(ev)
+    };
+
+    if (isDone) {
+      const compTs = ev.completedAt || 0;
+      if (!compTs || (compTs >= fromTs && compTs <= toTs)) {
+        if (isTask) completedTasks.push(item);
+        else completedEvents.push(item);
+      }
+    }
+  });
+
+  const sortByDateAndTime = (a, b) => {
+    const da = a.dateKey || "";
+    const db = b.dateKey || "";
+    if (da !== db) return db.localeCompare(da);
+    return (a.startTime || "23:59").localeCompare(b.startTime || "23:59");
+  };
+
+  completedEvents.sort(sortByDateAndTime);
+  completedTasks.sort(sortByDateAndTime);
+  missedEvents.sort(sortByDateAndTime);
+  missedTasks.sort(sortByDateAndTime);
+
+  return {
+    completedEvents,
+    completedTasks,
+    missedEvents,
+    missedTasks
+  };
+}
+
 function updateStats() {
+  const currentRange = state.statsRange || "day";
   const stats = computeStats({
     user: state.currentUser,
-    range: state.statsRange || "week"
+    range: currentRange
   });
+
+  const userName = state.currentUser === "nana" ? "נוי (ננה)" : "בנימין";
+  const rangeInfoEl = el("statsRangeInfo");
+  if (rangeInfoEl) {
+    const dateLabel =
+      stats.fromKey === stats.toKey
+        ? formatShortDateHe(stats.fromKey)
+        : `${formatShortDateHe(stats.fromKey)} – ${formatShortDateHe(stats.toKey)}`;
+    rangeInfoEl.innerHTML = `
+      <span>👤 סטטיסטיקה: <strong>${userName}</strong></span>
+      <span>📅 ${dateLabel} (${stats.totalDays} ${stats.totalDays === 1 ? "יום" : "ימים"} • <strong>${stats.totalHours} שעות = 100%</strong>)</span>
+    `;
+  }
+
+  const centerEl = el("statsChartCenter");
+  if (centerEl) {
+    centerEl.innerHTML = `
+      <div class="stats-center-hours">${stats.totalHours} ש׳</div>
+      <div class="stats-center-sub">100% (${stats.totalDays === 1 ? "יממה" : stats.totalDays + " ימים"})</div>
+    `;
+  }
 
   const canvas = el("workFreeChart");
   if (!canvas || !window.Chart) return;
 
-  // ננקה תקציר וקטגוריות קודמות
-  canvas.parentElement.querySelector("#statsSummary")?.remove();
-  canvas.parentElement.querySelector("#statsLegend")?.remove();
-
-  const sleep = stats.sleepMinutes / 60;
-  const work  = stats.workMinutes / 60;
-
-  // ---- סיכום יעדים ----
-  const summary = document.createElement("div");
-  summary.id = "statsSummary";
-  summary.style.marginTop = "10px";
-
-summary.innerHTML = computeTargetStatuses(stats).map(t => {
-  const diff = Math.abs(t.diff).toFixed(1);
-
-  // טקסט חדש
-  const text =
-    t.status === "high" ? `אקסטרה ${diff} ש׳` :
-    t.status === "low"  ? `חסר ${diff} ש׳` :
-    `מדויק`;
-
-  // צבעים חדשים
-  const textColor =
-    t.status === "high" ? "#16a34a" : // ירוק – אקסטרה
-    t.status === "low"  ? "#dc2626" : // אדום – חסר
-    "#3b82f6";                         // כחול – מדויק
-
-  const dotColor = GOAL_COLORS[t.title] || "#9ca3af";
-
-  return `
-    <div style="display:flex;align-items:center;gap:8px;color:${textColor}">
-      <span style="
-        width:10px;
-        height:10px;
-        border-radius:50%;
-        background:${dotColor};
-        display:inline-block;
-      "></span>
-      <strong>${t.title}</strong> – ${text}
-    </div>
-  `;
-}).join("");
-  canvas.parentElement.appendChild(summary);
-
-  // ---- גרף ----
-  const otherLabels = Object.keys(stats.otherMap);
-  const otherValues = Object.values(stats.otherMap).map(v => v / 60);
+  const sleepHours = stats.sleepMinutes / 60;
+  const workHours = stats.workMinutes / 60;
+  const foodShowerHours = stats.foodShowerMinutes / 60;
   const freeHours = stats.freeMinutes / 60;
 
-  const labels = ["שינה", "עבודה", ...otherLabels, "זמן פנוי"];
-  const data = [sleep, work, ...otherValues, freeHours];
-  const total = data.reduce((a, b) => a + b, 0);
+  const otherEntries = Object.entries(stats.otherMap)
+    .filter(([, mins]) => mins > 0)
+    .sort((a, b) => b[1] - a[1]);
 
-  // צבעים ברורים לכל קטגוריה
+  const baseItems = [
+    { label: "עבודה", hours: workHours },
+    { label: "שינה", hours: sleepHours },
+    { label: "זמן פנוי", hours: freeHours },
+    { label: "אוכל ומקלחת", hours: foodShowerHours },
+    ...otherEntries.map(([label, mins]) => ({ label, hours: mins / 60 }))
+  ].filter((item) => item.hours > 0.001);
+
+  const labels = baseItems.map((i) => i.label);
+  const data = baseItems.map((i) => Number(i.hours.toFixed(2)));
+  const total = data.reduce((a, b) => a + b, 0) || stats.totalHours;
+
   const fallbackPalette = [
-    "#22c55e", // ירוק
-    "#a855f7", // סגול
-    "#f97316", // כתום
+    "#10b981", // ירוק אמרלד
     "#ec4899", // ורוד
-    "#0ea5e9", // טורקיז
-    "#64748b"  // אפור-כחלחל
+    "#06b6d4", // טורקיז
+    "#8b5cf6", // סגול
+    "#f43f5e", // קורל
+    "#eab308", // זהב
+    "#14b8a6", // טיל
+    "#6366f1"  // אינדיגו
   ];
   let fallbackIndex = 0;
   const colors = labels.map((l) => {
@@ -3666,66 +3821,90 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
   });
 
   // ---- מקרא צבעים (Legend) ----
-  const legend = document.createElement("div");
-  legend.id = "statsLegend";
-  legend.style.display = "flex";
-  legend.style.flexWrap = "wrap";
-  legend.style.gap = "8px 16px";
-  legend.style.marginTop = "10px";
+  const legendEl = el("statsLegend");
+  if (legendEl) {
+    legendEl.innerHTML = labels
+      .map((label, idx) => {
+        const hours = baseItems[idx].hours || 0;
+        const pct = total > 0 ? ((hours / total) * 100).toFixed(1) : "0.0";
+        const color = colors[idx];
+        return `
+          <div class="stats-legend-item">
+            <span class="stats-legend-dot" style="background:${color};"></span>
+            <span class="stats-legend-text">
+              <strong>${label}</strong>
+              <span class="stats-legend-val">${formatHoursClean(hours)} ש׳ (${pct}%)</span>
+            </span>
+          </div>
+        `;
+      })
+      .join("");
+  }
 
-  legend.innerHTML = labels.map((label, idx) => {
-    const hours = data[idx] || 0;
-    const pct = total > 0 ? ((hours / total) * 100).toFixed(1) : "0.0";
-    const color = colors[idx];
-    return `
-      <div style="display:flex;align-items:center;gap:6px;font-size:0.9rem;">
-        <span style="
-          width:12px;
-          height:12px;
-          border-radius:50%;
-          background:${color};
-          display:inline-block;
-        "></span>
-        <span><strong>${label}</strong> – ${hours.toFixed(2)} ש׳ (${pct}%)</span>
-      </div>
-    `;
-  }).join("");
-
-  canvas.parentElement.appendChild(legend);
-  canvas.parentElement.appendChild(summary);
+  // ---- סיכום יעדים ----
+  const summaryEl = el("statsSummary");
+  if (summaryEl) {
+    const targetStatuses = computeTargetStatuses(stats);
+    summaryEl.innerHTML = targetStatuses
+      .map((t) => {
+        const diff = Math.abs(t.diff).toFixed(1);
+        const text =
+          t.status === "high"
+            ? `אקסטרה ${diff} ש׳`
+            : t.status === "low"
+              ? `חסר ${diff} ש׳`
+              : `מדויק ביעד`;
+        const textColor =
+          t.status === "high"
+            ? "#4ade80"
+            : t.status === "low"
+              ? "#f87171"
+              : "#60a5fa";
+        const dotColor = GOAL_COLORS[t.title] || "#9ca3af";
+        return `
+          <div class="stats-goal-chip" style="color:${textColor}">
+            <span class="stats-legend-dot" style="background:${dotColor};"></span>
+            <strong>${t.title}:</strong> <span>${text}</span>
+          </div>
+        `;
+      })
+      .join("");
+  }
 
   const ctx = canvas.getContext("2d");
-
   if (!workFreeChart) {
     workFreeChart = new Chart(ctx, {
       type: "doughnut",
       data: {
         labels,
-        datasets: [{
-          data,
-          backgroundColor: colors
-        }]
+        datasets: [
+          {
+            data,
+            backgroundColor: colors,
+            borderWidth: 2,
+            borderColor: "rgba(15, 23, 42, 0.75)"
+          }
+        ]
       },
       options: {
-        cutout: "65%",
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "66%",
         plugins: {
+          legend: {
+            display: false
+          },
           tooltip: {
-  callbacks: {
-    label: (ctx) => {
-      const val = Number(ctx.raw) || 0;
-
-      // 🔥 זה המקור היחיד לאמת
-      const dataset = ctx.chart.data.datasets[0].data || [];
-      const total = dataset.reduce((a, b) => a + b, 0);
-
-      const pct = total > 0
-        ? ((val / total) * 100).toFixed(1)
-        : "0.0";
-
-      return `${ctx.label}: ${val.toFixed(2)} ש׳ (${pct}%)`;
-    }
-  }
-}
+            callbacks: {
+              label: (context) => {
+                const val = Number(context.raw) || 0;
+                const dataset = context.chart.data.datasets[0].data || [];
+                const sum = dataset.reduce((a, b) => a + b, 0);
+                const pct = sum > 0 ? ((val / sum) * 100).toFixed(1) : "0.0";
+                return `${context.label}: ${formatHoursClean(val)} ש׳ (${pct}%)`;
+              }
+            }
+          }
         }
       }
     });
@@ -3734,134 +3913,141 @@ summary.innerHTML = computeTargetStatuses(stats).map(t => {
     workFreeChart.data.datasets[0].data = data;
     workFreeChart.data.datasets[0].backgroundColor = colors;
     workFreeChart.update();
-   
-
-  }
-    // --- מאזיני סינון לפי תאריך (סטטיסטיקה) ---
-  const fromInput = el("completedFromDate");
-  const toInput   = el("completedToDate");
-
-  if (fromInput && !fromInput.dataset.bound) {
-    fromInput.dataset.bound = "1";
-   fromInput.onchange = () => { statsMarkManualDates(); renderCompletedCards(); };
-
   }
 
-  if (toInput && !toInput.dataset.bound) {
-    toInput.dataset.bound = "1";
-   toInput.onchange = () => { statsMarkManualDates(); renderCompletedCards(); };
-
-  }
-
-
-  
-  // ברירת מחדל: מהיום עד +30 יום
-
-  if (fromInput && !fromInput.value) {
-    const today = new Date();
-    fromInput.value = today.toISOString().slice(0, 10);
-  }
-
-  if (toInput && !toInput.value) {
-    const d = new Date();
-    d.setDate(d.getDate() + 30);
-    toInput.value = d.toISOString().slice(0, 10);
-  }
-
-  
- renderCompletedCards();
-
-// שחזור תאריכים שמורים
-const savedFrom = localStorage.getItem("bnapp_stats_from");
-const savedTo   = localStorage.getItem("bnapp_stats_to");
-
-if (fromInput && savedFrom) fromInput.value = savedFrom;
-if (toInput && savedTo) toInput.value = savedTo;
-
-// אם אין תאריכים שמורים ואין שינוי ידני – תן לברירת המחדל להיות "שעבר" לפי הטווח הנבחר
-if ((!savedFrom || !savedTo) && localStorage.getItem("bnapp_stats_manualDates") !== "1") {
-  statsApplyPresetDates(state.statsRange || "week");
+  renderCompletedCards(stats.dates);
 }
 
-}
-
-
-
-
-function renderCompletedCards() {
+function renderCompletedCards(datesOverride) {
   const container = el("statsCompleted");
   if (!container) return;
 
-  const from = el("completedFromDate")?.value;
-  const to   = el("completedToDate")?.value;
+  const dates = datesOverride || getStatsDates(state.statsRange || "day");
+  const {
+    completedEvents,
+    completedTasks,
+    missedEvents,
+    missedTasks
+  } = getCategorizedStatsItems(dates, state.currentUser);
 
-  const { tasks, events } = getCompletedItemsInRange(
-    state.statsRange || "week",
-    from,
-    to
-  );
+  if (!state.ui.openStatsTabs) {
+    state.ui.openStatsTabs = {};
+  }
 
-  container.innerHTML = "";
+  const ownerLabel = (owner) =>
+    owner === "shared" ? "משותף 👥" : owner === "nana" ? "נוי 💖" : "בנימין 💙";
 
-  const makeCardsHtml = (items) =>
-    items.map(i => `
-      <div class="stat-card">
-        <div class="stat-title">${i.title}</div>
-        <div class="stat-meta">👤 ${i.owner}</div>
+  const makeCardsHtml = (items, isCompletedList) => {
+    if (!items.length) {
+      return `<div class="stats-empty-tab">אין פריטים בקטגוריה זו בטווח הנבחר</div>`;
+    }
+    return items
+      .map((i) => {
+        const durHours = formatHoursClean((i.effectiveDuration || 60) / 60);
+        const timeStr =
+          i.startTime && i.endTime
+            ? `🕒 ${i.startTime}–${i.endTime} (${durHours} ש׳)`
+            : i.startTime
+              ? `🕒 ${i.startTime} (${durHours} ש׳)`
+              : `🕒 משך מחושב: ${durHours} ש׳`;
+        const safeId = String(i._id || i.id || "").replace(/'/g, "\\'");
+        const safeDk = String(i.dateKey || "").replace(/'/g, "\\'");
 
-        ${
-          i.startTime
-            ? `<div class="stat-meta">🕒 ${i.startTime}–${i.endTime}</div>`
-            : i.duration
-              ? `<div class="stat-meta">🕒 ${Math.round(i.duration / 60)} ש׳</div>`
-              : ""
-        }
+        return `
+          <div class="stat-card ${isCompletedList ? "stat-card-done" : "stat-card-missed"}">
+            <div class="stat-card-top">
+              <div class="stat-title">${i.title || "(ללא כותרת)"}</div>
+              <span class="stat-owner-badge">${ownerLabel(i.owner)}</span>
+            </div>
+            <div class="stat-card-meta-row">
+              <span>📅 ${formatShortDateHe(i.dateKey)}</span>
+              <span>${timeStr}</span>
+            </div>
+            <div class="stat-card-actions">
+              <button type="button" class="ghost-pill small ${isCompletedList ? "" : "stat-mark-done-btn"}"
+                onclick="toggleTaskDone({ _id: '${safeId}', dateKey: '${safeDk}', completed: ${isCompletedList ? "true" : "false"} })">
+                ${isCompletedList ? "↩ בטל בוצע" : "✔ סמן כבוצע"}
+              </button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  };
 
-        <div class="stat-meta">📅 ${i.dateKey}</div>
+  const sections = [
+    {
+      id: "tabCompletedEvents",
+      title: "אירועים שבוצעו",
+      items: completedEvents,
+      icon: "📅",
+      isCompleted: true,
+      badgeClass: "stat-tab-done"
+    },
+    {
+      id: "tabCompletedTasks",
+      title: "משימות שבוצעו",
+      items: completedTasks,
+      icon: "✔",
+      isCompleted: true,
+      badgeClass: "stat-tab-done"
+    },
+    {
+      id: "tabMissedEvents",
+      title: "אירועים שחלפו ללא ביצוע",
+      items: missedEvents,
+      icon: "⏳",
+      isCompleted: false,
+      badgeClass: "stat-tab-missed"
+    },
+    {
+      id: "tabMissedTasks",
+      title: "משימות שחלפו ללא ביצוע",
+      items: missedTasks,
+      icon: "⚠️",
+      isCompleted: false,
+      badgeClass: "stat-tab-missed"
+    }
+  ];
 
-        <button class="ghost-pill small"
-          onclick="toggleTaskDone({ _id: '${i._id}', dateKey: '${i.dateKey}', completed: true })">
-          ↩ בטל בוצע
-        </button>
-      </div>
-    `).join("");
-
-  const makeSection = (id, title, items, icon) => {
-    if (!items.length) return "";
-
-    return `
-      <div class="completed-section">
-       <h3 class="completed-header" data-toggle-id="${id}">
-
-          ${icon} ${title} (${items.length})
-        </h3>
-
-        <div id="${id}" class="completed-body hidden">
-          <div class="cards-grid">
-            ${makeCardsHtml(items)}
+  container.innerHTML = sections
+    .map((sec) => {
+      const isOpen = Boolean(state.ui.openStatsTabs[sec.id]);
+      return `
+        <div class="completed-section ${sec.badgeClass}">
+          <button type="button" class="completed-header" data-toggle-id="${sec.id}">
+            <span class="completed-header-title">${sec.icon} ${sec.title}</span>
+            <span class="completed-header-right">
+              <span class="completed-count-pill">${sec.items.length}</span>
+              <span class="completed-chevron">${isOpen ? "▲" : "▼"}</span>
+            </span>
+          </button>
+          <div id="${sec.id}" class="completed-body ${isOpen ? "" : "hidden"}">
+            <div class="cards-grid">
+              ${makeCardsHtml(sec.items, sec.isCompleted)}
+            </div>
           </div>
         </div>
-      </div>
-    `;
-  };
+      `;
+    })
+    .join("");
 
-  container.innerHTML =
-    makeSection("completedTasks", "משימות שבוצעו", tasks, "✔") +
-    makeSection("completedEvents", "אירועים שבוצעו", events, "📅");
-
-  container.querySelectorAll(".completed-header").forEach(h => {
-  h.onclick = () => {
-    const id = h.dataset.toggleId;
-    toggleCompletedSection(id);
-  };
-});
-
+  container.querySelectorAll(".completed-header").forEach((h) => {
+    h.onclick = () => {
+      const id = h.dataset.toggleId;
+      toggleCompletedSection(id);
+    };
+  });
 }
 
 function toggleCompletedSection(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.toggle("hidden");
+  const bodyEl = document.getElementById(id);
+  if (!bodyEl) return;
+  const isNowHidden = bodyEl.classList.toggle("hidden");
+  if (!state.ui.openStatsTabs) state.ui.openStatsTabs = {};
+  state.ui.openStatsTabs[id] = !isNowHidden;
+  const btn = document.querySelector(`.completed-header[data-toggle-id="${id}"] .completed-chevron`);
+  if (btn) btn.textContent = isNowHidden ? "▼" : "▲";
 }
 
 // ===============================
@@ -4164,54 +4350,51 @@ function statsMarkManualDates() {
   localStorage.setItem("bnapp_stats_manualDates", "1");
 
   const from = el("completedFromDate")?.value || "";
-  const to   = el("completedToDate")?.value || "";
+  const to = el("completedToDate")?.value || "";
   localStorage.setItem("bnapp_stats_from", from);
   localStorage.setItem("bnapp_stats_to", to);
 }
 
-function statsApplyPresetDates(range) {
-  // אם המשתמש שינה ידנית – לא לדרוס
-  if (localStorage.getItem("bnapp_stats_manualDates") === "1") return;
+function statsApplyPresetDates(range, force = false) {
+  if (!force && localStorage.getItem("bnapp_stats_manualDates") === "1") return;
 
   const fromInput = el("completedFromDate");
-  const toInput   = el("completedToDate");
+  const toInput = el("completedToDate");
   if (!fromInput || !toInput) return;
 
   const now = new Date();
   now.setHours(12, 0, 0, 0);
 
-  let fromDate = null;
-  let toDate = null;
+  let fromDate = new Date(now);
+  let toDate = new Date(now);
 
-  // תמיד עד אתמול (כדי שלא יהיה "על ההווה")
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  if (range === "week") {
-    toDate = yesterday;
-    fromDate = new Date(toDate);
+  if (range === "day") {
+    fromDate = new Date(now);
+    toDate = new Date(now);
+  } else if (range === "week") {
+    toDate = new Date(now);
+    fromDate = new Date(now);
     fromDate.setDate(fromDate.getDate() - 6);
+  } else if (range === "2weeks") {
+    toDate = new Date(now);
+    fromDate = new Date(now);
+    fromDate.setDate(fromDate.getDate() - 13);
   } else if (range === "month") {
     const y = now.getFullYear();
-    const m = now.getMonth(); // החודש הנוכחי (0-11)
-    // חודש שעבר:
-    fromDate = new Date(y, m - 1, 1);
-    toDate = new Date(y, m, 0);
+    const m = now.getMonth();
+    fromDate = new Date(y, m, 1, 12, 0, 0, 0);
+    toDate = new Date(y, m + 1, 0, 12, 0, 0, 0);
   } else if (range === "year") {
-    const y = now.getFullYear() - 1;
-    fromDate = new Date(y, 0, 1);
-    toDate = new Date(y, 11, 31);
-  } else {
-    return;
+    const y = now.getFullYear();
+    fromDate = new Date(y, 0, 1, 12, 0, 0, 0);
+    toDate = new Date(y, 11, 31, 12, 0, 0, 0);
   }
 
-  fromInput.value = fromDate.toISOString().slice(0, 10);
-  toInput.value   = toDate.toISOString().slice(0, 10);
+  fromInput.value = dateKeyFromDate(fromDate);
+  toInput.value = dateKeyFromDate(toDate);
 
   localStorage.setItem("bnapp_stats_from", fromInput.value);
   localStorage.setItem("bnapp_stats_to", toInput.value);
-
-  renderCompletedCards();
 }
 
 // =========================
@@ -4233,87 +4416,125 @@ if (savedUser) {
   initFirebaseListeners();
 
   el("btnOpenGoals").onclick = openGoalsModal;
-el("btnAddGoal").onclick = () => {
-  const title = el("goalTitle").value.trim();
-  const hours = Number(el("goalHours").value);
-  const owner = el("goalOwner").value;
+  el("btnAddGoal").onclick = () => {
+    const title = el("goalTitle").value.trim();
+    const hours = Number(el("goalHours").value);
+    const owner = el("goalOwner").value;
 
-  if (!title || isNaN(hours) || hours <= 0 || !owner) return;
+    if (!title || isNaN(hours) || hours <= 0 || !owner) return;
 
-  if (!state.goals[owner]) {
-    state.goals[owner] = {};
+    if (!state.goals[owner]) {
+      state.goals[owner] = {};
+    }
+
+    if (editingGoalId) {
+      state.goals[owner][editingGoalId] = {
+        ...state.goals[owner][editingGoalId],
+        title,
+        weeklyHours: hours
+      };
+    } else {
+      const id = Date.now();
+      state.goals[owner][id] = {
+        title,
+        weeklyHours: hours
+      };
+    }
+
+    update(ref(db, "goals"), state.goals);
+
+    editingGoalId = null;
+    el("goalTitle").value = "";
+    el("goalHours").value = "";
+    el("btnAddGoal").textContent = "הוסף מטרה";
+
+    el("goalsModal").classList.add("hidden");
+    renderGoals();
+    try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
+  };
+
+  // =========================
+  // Stats range selector & custom dates
+  // =========================
+  const rangeButtons = document.querySelectorAll("#statsRangeSelector .segmented-btn");
+  const fromInput = el("completedFromDate");
+  const toInput = el("completedToDate");
+  const customDatesCard = el("statsCustomDatesCard");
+  const btnToggleDates = el("btnToggleCustomDates");
+
+  // Initialize default range to "day" (24h = 100%)
+  localStorage.removeItem("bnapp_stats_manualDates");
+  statsApplyPresetDates(state.statsRange || "day", true);
+
+  rangeButtons.forEach((btn) => {
+    btn.onclick = () => {
+      rangeButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      state.statsRange = btn.dataset.range;
+      localStorage.removeItem("bnapp_stats_manualDates");
+      statsApplyPresetDates(state.statsRange, true);
+      updateStats();
+    };
+  });
+
+  if (btnToggleDates && customDatesCard) {
+    btnToggleDates.onclick = () => {
+      customDatesCard.classList.toggle("hidden");
+    };
   }
 
-  // ✏️ מצב עריכה
-  if (editingGoalId) {
-    state.goals[owner][editingGoalId] = {
-      ...state.goals[owner][editingGoalId],
-      title,
-      weeklyHours: hours
-    };
-  } 
-  // ➕ מצב הוספה
-  else {
-    const id = Date.now();
-    state.goals[owner][id] = {
-      title,
-      weeklyHours: hours
+  if (el("btnCloseCustomDates") && customDatesCard) {
+    el("btnCloseCustomDates").onclick = () => {
+      customDatesCard.classList.add("hidden");
     };
   }
 
-  update(ref(db, "goals"), state.goals);
+  if (el("btnStatsToday") && fromInput && toInput) {
+    el("btnStatsToday").onclick = () => {
+      const todayStr = dateKeyFromDate(new Date());
+      fromInput.value = todayStr;
+      toInput.value = todayStr;
+      state.statsRange = "day";
+      rangeButtons.forEach((b) => b.classList.toggle("active", b.dataset.range === "day"));
+      statsMarkManualDates();
+      updateStats();
+    };
+  }
 
-  // ניקוי מצב
-  editingGoalId = null;
-  el("goalTitle").value = "";
-  el("goalHours").value = "";
-  el("btnAddGoal").textContent = "הוסף מטרה";
+  if (el("btnStatsYesterday") && fromInput && toInput) {
+    el("btnStatsYesterday").onclick = () => {
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      const yStr = dateKeyFromDate(y);
+      fromInput.value = yStr;
+      toInput.value = yStr;
+      state.statsRange = "day";
+      rangeButtons.forEach((b) => b.classList.toggle("active", b.dataset.range === "day"));
+      statsMarkManualDates();
+      updateStats();
+    };
+  }
 
-  el("goalsModal").classList.add("hidden");
+  if (fromInput) {
+    fromInput.onchange = () => {
+      if (toInput && toInput.value && fromInput.value > toInput.value) {
+        toInput.value = fromInput.value;
+      }
+      statsMarkManualDates();
+      updateStats();
+    };
+  }
 
-// ===== Completed stats default date range =====
-const fromInput = el("completedFromDate");
-const toInput   = el("completedToDate");
-
-if (fromInput && toInput) {
-  const today = new Date();
-  const from = today.toISOString().slice(0, 10);
-
-  const future = new Date(today);
-  future.setDate(future.getDate() + 30);
-  const to = future.toISOString().slice(0, 10);
-
-  fromInput.value = from;
-  toInput.value = to;
-
-  fromInput.onchange = () => renderCompletedCards();
-  toInput.onchange = () => renderCompletedCards();
-}
-
-  
-  renderGoals();
-  try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
-};
-
-  
-// =========================
-// Stats range selector
-// =========================
-const rangeButtons = document.querySelectorAll("#statsRangeSelector .segmented-btn");
-
-rangeButtons.forEach(btn => {
-btn.onclick = () => {
-  rangeButtons.forEach(b => b.classList.remove("active"));
-  btn.classList.add("active");
-
-  state.statsRange = btn.dataset.range;
-
-  // ✅ אוטומטי לטווח "שעבר" (רק אם המשתמש לא שינה ידנית)
-  statsApplyPresetDates(state.statsRange);
-
-  updateStats();
-};
-});
+  if (toInput) {
+    toInput.onchange = () => {
+      if (fromInput && fromInput.value && toInput.value < fromInput.value) {
+        fromInput.value = toInput.value;
+      }
+      statsMarkManualDates();
+      updateStats();
+    };
+  }
 
   
   initGihari();

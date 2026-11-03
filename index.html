@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=blue13" />
-  <link rel="stylesheet" href="theme.css?v=blue13" />
+  <link rel="stylesheet" href="styles.css?v=blue14" />
+  <link rel="stylesheet" href="theme.css?v=blue14" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -31,7 +31,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue13"></script>
+  <script defer src="app.js?v=blue14"></script>
 </head>
 
 <body>
@@ -119,47 +119,50 @@
       </section>
 
       <section id="statsSection" class="screen">
-        <div class="section-header">
-
-          <button id="btnOpenGoals" class="ghost-pill small">
-  🎯 מטרות
-</button>
-
-
-<div id="statsRangeSelector">
-  <button class="segmented-btn active" data-range="day">יומי</button>
-  <button class="segmented-btn" data-range="week">שבועי</button>
-  <button class="segmented-btn" data-range="2weeks">שבועיים</button>
-  <button class="segmented-btn" data-range="month">חודשי</button>
-  <button class="segmented-btn" data-range="year">שנתי</button>
-</div>
-          
+        <div class="section-header stats-top-bar">
+          <div id="statsRangeSelector">
+            <button type="button" class="segmented-btn active" data-range="day">יומי</button>
+            <button type="button" class="segmented-btn" data-range="week">שבועי</button>
+            <button type="button" class="segmented-btn" data-range="2weeks">שבועיים</button>
+            <button type="button" class="segmented-btn" data-range="month">חודשי</button>
+            <button type="button" class="segmented-btn" data-range="year">שנתי</button>
+            <button type="button" class="segmented-btn" id="btnToggleCustomDates" data-range="custom">📅 תאריכים</button>
+          </div>
+          <button id="btnOpenGoals" type="button" class="ghost-pill small">🎯 מטרות</button>
           <h2>סטטיסטיקות</h2>
         </div>
-        <div class="card">
-          <canvas id="workFreeChart" height="150"></canvas>
+
+        <div id="statsCustomDatesCard" class="card stats-dates-card hidden">
+          <div class="grid-2">
+            <div class="field">
+              <label>מתאריך</label>
+              <input type="date" id="completedFromDate">
+            </div>
+            <div class="field">
+              <label>עד תאריך</label>
+              <input type="date" id="completedToDate">
+            </div>
+          </div>
+          <div class="stats-date-shortcuts">
+            <button type="button" id="btnStatsToday" class="ghost-pill small">היום (24 ש׳)</button>
+            <button type="button" id="btnStatsYesterday" class="ghost-pill small">אתמול (24 ש׳)</button>
+            <button type="button" id="btnCloseCustomDates" class="primary-pill small">אישור</button>
+          </div>
         </div>
-      
 
-<div class="card" style="margin-bottom:12px">
-  <div class="grid-2">
-    <div class="field">
-      <label>מתאריך</label>
-      <input type="date" id="completedFromDate">
-    </div>
-    <div class="field">
-      <label>עד תאריך</label>
-      <input type="date" id="completedToDate">
-    </div>
-  </div>
-</div>
+        <div class="card stats-chart-card">
+          <div id="statsRangeInfo" class="stats-range-info"></div>
+          <div class="stats-chart-layout">
+            <div class="stats-chart-wrap">
+              <canvas id="workFreeChart"></canvas>
+              <div id="statsChartCenter" class="stats-chart-center"></div>
+            </div>
+            <div id="statsLegend" class="stats-legend-box"></div>
+          </div>
+          <div id="statsSummary" class="stats-summary-box"></div>
+        </div>
 
-<div id="statsCompleted"></div>
-
-        
-
-
-        
+        <div id="statsCompleted" class="stats-tabs-stack"></div>
       </section>
 
       <section id="settingsSection" class="screen">
