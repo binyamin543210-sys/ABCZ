@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=blue14" />
-  <link rel="stylesheet" href="theme.css?v=blue14" />
+  <link rel="stylesheet" href="styles.css?v=blue15" />
+  <link rel="stylesheet" href="theme.css?v=blue15" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -31,7 +31,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue14"></script>
+  <script defer src="app.js?v=blue15"></script>
 </head>
 
 <body>
@@ -72,6 +72,14 @@
 
     <main>
       <section id="calendarSection" class="screen active">
+        <div class="calendar-top-strips">
+          <div id="specialCountdownsBar" class="special-countdowns-bar"></div>
+          <div id="calendarOwnerFilter" class="owner-quick-filter">
+            <button type="button" data-owner-filter="all" class="owner-filter-btn active">הכל</button>
+            <button type="button" data-owner-filter="mine" class="owner-filter-btn">רק שלי</button>
+            <button type="button" data-owner-filter="shared" class="owner-filter-btn">משותף 👥</button>
+          </div>
+        </div>
         <div class="weekday-row">
           <div>א'</div><div>ב'</div><div>ג'</div><div>ד'</div><div>ה'</div><div>ו'</div><div>ש'</div>
         </div>
@@ -79,42 +87,60 @@
       </section>
 
       <section id="tasksSection" class="screen">
-        <div class="section-header">
-         <h2>משימות / אירועים</h2>
-        <button id="btnAddTask" class="primary-pill">+ משימה / אירוע</button>
+        <div class="section-header tasks-header-bar">
+          <div id="tasksOwnerFilter" class="owner-quick-filter">
+            <button type="button" data-owner-filter="all" class="owner-filter-btn active">הכל</button>
+            <button type="button" data-owner-filter="mine" class="owner-filter-btn">רק שלי</button>
+            <button type="button" data-owner-filter="shared" class="owner-filter-btn">משותף 👥</button>
+          </div>
+          <div class="tasks-header-actions">
+            <button id="btnRolloverMissedTasks" type="button" class="ghost-pill small rollover-btn hidden">⏭️ העבר מאתמול להיום</button>
+            <button id="btnAddTask" class="primary-pill small">+ משימה / אירוע</button>
+          </div>
         </div>
-      <div class="segmented">
-  <!-- משימות -->
-  <button data-filter="undated" class="segmented-btn active">משימות ללא תאריך</button>
-  <button data-filter="dated" class="segmented-btn">משימות מתוארכות</button>
-  <button data-filter="recurring" class="segmented-btn">משימות חוזרות</button>
-
-  <!-- אירועים -->
-  <button data-filter="dated-events" class="segmented-btn">אירועים מתוארכים</button>
-  <button data-filter="recurring-events" class="segmented-btn">אירועים חוזרים</button>
-</div>
+        <div class="segmented" id="tasksTypeSegmented">
+          <button data-filter="undated" class="segmented-btn active">משימות ללא תאריך</button>
+          <button data-filter="dated" class="segmented-btn">משימות מתוארכות</button>
+          <button data-filter="recurring" class="segmented-btn">משימות חוזרות</button>
+          <button data-filter="dated-events" class="segmented-btn">אירועים מתוארכים</button>
+          <button data-filter="recurring-events" class="segmented-btn">אירועים חוזרים</button>
+        </div>
         <div id="tasksList" class="list-container"></div>
       </section>
 
       <section id="shoppingSection" class="screen">
         <div class="tabs-row">
-        <div class="segmented" id="shoppingTabs">
-          <button data-list="default" class="segmented-btn active">רגיל</button>
-          <button data-list="shabbat" class="segmented-btn">קניות לשבת</button>
-          <button data-list="pesach" class="segmented-btn">קניות לפסח</button>
-          <button data-list="holiday" class="segmented-btn">קניות לחג</button>
+          <div class="segmented" id="shoppingTabs">
+            <button data-list="default" class="segmented-btn active">רגיל</button>
+            <button data-list="shabbat" class="segmented-btn">קניות לשבת</button>
+            <button data-list="pesach" class="segmented-btn">קניות לפסח</button>
+            <button data-list="holiday" class="segmented-btn">קניות לחג</button>
+          </div>
+          <button id="btnRenameShoppingTab" type="button" class="ghost-pill small" title="שנה שם ללשונית">✏️</button>
         </div>
-        <button id="btnRenameShoppingTab" type="button" class="ghost-pill small" title="שנה שם ללשונית">✏️</button>
-        </div>
-        <div id="shoppingRenameBar" class="shopping-input-row hidden" style="margin-bottom:8px;">
+        <div id="shoppingRenameBar" class="shopping-input-row hidden" style="margin-bottom:6px;">
           <input id="shoppingTabNameInput" type="text" placeholder="שם חדש ללשונית..." />
           <button id="btnSaveShoppingTabName" type="button" class="primary-pill small">שמור שם</button>
           <button id="btnCancelShoppingTabName" type="button" class="ghost-pill small">ביטול</button>
         </div>
+
+        <div class="shopping-favorites-wrap">
+          <span class="fav-label">⭐ קבועים:</span>
+          <div id="shoppingFavoritesBar" class="shopping-favorites-bar"></div>
+          <button id="btnAddShoppingFav" type="button" class="ghost-pill small fav-add-btn" title="הוסף מוצר קבוע">+ קבוע</button>
+        </div>
+
         <div class="shopping-input-row">
-          <input id="shoppingInput" type="text" placeholder="הוסף פריט..." />
+          <input id="shoppingInput" type="text" placeholder="הוסף מוצר (למשל: חלב)..." />
+          <input id="shoppingQtyInput" type="number" min="1" max="99" value="1" class="shopping-qty-input" title="כמות" />
           <button id="btnAddShopping" class="primary-pill">+</button>
         </div>
+
+        <div class="shopping-toolbar">
+          <button id="btnToggleShoppingDepts" type="button" class="ghost-pill small active">🗂️ מיין לפי מחלקות בסופר</button>
+          <button id="btnClearCompletedShopping" type="button" class="ghost-pill small">🧹 נקה פריטים שנקנו</button>
+        </div>
+
         <ul id="shoppingList" class="list-container"></ul>
       </section>
 
@@ -150,6 +176,8 @@
           </div>
         </div>
 
+        <div id="statsInsightsBar" class="stats-insights-bar"></div>
+
         <div class="card stats-chart-card">
           <div id="statsRangeInfo" class="stats-range-info"></div>
           <div class="stats-chart-layout">
@@ -159,6 +187,7 @@
             </div>
             <div id="statsLegend" class="stats-legend-box"></div>
           </div>
+          <div class="stats-legend-hint">💡 לחץ על קטגוריה (כגון תחזוקת בית או פגישות) לפירוט מלא</div>
           <div id="statsSummary" class="stats-summary-box"></div>
         </div>
 
@@ -293,6 +322,33 @@
           <div class="field">
             <label>סיום</label>
             <input type="time" name="endTime" />
+          </div>
+        </div>
+
+        <div class="field time-quick-wheels">
+          <div class="reminder-chips" id="editQuickStartTimes" title="בחירת שעת התחלה מהירה">
+            <span class="quick-wheel-lbl">🕒 שעה:</span>
+            <button type="button" class="ghost-pill small" data-quick-start="08:00">08:00</button>
+            <button type="button" class="ghost-pill small" data-quick-start="09:00">09:00</button>
+            <button type="button" class="ghost-pill small" data-quick-start="10:00">10:00</button>
+            <button type="button" class="ghost-pill small" data-quick-start="12:00">12:00</button>
+            <button type="button" class="ghost-pill small" data-quick-start="14:00">14:00</button>
+            <button type="button" class="ghost-pill small" data-quick-start="16:00">16:00</button>
+            <button type="button" class="ghost-pill small" data-quick-start="17:00">17:00</button>
+            <button type="button" class="ghost-pill small" data-quick-start="18:00">18:00</button>
+            <button type="button" class="ghost-pill small" data-quick-start="19:00">19:00</button>
+            <button type="button" class="ghost-pill small" data-quick-start="20:00">20:00</button>
+            <button type="button" class="ghost-pill small" data-quick-start="21:00">21:00</button>
+            <button type="button" class="ghost-pill small" data-quick-start="22:00">22:00</button>
+          </div>
+          <div class="reminder-chips" id="editQuickDurations" style="margin-top:4px;" title="קיצור משך ושעת סיום">
+            <span class="quick-wheel-lbl">⏱️ משך:</span>
+            <button type="button" class="ghost-pill small" data-quick-dur="30">+30 דק׳</button>
+            <button type="button" class="ghost-pill small" data-quick-dur="45">+45 דק׳</button>
+            <button type="button" class="ghost-pill small active" data-quick-dur="60">+1 שעה</button>
+            <button type="button" class="ghost-pill small" data-quick-dur="90">+1.5 ש׳</button>
+            <button type="button" class="ghost-pill small" data-quick-dur="120">+2 שעות</button>
+            <button type="button" class="ghost-pill small" data-quick-dur="180">+3 שעות</button>
           </div>
         </div>
 
@@ -641,6 +697,55 @@
       <button id="btnReminderSnooze" class="ghost-pill full-width">⏰ הזכר לי שוב בעוד 10 דקות</button>
       <button id="btnReminderDismiss" class="ghost-pill full-width">סגור</button>
     </div>
+  </div>
+</div>
+
+<!-- SPECIAL COUNTDOWN EVENTS MODAL -->
+<div id="specialEventsModal" class="modal hidden">
+  <div class="modal-backdrop" data-close-special></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">🎉 ספירה לאחור לאירועים מיוחדים</div>
+      <button type="button" class="icon-btn" data-close-special>✕</button>
+    </div>
+    <div class="form">
+      <div class="grid-2">
+        <div class="field">
+          <label>שם האירוע</label>
+          <input id="specialEventTitle" type="text" placeholder="לדוגמה: יום נישואין / חופשה" />
+        </div>
+        <div class="field">
+          <label>תאריך</label>
+          <input id="specialEventDate" type="date" />
+        </div>
+      </div>
+      <div class="field">
+        <label>סמל</label>
+        <div class="reminder-chips" id="specialEmojiPicker">
+          <button type="button" class="ghost-pill small active" data-emoji="💍">💍 נישואין</button>
+          <button type="button" class="ghost-pill small" data-emoji="🎂">🎂 יום הולדת</button>
+          <button type="button" class="ghost-pill small" data-emoji="✈️">✈️ חופשה</button>
+          <button type="button" class="ghost-pill small" data-emoji="❤️">❤️ דייט מיוחד</button>
+          <button type="button" class="ghost-pill small" data-emoji="🎉">🎉 חגיגה</button>
+          <button type="button" class="ghost-pill small" data-emoji="🏠">🏠 בית</button>
+        </div>
+      </div>
+      <button id="btnAddSpecialEvent" type="button" class="primary-pill full-width">+ הוסף לספירה לאחור</button>
+    </div>
+    <div id="specialEventsList" class="list-container" style="margin-top:10px; max-height:220px; overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- STAT CATEGORY BREAKDOWN MODAL -->
+<div id="statCategoryBreakdownModal" class="modal hidden">
+  <div class="modal-backdrop" data-close-cat-breakdown></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title" id="statCategoryBreakdownTitle">📊 פירוט קטגוריה</div>
+      <button type="button" class="icon-btn" data-close-cat-breakdown>✕</button>
+    </div>
+    <div id="statCategoryBreakdownSub" class="task-meta" style="margin-bottom:8px;"></div>
+    <div id="statCategoryBreakdownList" class="list-container" style="max-height:320px; overflow-y:auto;"></div>
   </div>
 </div>
   

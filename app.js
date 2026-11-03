@@ -92,7 +92,9 @@ const state = {
     city: null,
     cityLat: null,
     cityLon: null,
-    cityTz: null
+    cityTz: null,
+    specialEvents: {},
+    shoppingFavorites: null
   },
 
   cache: {
@@ -100,22 +102,25 @@ const state = {
     shopping: {},
     holidays: {},
     holidaysLoadedYear: null,
-    shabbat: {}
+    shabbat: {},
+    lastStatsBreakdown: {}
   },
 
-ui: {
-  darkMode: false,
-  notificationsGranted: false,
-  statsManualRange: false,
-  openStatsTabs: { completedEvents: true }
-},
-
+  ui: {
+    darkMode: false,
+    notificationsGranted: false,
+    statsManualRange: false,
+    openStatsTabs: { tabCompletedEvents: true },
+    calendarOwnerFilter: "all",
+    tasksOwnerFilter: "all",
+    shoppingSortByDept: true
+  },
 
   // מטרות שבועיות – מנוהלות מדף סטטיסטיקות
-goals: {
-  binyamin: {},
-  nana: {}
-}
+  goals: {
+    binyamin: {},
+    nana: {}
+  }
 };
 
 const GOAL_COLORS = {
@@ -123,7 +128,14 @@ const GOAL_COLORS = {
   "עבודה": "#ef4444",         // אדום (10 שעות: 07:00–17:00)
   "אוכל ומקלחת": "#f59e0b",   // כתום (שעה: 17:00–18:00)
   "אוכל + מקלחת": "#f59e0b",  // כתום
-  "זמן פנוי": "#22c55e"       // ירוק (6 שעות: 18:00–00:00)
+  "זמן פנוי": "#22c55e",      // ירוק (6 שעות: 18:00–00:00)
+  "פגישות": "#8b5cf6",        // סגול
+  "תחזוקת בית": "#06b6d4",    // טורקיז
+  "כושר ובריאות": "#10b981",  // אמרלד
+  "לימודים והתפתחות": "#ec4899", // ורוד
+  "זוגיות ובילוי": "#f43f5e", // רוז
+  "כספים ובירוקרטיה": "#eab308", // זהב
+  "נסיעות ורכב": "#6366f1"    // אינדיגו
 };
 
 let editingGoalId = null;
@@ -131,6 +143,27 @@ let editingGoalId = null;
 const el = (id) => document.getElementById(id);
 const qs = (sel, root = document) => root.querySelector(sel);
 const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+function matchesQuickOwnerFilter(ev, filterMode = "all") {
+  if (!ev) return false;
+  if (!filterMode || filterMode === "all") return true;
+  const owner = ev.owner || "shared";
+  if (filterMode === "mine") return owner === state.currentUser;
+  if (filterMode === "shared") return owner === "shared";
+  return true;
+}
+
+function addMinutesToTimeStr(timeStr, minsToAdd) {
+  if (!timeStr) return "";
+  const [h, m] = timeStr.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return "";
+  let total = h * 60 + m + Number(minsToAdd || 60);
+  if (total >= 24 * 60) total = 23 * 60 + 59;
+  if (total < 0) total = 0;
+  const nh = String(Math.floor(total / 60)).padStart(2, "0");
+  const nm = String(total % 60).padStart(2, "0");
+  return `${nh}:${nm}`;
+}
 function isDefaultEvent(ev) {
   if (!ev) return false;
 
@@ -746,24 +779,24 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
     const holiday = state.cache.holidays[dateKey];
     const events = state.cache.events[dateKey] || {};
 
-const realEvents = Object.values(events).filter(
-  ev => !isDefaultEvent(ev)
-);
+    const realEvents = Object.values(events).filter(
+      (ev) => !isDefaultEvent(ev) && matchesQuickOwnerFilter(ev, state.ui.calendarOwnerFilter || "all")
+    );
     
     const header = document.createElement("div");
     header.className = "day-header";
 
     const dayNumEl = document.createElement("div");
     dayNumEl.className = "day-num";
-dayNumEl.textContent = dayNum;
+    dayNumEl.textContent = dayNum;
 
     const hebEl = document.createElement("div");
     hebEl.className = "day-hebrew";
-   const hebDay = hasHebcal()
-  ? new window.Hebcal.HDate(cellDate).getDate()
-  : null;
+    const hebDay = hasHebcal()
+      ? new window.Hebcal.HDate(cellDate).getDate()
+      : null;
 
-hebEl.textContent = hebDay ? toHebrewNumeral(hebDay) : "";
+    hebEl.textContent = hebDay ? toHebrewNumeral(hebDay) : "";
 
     header.appendChild(dayNumEl);
     header.appendChild(hebEl);
@@ -816,83 +849,349 @@ hebEl.textContent = hebDay ? toHebrewNumeral(hebDay) : "";
     pointsRow.className = "day-points";
 
     let eventCount = 0;
-Object.values(events).forEach((ev) => {
-  // ❌ לא מציג נקודה לאירועי ברירת מחדל
-if (isDefaultEvent(ev)) return;
+    realEvents.forEach((ev) => {
+      const dot = document.createElement("div");
+      dot.className = "event-dot";
+      if (ev.type === "task") dot.classList.add("task");
+      if (ev.owner) dot.classList.add(`owner-${ev.owner}`);
+      pointsRow.appendChild(dot);
+      eventCount++;
+    });
 
-  const dot = document.createElement("div");
-  dot.className = "event-dot";
-  if (ev.type === "task") dot.classList.add("task");
-  if (ev.owner) dot.classList.add(`owner-${ev.owner}`);
-  pointsRow.appendChild(dot);
-  eventCount++;
-});
-
-   if (realEvents.length > 0) cell.appendChild(pointsRow);
-if (realEvents.length >= 2) cell.classList.add("day-border-glow");
+    if (realEvents.length > 0) cell.appendChild(pointsRow);
+    if (realEvents.length >= 2) cell.classList.add("day-border-glow");
     if (outside) cell.classList.add("outside");
     if (isSameDay(cellDate, today)) cell.classList.add("day-cell-today");
 
     cell.addEventListener("click", () => openDayModal(cellDate));
     grid.appendChild(cell);
   }
+
+  renderSpecialCountdownsBar();
+}
+
+// =========================
+// Special Couple Countdowns Capsule
+// =========================
+function getSavedSpecialEvents() {
+  let local = {};
+  try {
+    const raw = localStorage.getItem("bnapp_special_events");
+    if (raw) local = JSON.parse(raw) || {};
+  } catch {}
+  return {
+    ...local,
+    ...(state.settings.specialEvents || {})
+  };
+}
+
+function renderSpecialCountdownsBar() {
+  const bar = el("specialCountdownsBar");
+  if (!bar) return;
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const todayKey = dateKeyFromDate(now);
+
+  const items = [];
+  const saved = getSavedSpecialEvents();
+  Object.entries(saved).forEach(([id, item]) => {
+    if (!item || !item.dateKey || !item.title) return;
+    const d = parseDateKey(item.dateKey);
+    d.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((d.getTime() - now.getTime()) / 86400000);
+    if (diffDays >= 0 && diffDays <= 365) {
+      items.push({
+        id,
+        title: item.title,
+        dateKey: item.dateKey,
+        emoji: item.emoji || "🎉",
+        diffDays,
+        isCustomSpecial: true
+      });
+    }
+  });
+
+  // זיהוי חכם של אירועים מיוחדים מתוך היומן (יום הולדת, יום נישואין, חופשה, טיסה וכו')
+  const SPECIAL_KEYWORDS = ["יום הולדת", "יומולדת", "יום נישואין", "נישואין", "חופשה", "טיסה", "מלון", "צימר", "חתונה"];
+  Object.entries(state.cache.events || {}).forEach(([dk, dayMap]) => {
+    if (!dk || dk === "undated" || dk < todayKey) return;
+    const d = parseDateKey(dk);
+    d.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((d.getTime() - now.getTime()) / 86400000);
+    if (diffDays < 0 || diffDays > 180) return;
+
+    Object.entries(dayMap || {}).forEach(([id, ev]) => {
+      if (!ev || isDefaultEvent(ev)) return;
+      const t = (ev.title || "").trim();
+      if (!SPECIAL_KEYWORDS.some((kw) => t.includes(kw))) return;
+      if (items.some((x) => x.title === t && x.dateKey === dk)) return;
+      let emoji = "🎉";
+      if (t.includes("הולדת") || t.includes("יומולדת")) emoji = "🎂";
+      else if (t.includes("נישואין")) emoji = "💍";
+      else if (t.includes("חופשה") || t.includes("טיסה") || t.includes("מלון") || t.includes("צימר")) emoji = "✈️";
+      items.push({
+        id,
+        title: t,
+        dateKey: dk,
+        emoji,
+        diffDays,
+        isCustomSpecial: false
+      });
+    });
+  });
+
+  items.sort((a, b) => a.diffDays - b.diffDays);
+
+  const pillsHtml = items
+    .slice(0, 4)
+    .map((it) => {
+      const daysTxt =
+        it.diffDays === 0
+          ? "היום! 🥳"
+          : it.diffDays === 1
+            ? "מחר! ✨"
+            : `בעוד ${it.diffDays} ימים`;
+      return `
+        <button type="button" class="countdown-capsule" onclick="openSpecialEventsModal()" title="${formatShortDateHe(it.dateKey)}">
+          <span class="cd-emoji">${it.emoji}</span>
+          <span class="cd-title">${it.title}</span>
+          <span class="cd-days">${daysTxt}</span>
+        </button>
+      `;
+    })
+    .join("");
+
+  bar.innerHTML = `
+    ${pillsHtml || `<button type="button" class="countdown-capsule empty" onclick="openSpecialEventsModal()">🎉 + הוסף ספירה לאחור לאירוע מיוחד</button>`}
+    ${items.length ? `<button type="button" class="countdown-add-btn" onclick="openSpecialEventsModal()" title="נהל אירועים מיוחדים">+🎉</button>` : ""}
+  `;
+}
+
+function openSpecialEventsModal() {
+  const modal = el("specialEventsModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+
+  const dateIn = el("specialEventDate");
+  if (dateIn && !dateIn.value) {
+    dateIn.value = dateKeyFromDate(new Date());
+  }
+
+  let selectedEmoji = qs("#specialEmojiPicker button.active")?.dataset.emoji || "💍";
+  qsa("#specialEmojiPicker button").forEach((btn) => {
+    btn.onclick = () => {
+      qsa("#specialEmojiPicker button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      selectedEmoji = btn.dataset.emoji || "🎉";
+    };
+  });
+
+  const renderSpecialList = () => {
+    const listEl = el("specialEventsList");
+    if (!listEl) return;
+    const saved = getSavedSpecialEvents();
+    const entries = Object.entries(saved).sort((a, b) =>
+      (a[1]?.dateKey || "").localeCompare(b[1]?.dateKey || "")
+    );
+    if (!entries.length) {
+      listEl.innerHTML = `<div class="stats-empty-tab">עדיין לא הוגדרו אירועים מיוחדים לספירה לאחור</div>`;
+      return;
+    }
+    listEl.innerHTML = entries
+      .map(
+        ([id, item]) => `
+        <div class="task-item" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;">
+          <div>
+            <div class="task-title">${item.emoji || "🎉"} ${item.title}</div>
+            <div class="task-meta">📅 ${formatShortDateHe(item.dateKey)}</div>
+          </div>
+          <button type="button" class="ghost-pill small" data-del-special="${id}">🗑</button>
+        </div>
+      `
+      )
+      .join("");
+
+    listEl.querySelectorAll("[data-del-special]").forEach((btn) => {
+      btn.onclick = async () => {
+        const id = btn.dataset.delSpecial;
+        const current = getSavedSpecialEvents();
+        delete current[id];
+        state.settings.specialEvents = current;
+        try {
+          localStorage.setItem("bnapp_special_events", JSON.stringify(current));
+        } catch {}
+        renderSpecialList();
+        renderSpecialCountdownsBar();
+        try {
+          await set(ref(db, "settings/specialEvents"), current);
+        } catch {}
+      };
+    });
+  };
+
+  renderSpecialList();
+
+  if (el("btnAddSpecialEvent")) {
+    el("btnAddSpecialEvent").onclick = async () => {
+      const title = (el("specialEventTitle")?.value || "").trim();
+      const dateKey = el("specialEventDate")?.value || "";
+      const emoji = qs("#specialEmojiPicker button.active")?.dataset.emoji || selectedEmoji || "🎉";
+      if (!title || !dateKey) {
+        showToast("נא להזין שם אירוע ותאריך");
+        return;
+      }
+      const id = "sp_" + Date.now();
+      const current = getSavedSpecialEvents();
+      current[id] = { title, dateKey, emoji };
+      state.settings.specialEvents = current;
+      try {
+        localStorage.setItem("bnapp_special_events", JSON.stringify(current));
+      } catch {}
+      if (el("specialEventTitle")) el("specialEventTitle").value = "";
+      renderSpecialList();
+      renderSpecialCountdownsBar();
+      showToast("🎉 נוסף לספירה לאחור!");
+      try {
+        await update(ref(db, "settings/specialEvents"), { [id]: { title, dateKey, emoji } });
+      } catch {}
+    };
+  }
+
+  qsa("[data-close-special]", modal).forEach((b) => {
+    b.onclick = () => modal.classList.add("hidden");
+  });
+}
+
+// =========================
+// Rollover Missed Tasks/Events from Past Days to Today
+// =========================
+function getPastUncompletedItemsForUser(typeFilter = "all") {
+  const todayKey = dateKeyFromDate(new Date());
+  const results = [];
+  Object.entries(state.cache.events || {}).forEach(([dk, dayMap]) => {
+    if (!dk || dk === "undated" || dk >= todayKey) return;
+    Object.entries(dayMap || {}).forEach(([id, ev]) => {
+      if (!ev) return;
+      if (isDefaultEvent(ev) || isRoutineStatEvent(ev)) return;
+      if (ev.completed || ev.completedAt) return;
+      if (ev.isRecurringParent && ev.recurring && ev.recurring !== "none") return;
+      if (!isEventRelevantForUser(ev, state.currentUser)) return;
+      if (typeFilter === "task" && ev.type !== "task") return;
+      if (typeFilter === "event" && ev.type === "task") return;
+      results.push({ ...ev, _id: ev._id || id, dateKey: dk });
+    });
+  });
+  return results;
+}
+
+function updateRolloverMissedButton() {
+  const btn = el("btnRolloverMissedTasks");
+  if (!btn) return;
+  const pastMissed = getPastUncompletedItemsForUser("all");
+  if (pastMissed.length > 0) {
+    btn.classList.remove("hidden");
+    btn.textContent = `⏭️ העבר ${pastMissed.length} שחלפו להיום`;
+    btn.onclick = () => rolloverPastUncompletedToToday("all");
+  } else {
+    btn.classList.add("hidden");
+  }
+}
+
+async function rolloverPastUncompletedToToday(typeFilter = "all") {
+  const items = getPastUncompletedItemsForUser(typeFilter);
+  if (!items.length) {
+    showToast("אין פריטים שחלפו להעברה להיום");
+    return;
+  }
+  const todayKey = dateKeyFromDate(new Date());
+  if (!state.cache.events[todayKey]) state.cache.events[todayKey] = {};
+
+  for (const item of items) {
+    const id = item._id || item.id;
+    const oldDk = item.dateKey;
+    if (!id || !oldDk || oldDk === todayKey) continue;
+
+    const updatedObj = {
+      ...item,
+      _id: id,
+      dateKey: todayKey
+    };
+    delete updatedObj.effectiveDuration;
+
+    state.cache.events[todayKey][id] = updatedObj;
+    if (state.cache.events[oldDk]) {
+      delete state.cache.events[oldDk][id];
+    }
+
+    try {
+      await set(ref(db, `events/${todayKey}/${id}`), updatedObj);
+      await remove(ref(db, `events/${oldDk}/${id}`));
+    } catch (e) {
+      console.warn("Rollover error:", e);
+    }
+  }
+
+  renderCalendar();
+  renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+  try { updateStats(); } catch {}
+  showToast(`⏭️ הועברו ${items.length} פריטים להיום!`);
 }
 
 // =========================
 // Tasks
 // =========================
 function renderTasks(filter = "undated") {
+  updateRolloverMissedButton();
   const list = el("tasksList");
   if (!list) return;
   list.innerHTML = "";
   const allTasks = [];
 
-Object.entries(state.cache.events).forEach(([dateKey, items]) => {
-  Object.entries(items || {}).forEach(([id, ev]) => {
+  Object.entries(state.cache.events).forEach(([dateKey, items]) => {
+    Object.entries(items || {}).forEach(([id, ev]) => {
+      // ⛔ לא מציג פריטים שבוצעו
+      if (ev.completed === true) return;
 
-    
-    // ⛔ לא מציג פריטים שבוצעו
-if (ev.completed === true) return;
+      // סינון מהיר לפי משתמש (הכל / רק שלי / משותף)
+      if (!matchesQuickOwnerFilter(ev, state.ui.tasksOwnerFilter || "all")) return;
 
+      // ⛔ חסימה מוחלטת של מופעי חזרות (משימות + אירועים)
+      if (ev.isRecurringInstance === true) {
+        return;
+      }
 
-    // ⛔ חסימה מוחלטת של מופעי חזרות (משימות + אירועים)
-if (ev.isRecurringInstance === true) {
-  return;
-}
+      // משימות רגילות – רק אם זה לא מופע
+      if (ev.type === "task" && !ev.isRecurringInstance) {
+        allTasks.push({ id, dateKey, ...ev });
+        return;
+      }
 
-  // משימות רגילות – רק אם זה לא מופע
-if (ev.type === "task" && !ev.isRecurringInstance) {
-  allTasks.push({ id, dateKey, ...ev });
-  return;
-}
-
-    // אירועים רגילים (לא חוזרים)
-// אירועים רגילים (לא חוזרים) – ❌ בלי ברירת מחדל
-if (
-  ev.type === "event" &&
-  (!ev.recurring || ev.recurring === "none") &&
-  !isDefaultEvent(ev)
-) {
-  allTasks.push({ id, dateKey, ...ev });
-  return;
-}
-    // אירועים חוזרים בלבד
-    if (
-  ev.type === "event" &&
-  ev.recurring &&
-  ev.recurring !== "none" &&
-  ev.isRecurringParent === true
-) {
-      allTasks.push({
-        id,
-        dateKey,
-        ...ev,
-        __recurringEvent: true
-      });
-    }
-
+      // אירועים רגילים (לא חוזרים) – ❌ בלי ברירת מחדל
+      if (
+        ev.type === "event" &&
+        (!ev.recurring || ev.recurring === "none") &&
+        !isDefaultEvent(ev)
+      ) {
+        allTasks.push({ id, dateKey, ...ev });
+        return;
+      }
+      // אירועים חוזרים בלבד
+      if (
+        ev.type === "event" &&
+        ev.recurring &&
+        ev.recurring !== "none" &&
+        ev.isRecurringParent === true
+      ) {
+        allTasks.push({
+          id,
+          dateKey,
+          ...ev,
+          __recurringEvent: true
+        });
+      }
+    });
   });
-});
 
  const urgencyRank = {
   today: 0,
@@ -1352,26 +1651,72 @@ function openEditModal({ dateKey, id } = {}) {
   qsa("[data-close-modal]", modal).forEach((btn) => (btn.onclick = () => modal.classList.add("hidden")));
   const bd = qs(".modal-backdrop", modal);
   if (bd) bd.onclick = () => modal.classList.add("hidden");
-// =========================
-  // Live time validation (before save)
+
+  // =========================
+  // גלגלת שעות מהירה + חישוב אוטומטי של שעת סיום ומשך
   // =========================
   const startInput = form.elements["startTime"];
   const endInput = form.elements["endTime"];
+  const durInput = form.elements["duration"];
+
+  const getActiveQuickDur = () => {
+    const activeBtn = qs("#editQuickDurations button.active");
+    return activeBtn ? Number(activeBtn.dataset.quickDur || 60) : 60;
+  };
+
+  const applyStartAndDuration = (startStr, durMins) => {
+    if (!startStr) return;
+    startInput.value = startStr;
+    const endStr = addMinutesToTimeStr(startStr, durMins);
+    if (endStr) endInput.value = endStr;
+    if (durInput) durInput.value = String(durMins);
+    qsa("#editQuickStartTimes button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.quickStart === startStr);
+    });
+  };
+
+  qsa("#editQuickStartTimes button").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.quickStart === startInput.value);
+    btn.onclick = () => {
+      const startStr = btn.dataset.quickStart;
+      applyStartAndDuration(startStr, getActiveQuickDur());
+    };
+  });
+
+  qsa("#editQuickDurations button").forEach((btn) => {
+    btn.onclick = () => {
+      qsa("#editQuickDurations button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const durMins = Number(btn.dataset.quickDur || 60);
+      if (!startInput.value) {
+        const now = new Date();
+        const nextHour = String(Math.min(22, now.getHours() + 1)).padStart(2, "0") + ":00";
+        startInput.value = nextHour;
+      }
+      applyStartAndDuration(startInput.value, durMins);
+    };
+  });
 
   function validateTimesLive() {
     const start = startInput.value;
     const end = endInput.value;
 
-    if (start && end && isEndBeforeStart(start, end)) {
-      showToast("⛔ שעת סיום חייבת להיות אחרי שעת התחלה");
-      endInput.value = "";
-      endInput.focus();
+    if (start && (!end || isEndBeforeStart(start, end))) {
+      // בחירה אוטומטית של שעת סיום לפי המשך הפעיל (ברירת מחדל שעה קדימה)
+      const autoEnd = addMinutesToTimeStr(start, getActiveQuickDur());
+      if (autoEnd) endInput.value = autoEnd;
     }
   }
 
   startInput.onchange = validateTimesLive;
-  endInput.onchange = validateTimesLive;
-  
+  endInput.onchange = () => {
+    const start = startInput.value;
+    const end = endInput.value;
+    if (start && end && isEndBeforeStart(start, end)) {
+      showToast("⛔ שעת סיום חייבת להיות אחרי שעת התחלה");
+      endInput.value = addMinutesToTimeStr(start, 60);
+    }
+  };
 }
 
 async function handleEditFormSubmit(ev) {
@@ -1691,13 +2036,35 @@ function initBottomNav() {
 }
 
 function initTasksFilters() {
-  const btns = qsa("#tasksSection .segmented-btn");
+  const btns = qsa("#tasksTypeSegmented .segmented-btn");
   btns.forEach((btn) => {
     btn.addEventListener("click", () => {
       btns.forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       renderTasks(btn.dataset.filter);
     });
+  });
+
+  // מתגי סינון מהיר בלוח השנה (הכל | רק שלי | משותף)
+  const calOwnerBtns = qsa("#calendarOwnerFilter .owner-filter-btn");
+  calOwnerBtns.forEach((btn) => {
+    btn.onclick = () => {
+      calOwnerBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.ui.calendarOwnerFilter = btn.dataset.ownerFilter || "all";
+      renderCalendar();
+    };
+  });
+
+  // מתגי סינון מהיר בדף משימות (הכל | רק שלי | משותף)
+  const taskOwnerBtns = qsa("#tasksOwnerFilter .owner-filter-btn");
+  taskOwnerBtns.forEach((btn) => {
+    btn.onclick = () => {
+      taskOwnerBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.ui.tasksOwnerFilter = btn.dataset.ownerFilter || "all";
+      renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+    };
   });
 }
 
@@ -1707,6 +2074,154 @@ const DEFAULT_SHOPPING_TAB_NAMES = {
   pesach: "קניות לפסח",
   holiday: "קניות לחג"
 };
+
+const DEFAULT_SHOPPING_FAVORITES = [
+  "חלב",
+  "לחם",
+  "ביצים",
+  "גבינה צהובה",
+  "קוטג׳",
+  "מלפפונים",
+  "עגבניות",
+  "חזה עוף",
+  "נייר טואלט"
+];
+
+const SHOPPING_DEPARTMENTS = [
+  {
+    name: "🥒 ירקות ופירות",
+    keywords: [
+      "עגבנ", "מלפפון", "בצל", "תפוח", "גזר", "חסה", "פלפל", "גמבה", "אבוקדו",
+      "לימון", "בננה", "פטריות", "כוסברה", "פטרוזיליה", "שום", "תפוז", "אבטיח",
+      "ענבים", "תות", "בטטה", "קישוא", "חציל", "כרוב", "כרובית", "ברוקולי",
+      "סלרי", "שמיר", "נענע", "מנגו", "אפרסק", "אגס", "שזיף", "קלמנטינה", "ירקות", "פירות"
+    ]
+  },
+  {
+    name: "🥛 חלב וביצים",
+    keywords: [
+      "חלב", "גבינ", "קוטג", "יוגורט", "חמאה", "שמנת", "ביצ", "מעדן", "לבנה",
+      "שוקו", "מילקי", "צהובה", "בולגרית", "מוצרלה", "ריקוטה", "פרמזן", "קפיר", "אשל", "גיל"
+    ]
+  },
+  {
+    name: "🍞 לחם ומאפים",
+    keywords: [
+      "לחם", "פית", "פיתה", "לחמנ", "חלה", "חלות", "בגט", "טורטיה", "קרואסון",
+      "מאפה", "בורקס", "עוגה", "בייגלה"
+    ]
+  },
+  {
+    name: "🥩 בשר, עוף ודגים",
+    keywords: [
+      "עוף", "חזה", "בשר", "בקר", "טחון", "סטייק", "שניצל", "נקניק", "סלמון",
+      "דג", "טונה", "פרגית", "פרגיות", "כנפיים", "קבב", "המבורגר", "אנטריקוט", "הודו", "פסטרמה"
+    ]
+  },
+  {
+    name: "🥫 מזווה ויבשים",
+    keywords: [
+      "אורז", "פסטה", "פתיתים", "קוסקוס", "שמן", "קמח", "סוכר", "מלח", "תבלין",
+      "רסק", "שימורים", "זיתים", "חומוס", "טחינה", "עדשים", "שעועית", "דבש",
+      "ריבה", "קורנפלקס", "שיבולת שועל", "קטשופ", "מיונז", "חרדל", "סויה", "טריאקי", "מרק", "אבקת אפייה"
+    ]
+  },
+  {
+    name: "❄️ קפואים",
+    keywords: [
+      "קפוא", "גליד", "צ'יפס", "ציפס", "פיצה", "מלאווח", "ג'חנון", "אפונה", "תירס קפוא", "שניצל תירס"
+    ]
+  },
+  {
+    name: "🧴 ניקיון וטואלטיקה",
+    keywords: [
+      "נייר טואלט", "סבון", "שמפו", "מרכך", "משחת שיניים", "אקונומיקה", "כביסה",
+      "מגבונים", "סקוטש", "שקיות אשפה", "זבל", "נוזל כלים", "פיירי", "דאודורנט",
+      "נייר סופג", "אלומיניום", "ניילון נצמד", "סמרטוט", "נוזל רצפות"
+    ]
+  },
+  {
+    name: "🍫 חטיפים ומתוקים",
+    keywords: [
+      "שוקולד", "במבה", "ביסלי", "חטיף", "עוגיות", "וופל", "פיצוחים", "גרעינים",
+      "שקדים", "אגוזים", "סוכריות", "מסטיק", "בייגלה", "תפוצ'יפס", "דוריטוס", "מרשמלו"
+    ]
+  },
+  {
+    name: "🥤 שתייה ויין",
+    keywords: [
+      "מים", "קולה", "זירו", "סודה", "מיץ", "בירה", "יין", "תירוש", "קפה",
+      "נס קפה", "תה", "אספרסו", "קפסולות", "תרכיז", "פיוז טי", "ספרייט", "פאנטה", "XL", "אקסל"
+    ]
+  }
+];
+
+function classifyShoppingDepartment(text) {
+  const clean = (text || "").trim().toLowerCase();
+  for (const dept of SHOPPING_DEPARTMENTS) {
+    if (dept.keywords.some((kw) => clean.includes(kw))) {
+      return dept.name;
+    }
+  }
+  return "📦 כללי";
+}
+
+function getSavedShoppingFavorites() {
+  if (Array.isArray(state.settings.shoppingFavorites) && state.settings.shoppingFavorites.length) {
+    return state.settings.shoppingFavorites;
+  }
+  try {
+    const raw = localStorage.getItem("bnapp_shopping_favorites");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    }
+  } catch {}
+  return [...DEFAULT_SHOPPING_FAVORITES];
+}
+
+async function saveShoppingFavoritesList(favs) {
+  state.settings.shoppingFavorites = favs;
+  try {
+    localStorage.setItem("bnapp_shopping_favorites", JSON.stringify(favs));
+  } catch {}
+  renderShoppingFavoritesBar();
+  try {
+    await update(ref(db, "settings"), { shoppingFavorites: favs });
+  } catch {}
+}
+
+function renderShoppingFavoritesBar() {
+  const bar = el("shoppingFavoritesBar");
+  if (!bar) return;
+  const favs = getSavedShoppingFavorites();
+  bar.innerHTML = favs
+    .map(
+      (fav, idx) => `
+      <span class="fav-chip">
+        <button type="button" class="fav-chip-add" data-fav-name="${fav.replace(/"/g, "&quot;")}">+ ${fav}</button>
+        <button type="button" class="fav-chip-del" data-fav-idx="${idx}" title="הסר מהקבועים">×</button>
+      </span>
+    `
+    )
+    .join("");
+
+  bar.querySelectorAll(".fav-chip-add").forEach((btn) => {
+    btn.onclick = () => {
+      const name = btn.dataset.favName;
+      if (name) addOrIncrementShoppingItem(name, 1);
+    };
+  });
+
+  bar.querySelectorAll(".fav-chip-del").forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.favIdx);
+      const next = getSavedShoppingFavorites().filter((_, i) => i !== idx);
+      saveShoppingFavoritesList(next);
+    };
+  });
+}
 
 function getSavedShoppingTabNames() {
   let localNames = {};
@@ -1776,10 +2291,11 @@ async function saveShoppingTabName() {
 
 function initShopping() {
   applyShoppingTabNames();
+  renderShoppingFavoritesBar();
+
   const listTabs = qsa("#shoppingSection .segmented-btn");
   listTabs.forEach((btn) => {
     btn.addEventListener("click", () => {
-      const wasActive = btn.classList.contains("active");
       listTabs.forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       renderShoppingList();
@@ -1826,7 +2342,64 @@ function initShopping() {
       }
     });
   }
-  el("btnAddShopping").onclick = addShoppingItem;
+  if (el("btnAddShopping")) {
+    el("btnAddShopping").onclick = addShoppingItem;
+  }
+
+  if (el("btnAddShoppingFav")) {
+    el("btnAddShoppingFav").onclick = () => {
+      const input = el("shoppingInput");
+      const val = (input?.value || "").trim();
+      if (!val) {
+        showToast("הקלד שם מוצר בשורת ההוספה ולחץ על '+ קבוע'");
+        input?.focus();
+        return;
+      }
+      const favs = getSavedShoppingFavorites();
+      if (!favs.includes(val)) {
+        favs.push(val);
+        saveShoppingFavoritesList(favs);
+        showToast(`⭐ "${val}" נוסף למוצרים הקבועים!`);
+      } else {
+        showToast("המוצר כבר נמצא בקבועים");
+      }
+      if (input) input.value = "";
+    };
+  }
+
+  if (el("btnToggleShoppingDepts")) {
+    el("btnToggleShoppingDepts").onclick = () => {
+      state.ui.shoppingSortByDept = !state.ui.shoppingSortByDept;
+      el("btnToggleShoppingDepts").classList.toggle("active", state.ui.shoppingSortByDept);
+      el("btnToggleShoppingDepts").textContent = state.ui.shoppingSortByDept
+        ? "🗂️ מיין לפי מחלקות בסופר"
+        : "📋 תצוגת רשימה רגילה";
+      renderShoppingList();
+    };
+  }
+
+  if (el("btnClearCompletedShopping")) {
+    el("btnClearCompletedShopping").onclick = async () => {
+      const listKey = getCurrentShoppingListKey();
+      const itemsObj = state.cache.shopping[listKey] || {};
+      const completedIds = Object.entries(itemsObj)
+        .filter(([, it]) => it && it.completed)
+        .map(([id]) => id);
+
+      if (!completedIds.length) {
+        showToast("אין פריטים שסומנו ב-✔ למחיקה");
+        return;
+      }
+      for (const id of completedIds) {
+        if (state.cache.shopping[listKey]) delete state.cache.shopping[listKey][id];
+        try {
+          await remove(ref(db, `shopping/${listKey}/${id}`));
+        } catch {}
+      }
+      renderShoppingList();
+      showToast(`🧹 נוקו ${completedIds.length} פריטים שנקנו!`);
+    };
+  }
 }
 
 function getCurrentShoppingListKey() {
@@ -1834,14 +2407,60 @@ function getCurrentShoppingListKey() {
   return active ? (active.dataset.list || "default") : "default";
 }
 
+function addOrIncrementShoppingItem(rawText, defaultQty = 1) {
+  let text = (rawText || "").trim();
+  if (!text) return;
+
+  let qty = Math.max(1, Number(defaultQty) || 1);
+  // זיהוי כמות מתוך הטקסט (למשל "חלב x3" או "חלב 3")
+  const matchQty = text.match(/^(.*?)\s+[xX×*]?\s*(\d+)$/);
+  if (matchQty && matchQty[1].trim()) {
+    text = matchQty[1].trim();
+    qty = Math.max(1, parseInt(matchQty[2], 10));
+  }
+
+  const listKey = getCurrentShoppingListKey();
+  const itemsObj = state.cache.shopping[listKey] || {};
+
+  // אם המוצר כבר קיים ברשימה ועדיין לא סומן כנקנה -> נגדיל את הכמות שלו!
+  const existingEntry = Object.entries(itemsObj).find(
+    ([, it]) => it && !it.completed && (it.text || "").trim() === text
+  );
+
+  if (existingEntry) {
+    const [existingId, existingItem] = existingEntry;
+    const nextQty = (Number(existingItem.qty) || 1) + qty;
+    if (state.cache.shopping[listKey]?.[existingId]) {
+      state.cache.shopping[listKey][existingId].qty = nextQty;
+    }
+    renderShoppingList();
+    update(ref(db, `shopping/${listKey}/${existingId}`), { qty: nextQty });
+    showToast(`🛒 עודכנה כמות: ${text} (x${nextQty})`);
+    return;
+  }
+
+  const newRef = push(ref(db, `shopping/${listKey}`));
+  const newItem = {
+    text,
+    qty,
+    dept: classifyShoppingDepartment(text),
+    completed: false
+  };
+  if (!state.cache.shopping[listKey]) state.cache.shopping[listKey] = {};
+  if (newRef.key) state.cache.shopping[listKey][newRef.key] = newItem;
+  renderShoppingList();
+  set(newRef, newItem);
+}
+
 function addShoppingItem() {
   const input = el("shoppingInput");
-  const text = (input.value || "").trim();
+  const qtyInput = el("shoppingQtyInput");
+  const text = (input?.value || "").trim();
   if (!text) return;
-  const listKey = getCurrentShoppingListKey();
-  const newRef = push(ref(db, `shopping/${listKey}`));
-  set(newRef, { text, completed: false });
-  input.value = "";
+  const qty = Math.max(1, Number(qtyInput?.value) || 1);
+  addOrIncrementShoppingItem(text, qty);
+  if (input) input.value = "";
+  if (qtyInput) qtyInput.value = "1";
 }
 
 function renderShoppingList() {
@@ -1851,20 +2470,73 @@ function renderShoppingList() {
 
   const listKey = getCurrentShoppingListKey();
   const itemsObj = state.cache.shopping[listKey] || {};
-  Object.entries(itemsObj).forEach(([id, item]) => {
+  const entries = Object.entries(itemsObj).map(([id, item]) => ({
+    id,
+    ...item,
+    qty: Math.max(1, Number(item?.qty) || 1),
+    dept: item?.dept || classifyShoppingDepartment(item?.text || "")
+  }));
+
+  if (!entries.length) {
+    ul.innerHTML = `<li class="stats-empty-tab">הרשימה ריקה – הוסף מוצרים או לחץ על הקבועים למעלה ⭐</li>`;
+    return;
+  }
+
+  const createShoppingItemLi = (entry) => {
+    const { id, text, qty, completed } = entry;
     const li = document.createElement("li");
     li.className = "shopping-item";
-    if (item.completed) li.classList.add("completed");
+    if (completed) li.classList.add("completed");
+
+    const labelWrap = document.createElement("div");
+    labelWrap.className = "shopping-item-main";
 
     const label = document.createElement("span");
-    label.textContent = item.text;
+    label.className = "shopping-item-title";
+    label.textContent = text;
+    labelWrap.appendChild(label);
+
+    const qtyBox = document.createElement("div");
+    qtyBox.className = "shopping-qty-controls";
+
+    const minusBtn = document.createElement("button");
+    minusBtn.type = "button";
+    minusBtn.className = "qty-step-btn";
+    minusBtn.textContent = "−";
+    minusBtn.onclick = () => {
+      const next = Math.max(1, qty - 1);
+      update(ref(db, `shopping/${listKey}/${id}`), { qty: next });
+    };
+
+    const qtyBadge = document.createElement("span");
+    qtyBadge.className = "shopping-qty-badge";
+    qtyBadge.textContent = `x${qty}`;
+
+    const plusBtn = document.createElement("button");
+    plusBtn.type = "button";
+    plusBtn.className = "qty-step-btn";
+    plusBtn.textContent = "+";
+    plusBtn.onclick = () => {
+      const next = qty + 1;
+      update(ref(db, `shopping/${listKey}/${id}`), { qty: next });
+    };
+
+    qtyBox.appendChild(minusBtn);
+    qtyBox.appendChild(qtyBadge);
+    qtyBox.appendChild(plusBtn);
+
+    const actionsBox = document.createElement("div");
+    actionsBox.className = "shopping-item-actions";
 
     const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
     toggleBtn.className = "ghost-pill small";
-    toggleBtn.textContent = item.completed ? "בטל ✔" : "✔";
-    toggleBtn.onclick = () => update(ref(db, `shopping/${listKey}/${id}`), { completed: !item.completed });
+    toggleBtn.textContent = completed ? "בטל ✔" : "✔";
+    toggleBtn.onclick = () =>
+      update(ref(db, `shopping/${listKey}/${id}`), { completed: !completed });
 
     const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
     deleteBtn.className = "ghost-pill small";
     deleteBtn.textContent = "🗑";
     deleteBtn.onclick = async () => {
@@ -1872,10 +2544,39 @@ function renderShoppingList() {
       showToast("נמחק");
     };
 
-    li.appendChild(label);
-    li.appendChild(toggleBtn);
-    li.appendChild(deleteBtn);
-    ul.appendChild(li);
+    actionsBox.appendChild(qtyBox);
+    actionsBox.appendChild(toggleBtn);
+    actionsBox.appendChild(deleteBtn);
+
+    li.appendChild(labelWrap);
+    li.appendChild(actionsBox);
+    return li;
+  };
+
+  if (!state.ui.shoppingSortByDept) {
+    entries
+      .sort((a, b) => Number(Boolean(a.completed)) - Number(Boolean(b.completed)))
+      .forEach((entry) => ul.appendChild(createShoppingItemLi(entry)));
+    return;
+  }
+
+  // קיבוץ אוטומטי לפי מחלקות בסופר
+  const deptGroups = {};
+  entries.forEach((entry) => {
+    const d = entry.dept || "📦 כללי";
+    if (!deptGroups[d]) deptGroups[d] = [];
+    deptGroups[d].push(entry);
+  });
+
+  Object.entries(deptGroups).forEach(([deptName, groupItems]) => {
+    const headerLi = document.createElement("li");
+    headerLi.className = "shopping-dept-header";
+    headerLi.innerHTML = `<span>${deptName}</span><span class="dept-count">${groupItems.length}</span>`;
+    ul.appendChild(headerLi);
+
+    groupItems
+      .sort((a, b) => Number(Boolean(a.completed)) - Number(Boolean(b.completed)))
+      .forEach((entry) => ul.appendChild(createShoppingItemLi(entry)));
   });
 }
 
@@ -1901,16 +2602,15 @@ function initFirebaseListeners() {
     state.cache.events = snap.val() || {};
     migrateDefaultsOnce();
     renderCalendar();
-    renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
+    renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
     try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
     checkDueReminders();
   });
 
-  onValue(ref(db, "goals"), snap => {
-  state.goals = snap.val() || {};
-  updateStats();
-});
-
+  onValue(ref(db, "goals"), (snap) => {
+    state.goals = snap.val() || {};
+    updateStats();
+  });
 
   onValue(ref(db, "shopping"), (snap) => {
     state.cache.shopping = snap.val() || {};
@@ -1926,26 +2626,42 @@ function initFirebaseListeners() {
     if (settings.shoppingTabNames) {
       state.settings.shoppingTabNames = settings.shoppingTabNames;
       try {
-        localStorage.setItem("bnapp_shopping_tab_names", JSON.stringify({
-          ...getSavedShoppingTabNames(),
-          ...settings.shoppingTabNames
-        }));
+        localStorage.setItem(
+          "bnapp_shopping_tab_names",
+          JSON.stringify({
+            ...getSavedShoppingTabNames(),
+            ...settings.shoppingTabNames
+          })
+        );
       } catch {}
       applyShoppingTabNames();
     }
+    if (settings.specialEvents) {
+      state.settings.specialEvents = settings.specialEvents;
+      try {
+        localStorage.setItem("bnapp_special_events", JSON.stringify(settings.specialEvents));
+      } catch {}
+      renderSpecialCountdownsBar();
+    }
+    if (Array.isArray(settings.shoppingFavorites)) {
+      state.settings.shoppingFavorites = settings.shoppingFavorites;
+      try {
+        localStorage.setItem("bnapp_shopping_favorites", JSON.stringify(settings.shoppingFavorites));
+      } catch {}
+      renderShoppingFavoritesBar();
+    }
 
-state.targets = settings.targets || state.targets;
+    state.targets = settings.targets || state.targets;
 
-    
     el("cityLabel").textContent = state.settings.city || "לא נבחרה";
     el("settingsCityInput").value = state.settings.city || "";
   });
   if (el("targetSleep")) {
-  el("targetSleep").value = state.targets["שינה"]?.hours ?? 8;
-}
-if (el("targetWork")) {
-  el("targetWork").value = state.targets["עבודה"]?.hours ?? 8;
-}
+    el("targetSleep").value = state.targets["שינה"]?.hours ?? 8;
+  }
+  if (el("targetWork")) {
+    el("targetWork").value = state.targets["עבודה"]?.hours ?? 8;
+  }
 }
 
 async function saveCitySettings() {
@@ -3350,6 +4066,61 @@ const ROUTINE_STAT_TITLES = [
   "זמן פנוי"
 ];
 
+const SMART_EVENT_DOMAINS = [
+  {
+    category: "פגישות",
+    keywords: [
+      "לדבר עם", "לדבר ", "להתקשר", "טלפון", "שיחה", "שיחת", "פגישה", "פגישת",
+      "להיפגש", "זום", "zoom", "ראיון", "דיון", "ייעוץ", "לחזור ל", "לצלצל", "ווצאפ"
+    ]
+  },
+  {
+    category: "תחזוקת בית",
+    keywords: [
+      "לנקות", "ניקיון", "ניקוי", "מקרר", "כביסה", "כלים", "לסדר", "סידור",
+      "שטיפה", "לשטוף", "אבק", "זבל", "אשפה", "קניות", "סופר", "ללכת לקניות",
+      "לבשל", "בישול", "אפייה", "לאפות", "תיקון", "לתקן", "גינה", "קניית",
+      "מצעים", "גיהוץ", "לגהץ", "מטבח", "סלון", "ארון"
+    ]
+  },
+  {
+    category: "כושר ובריאות",
+    keywords: [
+      "אימון", "חדר כושר", "כושר", "ריצה", "לרוץ", "הליכה", "ספורט", "יוגה",
+      "פילאטיס", "שחייה", "רופא", "מרפאה", "בדיקה", "תור ל", "שיניים", "פיזיותרפיה",
+      "תרופות", "בית מרקחת", "כדורגל", "טניס"
+    ]
+  },
+  {
+    category: "לימודים והתפתחות",
+    keywords: [
+      "ללמוד", "לימודים", "קורס", "שיעור", "מבחן", "לקרוא", "קריאה", "ספר",
+      "תרגול", "הרצאה", "מחקר", "עבודה על"
+    ]
+  },
+  {
+    category: "זוגיות ובילוי",
+    keywords: [
+      "דייט", "מסעדה", "סרט", "טיול", "מסיבה", "חברים", "משפחה", "הורים",
+      "בית קפה", "קפה עם", "הופעה", "חופשה", "אירוח", "באולינג", "בילוי"
+    ]
+  },
+  {
+    category: "כספים ובירוקרטיה",
+    keywords: [
+      "בנק", "תשלום", "לשלם", "חשבון", "חשבונות", "ארנונה", "חשמל", "מים",
+      "ביטוח", "רואה חשבון", "דואר", "טפסים", "משכנתא", "חוזה", "עירייה"
+    ]
+  },
+  {
+    category: "נסיעות ורכב",
+    keywords: [
+      "נסיעה", "לנסוע", "להסיע", "איסוף", "לאסוף", "מוסך", "טסט", "דלק",
+      "לתדלק", "שטיפת רכב", "רכבת", "אוטובוס"
+    ]
+  }
+];
+
 function isRoutineStatEvent(ev) {
   if (!ev) return false;
   if (isDefaultEvent(ev)) return true;
@@ -3362,6 +4133,50 @@ function normalizeStatCategoryTitle(rawTitle) {
   if (!t) return "משימה";
   if (t === "אוכל + מקלחת" || t === "אוכל" || t === "מקלחת") return "אוכל ומקלחת";
   return t;
+}
+
+function detectSmartDomainCategory(rawTitle) {
+  const clean = normalizeStatCategoryTitle(rawTitle);
+  if (ROUTINE_STAT_TITLES.includes(clean)) return clean;
+  const lower = clean.toLowerCase();
+  for (const dom of SMART_EVENT_DOMAINS) {
+    if (dom.keywords.some((kw) => lower.includes(kw))) {
+      return dom.category;
+    }
+  }
+  return null;
+}
+
+function buildSmartTitleResolver(allCompletedRawTitles) {
+  // סופרים מילים ראשונות עבור אירועים שלא התאימו לקטגוריה מובנית, כדי למצוא מכנה משותף
+  const STOP_WORDS = new Set(["את", "של", "עם", "על", "אל", "או", "גם", "כל", "זה"]);
+  const firstWordCounts = {};
+
+  allCompletedRawTitles.forEach((raw) => {
+    const clean = normalizeStatCategoryTitle(raw);
+    if (ROUTINE_STAT_TITLES.includes(clean)) return;
+    if (detectSmartDomainCategory(clean)) return;
+    const firstWord = clean.split(/\s+/)[0] || "";
+    if (firstWord.length >= 3 && !STOP_WORDS.has(firstWord)) {
+      firstWordCounts[firstWord] = (firstWordCounts[firstWord] || 0) + 1;
+    }
+  });
+
+  return (rawTitle) => {
+    const clean = normalizeStatCategoryTitle(rawTitle);
+    if (ROUTINE_STAT_TITLES.includes(clean)) return clean;
+
+    const domainCat = detectSmartDomainCategory(clean);
+    if (domainCat) return domainCat;
+
+    const firstWord = clean.split(/\s+/)[0] || "";
+    if (firstWord.length >= 3 && (firstWordCounts[firstWord] || 0) >= 2) {
+      return firstWord;
+    }
+
+    // אם אין מכנה משותף עם שום אירוע אחר – מוצג בנפרד בשמו המלא!
+    return clean;
+  };
 }
 
 function isEventRelevantForUser(ev, user) {
@@ -3454,8 +4269,7 @@ function getStatsDates(range) {
   return dates;
 }
 
-function computeStats({ user, range }) {
-  const dates = getStatsDates(range);
+function computeStatsForDatesList(dates, user) {
   const totalDays = Math.max(1, dates.length);
   const totalHours = totalDays * 24;
 
@@ -3464,8 +4278,41 @@ function computeStats({ user, range }) {
   let foodShowerMinutes = 0;
   let freeMinutes = 0;
   const otherMap = {};
+  const categoryBreakdown = {};
 
   const undatedEvents = state.cache.events?.["undated"] || {};
+
+  // שלב 1: איסוף כל הכותרות של אירועים/משימות שבוצעו בטווח לצורך זיהוי מכנה משותף חכם
+  const allCompletedTitles = [];
+  dates.forEach((date) => {
+    const dk = dateKeyFromDate(date);
+    const dayEventsObj = state.cache.events?.[dk] || {};
+    Object.values(dayEventsObj).forEach((ev) => {
+      if (!ev || isDefaultEvent(ev) || !isEventRelevantForUser(ev, user)) return;
+      if (!isRoutineStatEvent(ev) && !ev.completed && !ev.completedAt) return;
+      allCompletedTitles.push(ev.title || "");
+    });
+  });
+  Object.values(undatedEvents).forEach((ev) => {
+    if (!ev || (!ev.completed && !ev.completedAt) || !isEventRelevantForUser(ev, user)) return;
+    allCompletedTitles.push(ev.title || "");
+  });
+
+  const resolveCategory = buildSmartTitleResolver(allCompletedTitles);
+
+  const addBreakdownItem = (catLabel, ev, durMins) => {
+    if (!categoryBreakdown[catLabel]) categoryBreakdown[catLabel] = [];
+    categoryBreakdown[catLabel].push({
+      _id: ev._id || ev.id,
+      title: ev.title || "(ללא כותרת)",
+      dateKey: ev.dateKey || "undated",
+      startTime: ev.startTime || null,
+      endTime: ev.endTime || null,
+      owner: ev.owner || "shared",
+      type: ev.type || "event",
+      effectiveDuration: durMins
+    });
+  };
 
   dates.forEach((date) => {
     const dk = dateKeyFromDate(date);
@@ -3504,7 +4351,7 @@ function computeStats({ user, range }) {
     dayItems.forEach((ev) => {
       if (!ev) return;
       if (!isEventRelevantForUser(ev, user)) return;
-      if (isDefaultEvent(ev)) return; // כבר מוגדר כבסיס היומי ב-dayTimeline
+      if (isDefaultEvent(ev)) return;
 
       const isRoutine = isRoutineStatEvent(ev);
       const isDone = Boolean(ev.completed || ev.completedAt);
@@ -3512,22 +4359,26 @@ function computeStats({ user, range }) {
       // רק משימות ואירועים שסומנו כבוצעו נכנסים לעוגה (למעט אירועי שגרה)
       if (!isRoutine && !isDone) return;
 
-      const label = normalizeStatCategoryTitle(ev.title);
-      const sig = `${label}|${ev.owner || "shared"}|${ev.startTime || ""}|${ev.endTime || ""}|${ev.type || ""}`;
+      const rawClean = normalizeStatCategoryTitle(ev.title);
+      const label = resolveCategory(ev.title);
+      const sig = `${rawClean}|${ev.owner || "shared"}|${ev.startTime || ""}|${ev.endTime || ""}|${ev.type || ""}`;
       if (seen.has(sig)) return;
       seen.add(sig);
 
+      let dur = getEffectiveDurationMinutes(ev);
+      if (dur <= 0) dur = 60;
+
+      if (!isRoutine) {
+        addBreakdownItem(label, ev, dur);
+      }
+
       if (ev.startTime) {
         const startMin = Math.max(0, Math.min(1439, timeToMinutes(ev.startTime)));
-        let dur = getEffectiveDurationMinutes(ev);
-        if (dur <= 0) dur = 60;
         const endMin = Math.max(startMin + 1, Math.min(1440, startMin + dur));
         for (let m = startMin; m < endMin; m++) {
           dayTimeline[m] = label;
         }
       } else {
-        let dur = getEffectiveDurationMinutes(ev);
-        if (dur <= 0) dur = 60;
         untimedCompleted.push({ label, dur });
       }
     });
@@ -3570,8 +4421,14 @@ function computeStats({ user, range }) {
     workMinutes,
     foodShowerMinutes,
     freeMinutes,
-    otherMap
+    otherMap,
+    categoryBreakdown
   };
+}
+
+function computeStats({ user, range }) {
+  const dates = getStatsDates(range);
+  return computeStatsForDatesList(dates, user);
 }
 
 function computeTargetStatuses(stats) {
@@ -3750,12 +4607,147 @@ function getCategorizedStatsItems(dates, user) {
   };
 }
 
+function openStatCategoryBreakdown(categoryLabel) {
+  const modal = el("statCategoryBreakdownModal");
+  if (!modal) return;
+
+  const titleEl = el("statCategoryBreakdownTitle");
+  const subEl = el("statCategoryBreakdownSub");
+  const listEl = el("statCategoryBreakdownList");
+
+  const items = state.cache.lastStatsBreakdown?.[categoryLabel] || [];
+  const totalMins = items.reduce((acc, it) => acc + (Number(it.effectiveDuration) || 60), 0);
+  const totalHours = formatHoursClean(totalMins / 60);
+
+  if (titleEl) titleEl.textContent = `📊 פירוט קטגוריה: ${categoryLabel}`;
+  if (subEl) {
+    if (ROUTINE_STAT_TITLES.includes(categoryLabel)) {
+      subEl.textContent = `קטגוריית שגרה אוטומטית מתוך 24 שעות היממה`;
+    } else {
+      subEl.textContent = `${items.length} פריטים שבוצעו בקטגוריה זו • סה״כ ${totalHours} שעות`;
+    }
+  }
+
+  const ownerLabel = (owner) =>
+    owner === "shared" ? "משותף 👥" : owner === "nana" ? "נוי 💖" : "בנימין 💙";
+
+  if (listEl) {
+    if (!items.length) {
+      listEl.innerHTML = `<div class="stats-empty-tab">זוהי קטגוריית בסיס יומית (ללא משימות ידניות נוספות).</div>`;
+    } else {
+      listEl.innerHTML = items
+        .map((i) => {
+          const durHours = formatHoursClean((i.effectiveDuration || 60) / 60);
+          const timeStr =
+            i.startTime && i.endTime
+              ? `🕒 ${i.startTime}–${i.endTime} (${durHours} ש׳)`
+              : `🕒 משך: ${durHours} ש׳`;
+          const safeId = String(i._id || "").replace(/'/g, "\\'");
+          const safeDk = String(i.dateKey || "").replace(/'/g, "\\'");
+
+          return `
+            <div class="stat-card stat-card-done">
+              <div class="stat-card-top">
+                <div class="stat-title">${i.title}</div>
+                <span class="stat-owner-badge">${ownerLabel(i.owner)}</span>
+              </div>
+              <div class="stat-card-meta-row">
+                <span>📅 ${formatShortDateHe(i.dateKey)}</span>
+                <span>${timeStr}</span>
+              </div>
+              <div class="stat-card-actions">
+                <button type="button" class="ghost-pill small"
+                  onclick="toggleTaskDone({ _id: '${safeId}', dateKey: '${safeDk}', completed: true }); document.getElementById('statCategoryBreakdownModal').classList.add('hidden');">
+                  ↩ בטל בוצע
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+  }
+
+  modal.classList.remove("hidden");
+  qsa("[data-close-cat-breakdown]", modal).forEach((b) => {
+    b.onclick = () => modal.classList.add("hidden");
+  });
+}
+
+function renderStatsInsightsBar(stats, categorized) {
+  const bar = el("statsInsightsBar");
+  if (!bar) return;
+
+  const doneCount = categorized.completedEvents.length + categorized.completedTasks.length;
+  const missedCount = categorized.missedEvents.length + categorized.missedTasks.length;
+  const totalActionable = doneCount + missedCount;
+  const scorePct = totalActionable > 0 ? Math.round((doneCount / totalActionable) * 100) : 100;
+
+  // חישוב השוואה חכמה מול התקופה הקודמת באותו אורך ימים
+  const prevDates = [];
+  if (stats.dates && stats.dates.length) {
+    const firstDate = new Date(stats.dates[0]);
+    for (let i = stats.totalDays; i >= 1; i--) {
+      const d = new Date(firstDate);
+      d.setDate(firstDate.getDate() - i);
+      prevDates.push(d);
+    }
+  }
+
+  let trendText = "";
+  if (prevDates.length) {
+    const prevStats = computeStatsForDatesList(prevDates, state.currentUser);
+    const prevCat = getCategorizedStatsItems(prevDates, state.currentUser);
+    const prevDone = prevCat.completedEvents.length + prevCat.completedTasks.length;
+
+    const curTaskMins = Object.values(stats.otherMap).reduce((a, b) => a + b, 0);
+    const prevTaskMins = Object.values(prevStats.otherMap).reduce((a, b) => a + b, 0);
+    const diffTaskHours = (curTaskMins - prevTaskMins) / 60;
+    const diffFreeHours = (stats.freeMinutes - prevStats.freeMinutes) / 60;
+
+    const periodWord =
+      stats.totalDays === 1
+        ? "אתמול"
+        : stats.totalDays === 7
+          ? "שבוע שעבר"
+          : "התקופה הקודמת";
+
+    if (Math.abs(diffTaskHours) >= 0.5) {
+      const moreOrLess = diffTaskHours > 0 ? "יותר" : "פחות";
+      trendText = `📈 מול ${periodWord}: השקעת ${formatHoursClean(Math.abs(diffTaskHours))} ש׳ ${moreOrLess} במשימות ואירועים (${doneCount} לעומת ${prevDone})`;
+    } else if (Math.abs(diffFreeHours) >= 0.5) {
+      const moreOrLess = diffFreeHours > 0 ? "יותר" : "פחות";
+      trendText = `📈 מול ${periodWord}: היו לך ${formatHoursClean(Math.abs(diffFreeHours))} ש׳ ${moreOrLess} זמן פנוי`;
+    } else {
+      trendText = `📈 מול ${periodWord}: קצב יציב ומאוזן (${doneCount} משימות ואירועים שבוצעו)`;
+    }
+  }
+
+  bar.innerHTML = `
+    <div class="stats-insight-row">
+      <div class="stats-score-badge">
+        <span>🔥 ציון עמידה ביעדים: <strong>${scorePct}%</strong></span>
+        <span class="stats-score-sub">(${doneCount} בוצעו מתוך ${totalActionable})</span>
+      </div>
+      <div class="stats-score-bar-track">
+        <div class="stats-score-bar-fill" style="width:${scorePct}%"></div>
+      </div>
+      ${trendText ? `<div class="stats-trend-line">${trendText}</div>` : ""}
+    </div>
+  `;
+}
+
 function updateStats() {
   const currentRange = state.statsRange || "day";
   const stats = computeStats({
     user: state.currentUser,
     range: currentRange
   });
+
+  state.cache.lastStatsBreakdown = stats.categoryBreakdown || {};
+
+  const categorized = getCategorizedStatsItems(stats.dates, state.currentUser);
+  renderStatsInsightsBar(stats, categorized);
 
   const userName = state.currentUser === "nana" ? "נוי (ננה)" : "בנימין";
   const rangeInfoEl = el("statsRangeInfo");
@@ -3820,7 +4812,7 @@ function updateStats() {
     return c;
   });
 
-  // ---- מקרא צבעים (Legend) ----
+  // ---- מקרא צבעים לחיץ (פתיחת חלונית פירוט קטגוריה בלחיצה!) ----
   const legendEl = el("statsLegend");
   if (legendEl) {
     legendEl.innerHTML = labels
@@ -3828,17 +4820,27 @@ function updateStats() {
         const hours = baseItems[idx].hours || 0;
         const pct = total > 0 ? ((hours / total) * 100).toFixed(1) : "0.0";
         const color = colors[idx];
+        const countInCat = (state.cache.lastStatsBreakdown?.[label] || []).length;
+        const countBadge = countInCat > 0 ? ` <span class="cat-count-tag">(${countInCat}) 🔍</span>` : "";
+        const safeLabel = label.replace(/"/g, "&quot;");
         return `
-          <div class="stats-legend-item">
+          <div class="stats-legend-item clickable-legend" data-cat-label="${safeLabel}" title="לחץ לפירוט הקטגוריה">
             <span class="stats-legend-dot" style="background:${color};"></span>
             <span class="stats-legend-text">
-              <strong>${label}</strong>
+              <strong>${label}${countBadge}</strong>
               <span class="stats-legend-val">${formatHoursClean(hours)} ש׳ (${pct}%)</span>
             </span>
           </div>
         `;
       })
       .join("");
+
+    legendEl.querySelectorAll(".clickable-legend").forEach((row) => {
+      row.onclick = () => {
+        const cat = row.dataset.catLabel;
+        if (cat) openStatCategoryBreakdown(cat);
+      };
+    });
   }
 
   // ---- סיכום יעדים ----
@@ -3890,6 +4892,13 @@ function updateStats() {
         responsive: true,
         maintainAspectRatio: false,
         cutout: "66%",
+        onClick: (evt, activeEls) => {
+          if (activeEls && activeEls.length > 0) {
+            const idx = activeEls[0].index;
+            const clickedLabel = workFreeChart.data.labels[idx];
+            if (clickedLabel) openStatCategoryBreakdown(clickedLabel);
+          }
+        },
         plugins: {
           legend: {
             display: false
@@ -3915,10 +4924,10 @@ function updateStats() {
     workFreeChart.update();
   }
 
-  renderCompletedCards(stats.dates);
+  renderCompletedCards(stats.dates, categorized);
 }
 
-function renderCompletedCards(datesOverride) {
+function renderCompletedCards(datesOverride, categorizedOverride) {
   const container = el("statsCompleted");
   if (!container) return;
 
@@ -3928,51 +4937,64 @@ function renderCompletedCards(datesOverride) {
     completedTasks,
     missedEvents,
     missedTasks
-  } = getCategorizedStatsItems(dates, state.currentUser);
+  } = categorizedOverride || getCategorizedStatsItems(dates, state.currentUser);
 
   if (!state.ui.openStatsTabs) {
     state.ui.openStatsTabs = {};
   }
 
+  const todayKey = dateKeyFromDate(new Date());
   const ownerLabel = (owner) =>
     owner === "shared" ? "משותף 👥" : owner === "nana" ? "נוי 💖" : "בנימין 💙";
 
-  const makeCardsHtml = (items, isCompletedList) => {
+  const makeCardsHtml = (items, isCompletedList, itemTypeFilter) => {
     if (!items.length) {
       return `<div class="stats-empty-tab">אין פריטים בקטגוריה זו בטווח הנבחר</div>`;
     }
-    return items
-      .map((i) => {
-        const durHours = formatHoursClean((i.effectiveDuration || 60) / 60);
-        const timeStr =
-          i.startTime && i.endTime
-            ? `🕒 ${i.startTime}–${i.endTime} (${durHours} ש׳)`
-            : i.startTime
-              ? `🕒 ${i.startTime} (${durHours} ש׳)`
-              : `🕒 משך מחושב: ${durHours} ש׳`;
-        const safeId = String(i._id || i.id || "").replace(/'/g, "\\'");
-        const safeDk = String(i.dateKey || "").replace(/'/g, "\\'");
+    const hasPastItems = !isCompletedList && items.some((x) => x.dateKey && x.dateKey < todayKey);
+    const rolloverBarHtml = hasPastItems
+      ? `<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">
+           <button type="button" class="primary-pill small" onclick="rolloverPastUncompletedToToday('${itemTypeFilter}')">
+             ⏭️ העבר הכל להיום
+           </button>
+         </div>`
+      : "";
 
-        return `
-          <div class="stat-card ${isCompletedList ? "stat-card-done" : "stat-card-missed"}">
-            <div class="stat-card-top">
-              <div class="stat-title">${i.title || "(ללא כותרת)"}</div>
-              <span class="stat-owner-badge">${ownerLabel(i.owner)}</span>
+    return (
+      rolloverBarHtml +
+      items
+        .map((i) => {
+          const durHours = formatHoursClean((i.effectiveDuration || 60) / 60);
+          const timeStr =
+            i.startTime && i.endTime
+              ? `🕒 ${i.startTime}–${i.endTime} (${durHours} ש׳)`
+              : i.startTime
+                ? `🕒 ${i.startTime} (${durHours} ש׳)`
+                : `🕒 משך מחושב: ${durHours} ש׳`;
+          const safeId = String(i._id || i.id || "").replace(/'/g, "\\'");
+          const safeDk = String(i.dateKey || "").replace(/'/g, "\\'");
+
+          return `
+            <div class="stat-card ${isCompletedList ? "stat-card-done" : "stat-card-missed"}">
+              <div class="stat-card-top">
+                <div class="stat-title">${i.title || "(ללא כותרת)"}</div>
+                <span class="stat-owner-badge">${ownerLabel(i.owner)}</span>
+              </div>
+              <div class="stat-card-meta-row">
+                <span>📅 ${formatShortDateHe(i.dateKey)}</span>
+                <span>${timeStr}</span>
+              </div>
+              <div class="stat-card-actions">
+                <button type="button" class="ghost-pill small ${isCompletedList ? "" : "stat-mark-done-btn"}"
+                  onclick="toggleTaskDone({ _id: '${safeId}', dateKey: '${safeDk}', completed: ${isCompletedList ? "true" : "false"} })">
+                  ${isCompletedList ? "↩ בטל בוצע" : "✔ סמן כבוצע"}
+                </button>
+              </div>
             </div>
-            <div class="stat-card-meta-row">
-              <span>📅 ${formatShortDateHe(i.dateKey)}</span>
-              <span>${timeStr}</span>
-            </div>
-            <div class="stat-card-actions">
-              <button type="button" class="ghost-pill small ${isCompletedList ? "" : "stat-mark-done-btn"}"
-                onclick="toggleTaskDone({ _id: '${safeId}', dateKey: '${safeDk}', completed: ${isCompletedList ? "true" : "false"} })">
-                ${isCompletedList ? "↩ בטל בוצע" : "✔ סמן כבוצע"}
-              </button>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
+          `;
+        })
+        .join("")
+    );
   };
 
   const sections = [
@@ -3982,6 +5004,7 @@ function renderCompletedCards(datesOverride) {
       items: completedEvents,
       icon: "📅",
       isCompleted: true,
+      typeFilter: "event",
       badgeClass: "stat-tab-done"
     },
     {
@@ -3990,6 +5013,7 @@ function renderCompletedCards(datesOverride) {
       items: completedTasks,
       icon: "✔",
       isCompleted: true,
+      typeFilter: "task",
       badgeClass: "stat-tab-done"
     },
     {
@@ -3998,6 +5022,7 @@ function renderCompletedCards(datesOverride) {
       items: missedEvents,
       icon: "⏳",
       isCompleted: false,
+      typeFilter: "event",
       badgeClass: "stat-tab-missed"
     },
     {
@@ -4006,6 +5031,7 @@ function renderCompletedCards(datesOverride) {
       items: missedTasks,
       icon: "⚠️",
       isCompleted: false,
+      typeFilter: "task",
       badgeClass: "stat-tab-missed"
     }
   ];
@@ -4024,7 +5050,7 @@ function renderCompletedCards(datesOverride) {
           </button>
           <div id="${sec.id}" class="completed-body ${isOpen ? "" : "hidden"}">
             <div class="cards-grid">
-              ${makeCardsHtml(sec.items, sec.isCompleted)}
+              ${makeCardsHtml(sec.items, sec.isCompleted, sec.typeFilter)}
             </div>
           </div>
         </div>
@@ -4597,9 +5623,11 @@ if (userSel) {
   window.addEventListener("pageshow", tickDirectReminders);
 
   // ===== expose functions for inline HTML handlers =====
-window.toggleCompletedSection = toggleCompletedSection;
-window.toggleTaskDone = toggleTaskDone;
-
+  window.toggleCompletedSection = toggleCompletedSection;
+  window.toggleTaskDone = toggleTaskDone;
+  window.openSpecialEventsModal = openSpecialEventsModal;
+  window.openStatCategoryBreakdown = openStatCategoryBreakdown;
+  window.rolloverPastUncompletedToToday = rolloverPastUncompletedToToday;
 }
 
 if (document.readyState === "loading") {

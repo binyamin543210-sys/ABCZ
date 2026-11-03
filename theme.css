@@ -987,3 +987,334 @@ body.dark .setting-row .ghost-pill { color: #fff !important; }
   .bottom-nav .fab-btn { margin-top: -22px; width: 52px !important; height: 52px !important; flex-basis: 52px; }
   .app-header { padding-top: calc(5px + env(safe-area-inset-top)) !important; padding-bottom: 6px !important; }
 }
+
+/* ---------- 1. ספירה לאחור לאירועים מיוחדים + מתג סינון בלוח שנה ---------- */
+.calendar-top-strips {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+  flex: 0 0 auto;
+}
+.special-countdowns-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.special-countdowns-bar::-webkit-scrollbar { display: none; }
+.countdown-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.18) !important;
+  border: 1px solid rgba(255,255,255,.32) !important;
+  color: #fff !important;
+  font-size: .7rem !important;
+  font-weight: 700;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15) !important;
+}
+.countdown-capsule .cd-days {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: .64rem;
+  font-weight: 800;
+}
+.countdown-add-btn {
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.2) !important;
+  color: #fff !important;
+  font-size: .7rem !important;
+  flex: 0 0 auto;
+}
+
+/* מתג סינון מהיר לפי משתמש (הכל | רק שלי | משותף) */
+.owner-quick-filter {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(15,23,42,.22);
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.22);
+  flex: 0 0 auto;
+}
+.owner-filter-btn {
+  padding: 3px 8px !important;
+  font-size: .68rem !important;
+  font-weight: 700;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: rgba(255,255,255,.85) !important;
+  border: none !important;
+  box-shadow: none !important;
+  white-space: nowrap;
+}
+.owner-filter-btn.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+  color: #fff !important;
+  font-weight: 800;
+}
+
+/* ---------- 2. שדרוגי דף משימות + גלגלת שעות מהירה ---------- */
+.tasks-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tasks-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.rollover-btn {
+  background: rgba(249,115,22,.28) !important;
+  border: 1px solid rgba(251,146,60,.6) !important;
+  color: #fff !important;
+  font-weight: 800 !important;
+}
+.time-quick-wheels {
+  background: rgba(148,163,184,.08);
+  padding: 6px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,.2);
+}
+.quick-wheel-lbl {
+  font-size: .68rem;
+  font-weight: 800;
+  color: var(--text-soft);
+  align-self: center;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+#editQuickStartTimes button.active,
+#editQuickDurations button.active,
+#specialEmojiPicker button.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+  color: #fff !important;
+  font-weight: 800;
+}
+
+/* ---------- 3. שדרוגי דף קניות (קבועים, כמויות, מחלקות בסופר) ---------- */
+.shopping-favorites-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 6px;
+  flex: 0 0 auto;
+}
+.fav-label {
+  font-size: .72rem;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+}
+.shopping-favorites-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1 1 auto;
+  padding: 2px 0;
+}
+.shopping-favorites-bar::-webkit-scrollbar { display: none; }
+.fav-chip {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255,255,255,.18);
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 999px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.fav-chip-add {
+  padding: 3px 8px !important;
+  font-size: .72rem !important;
+  font-weight: 700;
+  color: #fff !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  white-space: nowrap;
+}
+.fav-chip-del {
+  padding: 3px 6px !important;
+  font-size: .72rem !important;
+  color: rgba(255,255,255,.75) !important;
+  background: rgba(0,0,0,.15) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.fav-add-btn {
+  flex: 0 0 auto;
+  font-size: .7rem !important;
+  padding: 4px 8px !important;
+}
+.shopping-qty-input {
+  width: 54px !important;
+  flex: 0 0 54px !important;
+  text-align: center;
+  font-weight: 800;
+  padding: 8px 4px !important;
+}
+.shopping-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex: 0 0 auto;
+}
+.shopping-toolbar .ghost-pill.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+  color: #fff !important;
+}
+.shopping-dept-header {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  margin-top: 4px;
+  border-radius: 10px;
+  background: rgba(15,23,42,.26);
+  color: #fff;
+  font-size: .75rem;
+  font-weight: 800;
+}
+.dept-count {
+  background: rgba(255,255,255,.22);
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: .68rem;
+}
+.shopping-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.shopping-item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 700;
+}
+.shopping-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+.shopping-qty-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 2px 4px;
+}
+.qty-step-btn {
+  width: 22px;
+  height: 22px;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  font-size: .8rem !important;
+  font-weight: 800;
+  background: rgba(255,255,255,.65) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.shopping-qty-badge {
+  font-size: .74rem;
+  font-weight: 800;
+  padding: 0 4px;
+  color: var(--accent);
+}
+body.dark .shopping-qty-badge {
+  color: #fff;
+}
+
+/* ---------- 4. שדרוגי דף סטטיסטיקות (ציון עמידה, השוואה שבועית, פירוט קטגוריה בלחיצה) ---------- */
+.stats-insights-bar {
+  margin-bottom: 8px;
+}
+.stats-insight-row {
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255,255,255,.38);
+  border-radius: 16px;
+  padding: 8px 12px;
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.stats-score-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: .78rem;
+  color: var(--text);
+}
+.stats-score-sub {
+  font-size: .7rem;
+  color: var(--text-soft);
+}
+.stats-score-bar-track {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(148,163,184,.25);
+  overflow: hidden;
+}
+.stats-score-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22c55e, var(--accent));
+  transition: width .35s ease;
+}
+.stats-trend-line {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+body.dark .stats-trend-line {
+  color: #93c5fd;
+}
+.clickable-legend {
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 8px;
+  transition: background .15s ease;
+}
+.clickable-legend:hover {
+  background: rgba(148,163,184,.16);
+}
+.cat-count-tag {
+  font-size: .66rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+body.dark .cat-count-tag {
+  color: #93c5fd;
+}
+.stats-legend-hint {
+  font-size: .68rem;
+  color: var(--text-soft);
+  text-align: center;
+  margin-top: 6px;
+}
