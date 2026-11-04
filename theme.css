@@ -528,7 +528,15 @@ main {
 .event-dot { width: 6px; height: 6px; }
 
 /* ---------- משימות ---------- */
-#tasksSection .section-header { display: none; }
+#tasksSection .section-header:not(.tasks-header-bar) { display: none; }
+#tasksSection .tasks-header-bar {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
 .segmented { flex: 0 0 auto; margin-bottom: 8px !important; overflow-x: auto; scrollbar-width: none; }
 .segmented::-webkit-scrollbar { display: none; }
 #tasksSection .segmented-btn { flex: 0 0 auto !important; padding: 7px 12px !important; font-size: .76rem !important; }
@@ -1317,4 +1325,379 @@ body.dark .cat-count-tag {
   color: var(--text-soft);
   text-align: center;
   margin-top: 6px;
+}
+
+/* ---------- 5. שורה שנייה בסטטיסטיקות (אתמול / שבוע שעבר / חודש שעבר + מטרות בשמאל) ---------- */
+.stats-second-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: nowrap;
+}
+.stats-past-selector {
+  margin-bottom: 0 !important;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.stats-past-selector .segmented-btn {
+  padding: 6px 9px !important;
+  font-size: .74rem !important;
+}
+.stats-goals-btn {
+  margin-right: auto;
+  flex: 0 0 auto;
+  padding: 7px 12px !important;
+  font-size: .78rem !important;
+  font-weight: 800 !important;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, .22) !important;
+  white-space: nowrap;
+}
+
+/* ---------- 6. תיקון גלילה אופקית בחלונית עריכה/הוספה (#editModal) ---------- */
+#editModal .modal-content,
+#goalsModal .modal-content,
+#dailySummaryModal .modal-content {
+  width: min(95vw, 430px) !important;
+  max-width: 95vw !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+  padding: 14px 12px !important;
+}
+#editForm,
+#editForm .field,
+#editForm .grid-2,
+#editForm .grid-date-time,
+#editForm .grid-2 > *,
+#editForm .grid-date-time > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+#editForm input,
+#editForm select,
+#editForm textarea {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  font-size: .82rem !important;
+  padding: 7px 8px !important;
+}
+#editForm .grid-2 {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+#editForm .grid-date-time {
+  display: grid !important;
+  grid-template-columns: 1.25fr 0.9fr 0.9fr !important;
+  gap: 6px !important;
+}
+#editForm .grid-date-time input[type="date"],
+#editForm .grid-date-time input[type="time"] {
+  padding: 6px 4px !important;
+  font-size: .76rem !important;
+}
+.quick-time-helpers {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 6px 7px !important;
+}
+.quick-time-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.quick-grid {
+  display: grid !important;
+  gap: 4px !important;
+  width: 100% !important;
+}
+.quick-grid-6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+}
+.quick-grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+.quick-grid button {
+  padding: 4px 2px !important;
+  font-size: .68rem !important;
+  text-align: center;
+  min-width: 0 !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#editForm .reminder-chips {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 5px !important;
+  overflow-x: hidden !important;
+}
+#editForm .reminder-chips .chip {
+  padding: 4px 8px !important;
+  font-size: .72rem !important;
+  flex: 0 0 auto;
+}
+
+/* ---------- 7. דשבורד מטרות משודרג (#goalsModal) ---------- */
+.goals-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.goals-summary-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-soft);
+}
+.goals-summary-title {
+  font-size: .88rem;
+  font-weight: 800;
+}
+.goals-summary-sub {
+  font-size: .7rem;
+  opacity: .9;
+}
+.goals-summary-score {
+  background: rgba(255,255,255,.22);
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: .76rem;
+}
+.goal-card-box {
+  background: var(--bg-soft);
+  border: 1px solid rgba(148,163,184,.28);
+  border-radius: 16px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.goal-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.goal-card-title {
+  font-size: .88rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.goal-card-sub {
+  font-size: .72rem;
+  color: var(--text-soft);
+}
+.goal-status-badge {
+  font-size: .68rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.goal-status-badge.ok { background: rgba(34,197,94,.18); color: #16a34a; }
+.goal-status-badge.mid { background: rgba(59,130,246,.18); color: #2563eb; }
+.goal-status-badge.low { background: rgba(239,68,68,.18); color: #dc2626; }
+body.dark .goal-status-badge.ok { color: #4ade80; }
+body.dark .goal-status-badge.mid { color: #60a5fa; }
+body.dark .goal-status-badge.low { color: #f87171; }
+
+.goal-progress-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(148,163,184,.22);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.goal-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width .35s ease;
+}
+.goal-lists-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+.goal-list-col {
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  padding: 7px 9px;
+  border: 1px solid rgba(148,163,184,.18);
+}
+.goal-list-header {
+  font-size: .74rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.goal-mini-item {
+  font-size: .72rem;
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(148,163,184,.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.goal-mini-item:last-child { border-bottom: none; }
+.goal-mini-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+.goal-mini-empty {
+  font-size: .7rem;
+  color: var(--text-soft);
+  padding: 3px 0;
+}
+.goal-rec-box {
+  background: var(--accent-soft);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.goal-rec-title {
+  font-size: .75rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+body.dark .goal-rec-title { color: #93c5fd; }
+.goal-rec-item {
+  font-size: .71rem;
+  line-height: 1.35;
+  color: var(--text);
+}
+.goal-rec-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.goals-empty-box {
+  background: var(--bg-soft);
+  border-radius: 14px;
+  padding: 12px;
+  text-align: center;
+}
+.goals-empty-title {
+  font-size: .85rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.goals-empty-sub {
+  font-size: .72rem;
+  color: var(--text-soft);
+  margin-bottom: 8px;
+}
+.goals-preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+.goals-manage-details {
+  background: var(--bg-soft);
+  border-radius: 14px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148,163,184,.25);
+}
+.goals-manage-summary {
+  font-size: .8rem;
+  font-weight: 800;
+  cursor: pointer;
+  color: var(--accent);
+}
+body.dark .goals-manage-summary { color: #93c5fd; }
+
+/* ---------- 8. מודאל סיכום יומי אוטומטי ב-21:00 (#dailySummaryModal) ---------- */
+.daily-summary-score-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 14px;
+  margin-bottom: 10px;
+}
+.daily-summary-score-title {
+  font-size: .86rem;
+  font-weight: 800;
+}
+.daily-summary-score-sub {
+  font-size: .72rem;
+  opacity: .9;
+}
+.daily-summary-score-badge {
+  font-size: 1.2rem;
+  font-weight: 900;
+  background: rgba(255,255,255,.22);
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+.daily-summary-24h-box,
+.daily-summary-section {
+  background: var(--bg-soft);
+  border-radius: 14px;
+  padding: 9px 11px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(148,163,184,.2);
+}
+.daily-summary-sec-title {
+  font-size: .78rem;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+.summary-stat-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.summary-stat-pill {
+  font-size: .71rem;
+  background: var(--bg-elevated);
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148,163,184,.22);
+}
+.summary-missed-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(148,163,184,.22);
+}
+.summary-missed-row:last-child { border-bottom: none; }
+.summary-missed-info {
+  display: flex;
+  flex-direction: column;
+  font-size: .75rem;
+  min-width: 0;
+}
+.summary-missed-info small {
+  font-size: .66rem;
+  color: var(--text-soft);
+}
+.summary-missed-actions {
+  display: inline-flex;
+  gap: 4px;
+  flex: 0 0 auto;
 }

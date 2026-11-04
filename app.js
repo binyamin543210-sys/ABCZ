@@ -111,8 +111,8 @@ const state = {
     notificationsGranted: false,
     statsManualRange: false,
     openStatsTabs: { tabCompletedEvents: true },
-    calendarOwnerFilter: "all",
-    tasksOwnerFilter: "all",
+    calendarOwnerFilter: (() => { try { return localStorage.getItem("bnapp_cal_owner_filter") || "all"; } catch { return "all"; } })(),
+    tasksOwnerFilter: (() => { try { return localStorage.getItem("bnapp_tasks_owner_filter") || "all"; } catch { return "all"; } })(),
     shoppingSortByDept: true
   },
 
@@ -272,20 +272,165 @@ function getHebrewMonthYearLabel(date) {
 }
 
 function getCity() {
-  return state.settings.city || "ירושלים";
+  return state.settings.city || localStorage.getItem("bnapp_city") || "ירושלים";
 }
 
-// --- Open-Meteo helpers (מזג אוויר בלי API KEY) ---
-async function geocodeCity(name) {
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=he&format=json`;
-  const resp = await fetch(url);
-  const data = await resp.json();
-  if (!data.results || !data.results.length) throw new Error("עיר לא נמצאה");
-  const r = data.results[0];
-  state.settings.cityLat = r.latitude;
-  state.settings.cityLon = r.longitude;
-  state.settings.cityTz = r.timezone;
+const ISRAEL_CITIES_COORDS = {
+  "ירושלים": { lat: 31.7683, lon: 35.2137 },
+  "תל אביב": { lat: 32.0853, lon: 34.7818 },
+  "תל אביב יפו": { lat: 32.0853, lon: 34.7818 },
+  "ת\"א": { lat: 32.0853, lon: 34.7818 },
+  "חיפה": { lat: 32.7940, lon: 34.9896 },
+  "ראשון לציון": { lat: 31.9730, lon: 34.7925 },
+  "ראשל\"צ": { lat: 31.9730, lon: 34.7925 },
+  "פתח תקווה": { lat: 32.0840, lon: 34.8878 },
+  "פתח תקוה": { lat: 32.0840, lon: 34.8878 },
+  "פ\"ת": { lat: 32.0840, lon: 34.8878 },
+  "אשדוד": { lat: 31.8044, lon: 34.6553 },
+  "נתניה": { lat: 32.3215, lon: 34.8532 },
+  "באר שבע": { lat: 31.2518, lon: 34.7913 },
+  "ב\"ש": { lat: 31.2518, lon: 34.7913 },
+  "בני ברק": { lat: 32.0807, lon: 34.8338 },
+  "חולון": { lat: 32.0158, lon: 34.7874 },
+  "רמת גן": { lat: 32.0684, lon: 34.8248 },
+  "אשקלון": { lat: 31.6688, lon: 34.5743 },
+  "רחובות": { lat: 31.8928, lon: 34.8113 },
+  "בת ים": { lat: 32.0132, lon: 34.7480 },
+  "בית שמש": { lat: 31.7470, lon: 34.9881 },
+  "כפר סבא": { lat: 32.1750, lon: 34.9069 },
+  "הרצליה": { lat: 32.1663, lon: 34.8436 },
+  "חדרה": { lat: 32.4340, lon: 34.9197 },
+  "מודיעין": { lat: 31.8969, lon: 35.0104 },
+  "מודיעין מכבים רעות": { lat: 31.8969, lon: 35.0104 },
+  "נצרת": { lat: 32.6996, lon: 35.3035 },
+  "לוד": { lat: 31.9510, lon: 34.8881 },
+  "רמלה": { lat: 31.9292, lon: 34.8656 },
+  "רעננה": { lat: 32.1848, lon: 34.8713 },
+  "גבעתיים": { lat: 32.0722, lon: 34.8089 },
+  "רהט": { lat: 31.3955, lon: 34.7569 },
+  "נהריה": { lat: 33.0059, lon: 35.0941 },
+  "אילת": { lat: 29.5577, lon: 34.9519 },
+  "עכו": { lat: 32.9278, lon: 35.0818 },
+  "אלעד": { lat: 32.0519, lon: 34.9512 },
+  "ראש העין": { lat: 32.0956, lon: 34.9566 },
+  "קריית אתא": { lat: 32.8115, lon: 35.1132 },
+  "קרית אתא": { lat: 32.8115, lon: 35.1132 },
+  "קריית גת": { lat: 31.6111, lon: 34.7685 },
+  "קרית גת": { lat: 31.6111, lon: 34.7685 },
+  "קריית מוצקין": { lat: 32.8371, lon: 35.0776 },
+  "קריית ביאליק": { lat: 32.8275, lon: 35.0889 },
+  "קריית ים": { lat: 32.8493, lon: 35.0697 },
+  "קריית שמונה": { lat: 33.2073, lon: 35.5702 },
+  "כרמיאל": { lat: 32.9199, lon: 35.2901 },
+  "טבריה": { lat: 32.7922, lon: 35.5312 },
+  "צפת": { lat: 32.9646, lon: 35.4960 },
+  "עפולה": { lat: 32.6078, lon: 35.2897 },
+  "נס ציונה": { lat: 31.9293, lon: 34.7987 },
+  "יבנה": { lat: 31.8781, lon: 34.7398 },
+  "אור יהודה": { lat: 32.0292, lon: 34.8579 },
+  "רמת השרון": { lat: 32.1461, lon: 34.8395 },
+  "הוד השרון": { lat: 32.1524, lon: 34.8947 },
+  "גבעת שמואל": { lat: 32.0782, lon: 34.8476 },
+  "קריית אונו": { lat: 32.0636, lon: 34.8553 },
+  "מעלה אדומים": { lat: 31.7774, lon: 35.2990 },
+  "אריאל": { lat: 32.1040, lon: 35.1845 },
+  "דימונה": { lat: 31.0708, lon: 35.0333 },
+  "שדרות": { lat: 31.5250, lon: 34.5969 },
+  "נתיבות": { lat: 31.4231, lon: 34.5892 },
+  "אופקים": { lat: 31.3141, lon: 34.6203 },
+  "ערד": { lat: 31.2588, lon: 35.2128 },
+  "מגדל העמק": { lat: 32.6770, lon: 35.2405 },
+  "יוקנעם": { lat: 32.6593, lon: 35.1100 },
+  "יקנעם": { lat: 32.6593, lon: 35.1100 },
+  "פרדס חנה": { lat: 32.4718, lon: 34.9706 },
+  "זכרון יעקב": { lat: 32.5708, lon: 34.9517 },
+  "באר יעקב": { lat: 31.9404, lon: 34.8363 },
+  "שוהם": { lat: 31.9986, lon: 34.9456 },
+  "מבשרת ציון": { lat: 31.8017, lon: 35.1566 },
+  "גדרה": { lat: 31.8146, lon: 34.7798 },
+  "גן יבנה": { lat: 31.7873, lon: 34.7063 }
+};
 
+// --- Open-Meteo helpers (מזג אוויר בלי API KEY) ---
+// מחזיר קואורדינטות לעיר בלי לכתוב ל-Firebase (כדי שהמאזין לא ידרוס את העיר החדשה באמצע השמירה)
+async function lookupCityCoords(name) {
+  const raw = (name || "").trim();
+  const base = raw.split(",")[0].replace(/-/g, " ").replace(/\s+/g, " ").trim();
+
+  // 1) בדיקה מיידית במילון ערי ישראל (עובד תמיד בעברית ובלי תלות ברשת)
+  if (ISRAEL_CITIES_COORDS[base]) {
+    const c = ISRAEL_CITIES_COORDS[base];
+    return { lat: c.lat, lon: c.lon, tz: "Asia/Jerusalem", label: base };
+  }
+  const matchKey = Object.keys(ISRAEL_CITIES_COORDS).find(
+    (k) => k === base || k.includes(base) || base.includes(k)
+  );
+  if (matchKey) {
+    const c = ISRAEL_CITIES_COORDS[matchKey];
+    return { lat: c.lat, lon: c.lon, tz: "Asia/Jerusalem", label: raw };
+  }
+
+  // 2) חיפוש ב-Open-Meteo Geocoding
+  const variants = Array.from(new Set([raw, base].filter(Boolean)));
+  for (const q of variants) {
+    for (const lang of ["he", "en"]) {
+      try {
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=${lang}&format=json`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        const results = data.results || [];
+        if (!results.length) continue;
+        const r = results.find((x) => x.country_code === "IL") || results[0];
+        return {
+          lat: r.latitude,
+          lon: r.longitude,
+          tz: r.timezone || "Asia/Jerusalem",
+          label: r.name || base
+        };
+      } catch (e) {
+        console.warn("geocode attempt failed", q, lang, e);
+      }
+    }
+  }
+
+  // 3) גיבוי דרך OpenStreetMap Nominatim (תומך מעולה בעברית וכתובות בישראל)
+  try {
+    const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(raw)}&accept-language=he&limit=3`;
+    const resp = await fetch(nomUrl);
+    const arr = await resp.json();
+    if (Array.isArray(arr) && arr.length > 0) {
+      const best = arr[0];
+      return {
+        lat: Number(best.lat),
+        lon: Number(best.lon),
+        tz: "Asia/Jerusalem",
+        label: raw
+      };
+    }
+  } catch (e) {
+    console.warn("Nominatim geocode fallback failed", e);
+  }
+
+  // 4) גם אם לא נמצאו קואורדינטות מדויקות – שומרים את שם העיר שהמשתמש בחר עם מרכז ישראל
+  return {
+    lat: 32.0853,
+    lon: 34.7818,
+    tz: "Asia/Jerusalem",
+    label: raw
+  };
+}
+
+async function geocodeCity(name) {
+  const r = await lookupCityCoords(name);
+  state.settings.cityLat = r.lat;
+  state.settings.cityLon = r.lon;
+  state.settings.cityTz = r.tz;
+  return r;
+}
+
+async function ensureCityCoords() {
+  if (state.settings.cityLat && state.settings.cityLon && state.settings.cityTz) return;
+  await geocodeCity(getCity());
   try {
     await update(ref(db, "settings"), {
       cityLat: state.settings.cityLat,
@@ -295,11 +440,6 @@ async function geocodeCity(name) {
   } catch (e) {
     console.warn("Failed saving city coords", e);
   }
-}
-
-async function ensureCityCoords() {
-  if (state.settings.cityLat && state.settings.cityLon && state.settings.cityTz) return;
-  await geocodeCity(getCity());
 }
 
 function mapOpenMeteoWeather(code) {
@@ -779,9 +919,15 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
     const holiday = state.cache.holidays[dateKey];
     const events = state.cache.events[dateKey] || {};
 
-    const realEvents = Object.values(events).filter(
-      (ev) => !isDefaultEvent(ev) && matchesQuickOwnerFilter(ev, state.ui.calendarOwnerFilter || "all")
-    );
+    const realEvents = Object.entries(events)
+      .filter(
+        ([eid, ev]) =>
+          ev &&
+          !isDefaultEvent(ev) &&
+          !(ev.isRecurringParent && events[`${eid}_${dateKey}`]) &&
+          matchesQuickOwnerFilter(ev, state.ui.calendarOwnerFilter || "all")
+      )
+      .map(([, ev]) => ev);
     
     const header = document.createElement("div");
     header.className = "day-header";
@@ -1089,13 +1235,142 @@ function updateRolloverMissedButton() {
   const btn = el("btnRolloverMissedTasks");
   if (!btn) return;
   const pastMissed = getPastUncompletedItemsForUser("all");
+  btn.classList.remove("hidden");
   if (pastMissed.length > 0) {
-    btn.classList.remove("hidden");
+    btn.disabled = false;
+    btn.classList.add("has-items");
     btn.textContent = `⏭️ העבר ${pastMissed.length} שחלפו להיום`;
     btn.onclick = () => rolloverPastUncompletedToToday("all");
   } else {
-    btn.classList.add("hidden");
+    btn.disabled = true;
+    btn.classList.remove("has-items");
+    btn.textContent = "✅ אין משימות שחלפו";
+    btn.onclick = null;
   }
+}
+
+function getTomorrowKey() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return dateKeyFromDate(d);
+}
+
+// העברת רשימת פריטים לתאריך חדש (אופציונלית גם שעה חדשה) – שומר משך ומעדכן הכל מיד
+async function moveItemsToDate(items, toDk, newStartTime) {
+  let moved = 0;
+  if (!state.cache.events[toDk]) state.cache.events[toDk] = {};
+  const multi = {};
+
+  for (const item of items) {
+    const id = item._id || item.id;
+    const oldDk = item.dateKey;
+    if (!id || !oldDk) continue;
+    if (oldDk === toDk && !newStartTime) continue;
+
+    const source = state.cache.events?.[oldDk]?.[id] || item;
+    const updatedObj = { ...source, _id: id, dateKey: toDk };
+    delete updatedObj.effectiveDuration;
+    delete updatedObj.id;
+
+    if (newStartTime) {
+      const dur = getEffectiveDurationMinutes(source);
+      updatedObj.startTime = newStartTime;
+      updatedObj.endTime = addMinutesToTimeStr(newStartTime, dur);
+    }
+    // תזכורת ישנה כבר לא רלוונטית
+    updatedObj.reminderCustomTs = null;
+    updatedObj.reminderDate = null;
+    updatedObj.remindedAt = null;
+    updatedObj.remindedAt_binyamin = null;
+    updatedObj.remindedAt_nana = null;
+    updatedObj.remindedAt_shared = null;
+    updatedObj.isRecurringInstance = source.isRecurringInstance || null;
+
+    state.cache.events[toDk][id] = updatedObj;
+    if (oldDk !== toDk && state.cache.events[oldDk]) delete state.cache.events[oldDk][id];
+
+    multi[`${toDk}/${id}`] = updatedObj;
+    if (oldDk !== toDk) multi[`${oldDk}/${id}`] = null;
+    moved++;
+  }
+
+  renderCalendar();
+  renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+  if (!el("dayModal")?.classList.contains("hidden") && state.ui.openDayKey) {
+    renderDayEvents(state.ui.openDayKey);
+    updateDayRolloverButton(state.ui.openDayKey);
+  }
+  try { updateStats(); } catch {}
+  if (!el("dailySummaryModal")?.classList.contains("hidden")) {
+    try { renderDailySummary(state.ui.summaryDayKey); } catch {}
+  }
+
+  try {
+    if (Object.keys(multi).length) await update(ref(db, "events"), multi);
+  } catch (e) {
+    console.warn("move error:", e);
+  }
+  return moved;
+}
+
+function findCachedItem(id, dk) {
+  const ev = state.cache.events?.[dk]?.[id];
+  return ev ? { ...ev, _id: ev._id || id, dateKey: dk } : null;
+}
+
+// העברה של פריט אחד ליום שאחריו (אם היום שאחריו כבר עבר – להיום)
+async function moveItemToNextDay(id, dk) {
+  const item = findCachedItem(id, dk);
+  if (!item) return;
+  const todayKey = dateKeyFromDate(new Date());
+  let target;
+  if (!dk || dk === "undated") target = getTomorrowKey();
+  else {
+    const d = parseDateKey(dk);
+    d.setDate(d.getDate() + 1);
+    target = dateKeyFromDate(d);
+    if (target < todayKey) target = todayKey;
+  }
+  await moveItemsToDate([item], target);
+  showToast(`⏭️ "${item.title || "פריט"}" הועבר ל-${formatShortDateHe(target)}`);
+}
+
+function postponeItemById(id, dk) {
+  const item = findCachedItem(id, dk);
+  if (item) openPostponeModal(item);
+}
+
+function getUncompletedItemsOfDay(dk) {
+  const res = [];
+  Object.entries(state.cache.events?.[dk] || {}).forEach(([id, ev]) => {
+    if (!ev || isDefaultEvent(ev) || isRoutineStatEvent(ev)) return;
+    if (ev.completed || ev.completedAt) return;
+    if (ev.isRecurringParent && ev.recurring && ev.recurring !== "none") return;
+    if (ev.isRecurringInstance) return; // מופע חוזר – יופיע שוב ממילא
+    if (!isEventRelevantForUser(ev, state.currentUser)) return;
+    res.push({ ...ev, _id: ev._id || id, dateKey: dk });
+  });
+  return res;
+}
+
+function updateDayRolloverButton(dk) {
+  const btn = el("btnDayRollover");
+  if (!btn) return;
+  const todayKey = dateKeyFromDate(new Date());
+  const items = getUncompletedItemsOfDay(dk);
+  if (dk > todayKey || !items.length) {
+    btn.classList.add("hidden");
+    btn.onclick = null;
+    return;
+  }
+  const toDk = dk < todayKey ? todayKey : getTomorrowKey();
+  const label = dk < todayKey ? "להיום" : "למחר";
+  btn.classList.remove("hidden");
+  btn.textContent = `⏭️ העבר ${items.length} שלא בוצעו ${label}`;
+  btn.onclick = async () => {
+    const n = await moveItemsToDate(getUncompletedItemsOfDay(dk), toDk);
+    showToast(`⏭️ הועברו ${n} פריטים ${label}!`);
+  };
 }
 
 async function rolloverPastUncompletedToToday(typeFilter = "all") {
@@ -1104,38 +1379,8 @@ async function rolloverPastUncompletedToToday(typeFilter = "all") {
     showToast("אין פריטים שחלפו להעברה להיום");
     return;
   }
-  const todayKey = dateKeyFromDate(new Date());
-  if (!state.cache.events[todayKey]) state.cache.events[todayKey] = {};
-
-  for (const item of items) {
-    const id = item._id || item.id;
-    const oldDk = item.dateKey;
-    if (!id || !oldDk || oldDk === todayKey) continue;
-
-    const updatedObj = {
-      ...item,
-      _id: id,
-      dateKey: todayKey
-    };
-    delete updatedObj.effectiveDuration;
-
-    state.cache.events[todayKey][id] = updatedObj;
-    if (state.cache.events[oldDk]) {
-      delete state.cache.events[oldDk][id];
-    }
-
-    try {
-      await set(ref(db, `events/${todayKey}/${id}`), updatedObj);
-      await remove(ref(db, `events/${oldDk}/${id}`));
-    } catch (e) {
-      console.warn("Rollover error:", e);
-    }
-  }
-
-  renderCalendar();
-  renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
-  try { updateStats(); } catch {}
-  showToast(`⏭️ הועברו ${items.length} פריטים להיום!`);
+  const n = await moveItemsToDate(items, dateKeyFromDate(new Date()));
+  showToast(`⏭️ הועברו ${n} פריטים להיום!`);
 }
 
 // =========================
@@ -1365,8 +1610,17 @@ function toggleTaskDone(task) {
 
   renderCalendar();
   renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
-  if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(task.dateKey);
+  if (!el("dayModal")?.classList.contains("hidden")) {
+    renderDayEvents(task.dateKey);
+    updateDayRolloverButton(task.dateKey);
+  }
   try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
+  if (!el("dailySummaryModal")?.classList.contains("hidden")) {
+    try { renderDailySummary(state.ui.summaryDayKey); } catch {}
+  }
+  if (!el("goalsModal")?.classList.contains("hidden")) {
+    try { renderGoalsProgress(); } catch {}
+  }
 
   showToast(isDone ? "בוטל סימון בוצע" : "סומן כבוצע ✔");
 }
@@ -1410,9 +1664,12 @@ try {
 }
 
   const dateKey = dateKeyFromDate(date);
+  state.ui.openDayKey = dateKey;
   ensureDefaultDayEvents(date).then(() => {
-  renderDayEvents(dateKey);
-});
+    renderDayEvents(dateKey);
+    updateDayRolloverButton(dateKey);
+  });
+  updateDayRolloverButton(dateKey);
 
 
   const weatherCard = el("dayWeatherContainer");
@@ -1437,6 +1694,7 @@ function renderDayEvents(dateKey) {
   const events = state.cache.events[dateKey] || {};
 
 const list = Object.entries(events)
+  .filter(([id, ev]) => ev && !(ev.isRecurringParent && events[`${id}_${dateKey}`]))
   .map(([id, ev]) => ({ id, ...ev }))
   .sort((a, b) => {
     const aHasTime = !!a.startTime;
@@ -1567,7 +1825,7 @@ const list = Object.entries(events)
 // =========================
 // Edit modal + CRUD
 // =========================
-function openEditModal({ dateKey, id } = {}) {
+function openEditModal({ dateKey, id, title, startTime, endTime, type, owner } = {}) {
   const modal = el("editModal");
   const form = el("editForm");
   if (!modal || !form) return;
@@ -1577,10 +1835,19 @@ function openEditModal({ dateKey, id } = {}) {
 
   const dk = dateKey || dateKeyFromDate(state.currentDate);
   form.elements["date"].value = dk;
-  form.elements["owner"].value = state.currentUser;
+  form.elements["owner"].value = state.currentUser === "shared" ? "shared" : state.currentUser;
 
   form.dataset.editDateKey = dk || "";
   form.dataset.editId = id || "";
+
+  // מילוי מוקדם (למשל משיבוץ מטרה)
+  if (!id) {
+    if (title) form.elements["title"].value = title;
+    if (startTime) form.elements["startTime"].value = startTime;
+    if (endTime) form.elements["endTime"].value = endTime;
+    if (type) form.elements["type"].value = type;
+    if (owner) form.elements["owner"].value = owner;
+  }
 
   // אם עריכה - למלא
   if (id && dk && state.cache.events[dk] && state.cache.events[dk][id]) {
@@ -1663,6 +1930,17 @@ function openEditModal({ dateKey, id } = {}) {
     const activeBtn = qs("#editQuickDurations button.active");
     return activeBtn ? Number(activeBtn.dataset.quickDur || 60) : 60;
   };
+
+  // סימון כפתור המשך לפי האירוע הקיים (או שעה כברירת מחדל)
+  {
+    let curDur = 60;
+    if (startInput.value && endInput.value && !isEndBeforeStart(startInput.value, endInput.value)) {
+      curDur = timeToMinutes(endInput.value) - timeToMinutes(startInput.value);
+    }
+    const durBtns = qsa("#editQuickDurations button");
+    const match = durBtns.find((b) => Number(b.dataset.quickDur) === curDur);
+    durBtns.forEach((b) => b.classList.toggle("active", match ? b === match : Number(b.dataset.quickDur) === 60));
+  }
 
   const applyStartAndDuration = (startStr, durMins) => {
     if (!startStr) return;
@@ -2045,24 +2323,28 @@ function initTasksFilters() {
     });
   });
 
-  // מתגי סינון מהיר בלוח השנה (הכל | רק שלי | משותף)
+  // מתגי סינון מהיר בלוח השנה (הכל | רק שלי | משותף) – נשמר גם אחרי סגירת האפליקציה
   const calOwnerBtns = qsa("#calendarOwnerFilter .owner-filter-btn");
   calOwnerBtns.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.ownerFilter === (state.ui.calendarOwnerFilter || "all"));
     btn.onclick = () => {
       calOwnerBtns.forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       state.ui.calendarOwnerFilter = btn.dataset.ownerFilter || "all";
+      try { localStorage.setItem("bnapp_cal_owner_filter", state.ui.calendarOwnerFilter); } catch {}
       renderCalendar();
     };
   });
 
-  // מתגי סינון מהיר בדף משימות (הכל | רק שלי | משותף)
+  // מתגי סינון מהיר בדף משימות (הכל | רק שלי | משותף) – נשמר גם אחרי סגירת האפליקציה
   const taskOwnerBtns = qsa("#tasksOwnerFilter .owner-filter-btn");
   taskOwnerBtns.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.ownerFilter === (state.ui.tasksOwnerFilter || "all"));
     btn.onclick = () => {
       taskOwnerBtns.forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       state.ui.tasksOwnerFilter = btn.dataset.ownerFilter || "all";
+      try { localStorage.setItem("bnapp_tasks_owner_filter", state.ui.tasksOwnerFilter); } catch {}
       renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
     };
   });
@@ -2619,10 +2901,26 @@ function initFirebaseListeners() {
 
   onValue(ref(db, "settings"), (snap) => {
     const settings = snap.val() || {};
-    state.settings.city = settings.city || null;
+    const coordsChanged =
+      settings.cityLat !== state.settings.cityLat || settings.cityLon !== state.settings.cityLon;
+    state.settings.city = settings.city || localStorage.getItem("bnapp_city") || null;
+    if (settings.city) {
+      try { localStorage.setItem("bnapp_city", settings.city); } catch {}
+    }
     state.settings.cityLat = settings.cityLat || null;
     state.settings.cityLon = settings.cityLon || null;
     state.settings.cityTz = settings.cityTz || null;
+    if (coordsChanged) {
+      state.cache.shabbat = {};
+      try { renderCalendar(); } catch {}
+    }
+    if (settings.dailySummaryTime) {
+      state.settings.dailySummaryTime = settings.dailySummaryTime;
+      try { localStorage.setItem("bnapp_daily_summary_time", settings.dailySummaryTime); } catch {}
+      const tIn = el("settingsSummaryTime");
+      if (tIn && document.activeElement !== tIn) tIn.value = settings.dailySummaryTime;
+      try { scheduleDailySummaryAlarm(); } catch {}
+    }
     if (settings.shoppingTabNames) {
       state.settings.shoppingTabNames = settings.shoppingTabNames;
       try {
@@ -2654,7 +2952,8 @@ function initFirebaseListeners() {
     state.targets = settings.targets || state.targets;
 
     el("cityLabel").textContent = state.settings.city || "לא נבחרה";
-    el("settingsCityInput").value = state.settings.city || "";
+    const cityIn = el("settingsCityInput");
+    if (cityIn && document.activeElement !== cityIn) cityIn.value = state.settings.city || "";
   });
   if (el("targetSleep")) {
     el("targetSleep").value = state.targets["שינה"]?.hours ?? 8;
@@ -2664,25 +2963,79 @@ function initFirebaseListeners() {
   }
 }
 
-async function saveCitySettings() {
-  const city = el("settingsCityInput").value.trim();
+async function persistCitySettings(city, coords) {
   state.settings.city = city || null;
-  el("cityLabel").textContent = city || "לא נבחרה";
-
   try {
-    if (state.settings.city) await geocodeCity(state.settings.city);
-    await update(ref(db, "settings"), {
-      city: state.settings.city,
-      cityLat: state.settings.cityLat || null,
-      cityLon: state.settings.cityLon || null,
-      cityTz: state.settings.cityTz || null
-    });
-    showToast("נשמר");
+    if (city) localStorage.setItem("bnapp_city", city);
+  } catch {}
+  state.settings.cityLat = coords ? coords.lat : null;
+  state.settings.cityLon = coords ? coords.lon : null;
+  state.settings.cityTz = coords ? coords.tz : null;
+  state.cache.shabbat = {}; // זמני שבת יחושבו מחדש לפי המיקום החדש
+  el("cityLabel").textContent = city || "לא נבחרה";
+  if (el("settingsCityInput")) el("settingsCityInput").value = city || "";
+  // כתיבה אטומית אחת – כדי שהמאזין לא יחזיר את העיר הישנה באמצע
+  await update(ref(db, "settings"), {
+    city: state.settings.city,
+    cityLat: state.settings.cityLat,
+    cityLon: state.settings.cityLon,
+    cityTz: state.settings.cityTz
+  });
+  renderCalendar();
+}
+
+async function saveCitySettings() {
+  const city = (el("settingsCityInput").value || "").trim();
+  if (!city) {
+    showToast("נא להזין שם עיר");
+    return;
+  }
+  const btn = el("btnSaveCity");
+  if (btn) { btn.disabled = true; btn.textContent = "..."; }
+  try {
+    const coords = await lookupCityCoords(city);
+    await persistCitySettings(city, coords);
+    showToast(`📍 המיקום עודכן ל-${city}`);
   } catch (e) {
     console.error("Failed to save city settings", e);
-    await update(ref(db, "settings"), { city: state.settings.city });
-    showToast("נשמר");
+    showToast("⛔ לא נמצאה עיר בשם הזה – נסה שם אחר (למשל: תל אביב)");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "שמור"; }
   }
+}
+
+function useGpsLocation() {
+  if (!navigator.geolocation) {
+    showToast("המכשיר לא תומך באיתור מיקום");
+    return;
+  }
+  showToast("🛰️ מאתר מיקום...");
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const coords = {
+        lat: Number(pos.coords.latitude.toFixed(4)),
+        lon: Number(pos.coords.longitude.toFixed(4)),
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Jerusalem"
+      };
+      let label = "המיקום שלי";
+      try {
+        const resp = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lon}&accept-language=he&zoom=10`
+        );
+        const data = await resp.json();
+        const a = data.address || {};
+        label = a.city || a.town || a.village || a.municipality || label;
+      } catch {}
+      try {
+        await persistCitySettings(label, coords);
+        showToast(`📍 המיקום עודכן ל-${label}`);
+      } catch {
+        showToast("שגיאה בשמירת המיקום");
+      }
+    },
+    () => showToast("⛔ לא ניתנה הרשאת מיקום"),
+    { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 }
+  );
 }
 
 // =========================
@@ -3663,6 +4016,12 @@ function checkDueReminders() {
       }
     });
   });
+
+  try {
+    checkDailySummaryDue();
+  } catch (e) {
+    console.warn("checkDailySummaryDue error", e);
+  }
 }
 
 function openQuickReminderModal(task) {
@@ -4705,12 +5064,17 @@ function renderStatsInsightsBar(stats, categorized) {
     const diffTaskHours = (curTaskMins - prevTaskMins) / 60;
     const diffFreeHours = (stats.freeMinutes - prevStats.freeMinutes) / 60;
 
-    const periodWord =
-      stats.totalDays === 1
-        ? "אתמול"
-        : stats.totalDays === 7
-          ? "שבוע שעבר"
-          : "התקופה הקודמת";
+    const periodWordMap = {
+      day: "אתמול",
+      yesterday: "שלשום",
+      week: "השבוע שלפני",
+      lastweek: "השבוע שלפניו",
+      "2weeks": "השבועיים שלפני",
+      month: "התקופה המקבילה הקודמת",
+      lastmonth: "החודש שלפניו",
+      year: "השנה הקודמת"
+    };
+    const periodWord = periodWordMap[state.statsRange] || "התקופה הקודמת";
 
     if (Math.abs(diffTaskHours) >= 0.5) {
       const moreOrLess = diffTaskHours > 0 ? "יותר" : "פחות";
@@ -4985,6 +5349,9 @@ function renderCompletedCards(datesOverride, categorizedOverride) {
                 <span>${timeStr}</span>
               </div>
               <div class="stat-card-actions">
+                ${isCompletedList ? "" : `
+                <button type="button" class="ghost-pill small" onclick="moveItemToNextDay('${safeId}', '${safeDk}')">⏭️ ליום הבא</button>
+                <button type="button" class="ghost-pill small" onclick="postponeItemById('${safeId}', '${safeDk}')">📅 דחיה</button>`}
                 <button type="button" class="ghost-pill small ${isCompletedList ? "" : "stat-mark-done-btn"}"
                   onclick="toggleTaskDone({ _id: '${safeId}', dateKey: '${safeDk}', completed: ${isCompletedList ? "true" : "false"} })">
                   ${isCompletedList ? "↩ בטל בוצע" : "✔ סמן כבוצע"}
@@ -5163,19 +5530,22 @@ function openPostponeModal(task) {
   _postponeTask = task;
   el("postponeModal")?.classList.remove("hidden");
 
+  // ברירת מחדל: מחר באותה שעה
+  if (el("postponeDateInput")) el("postponeDateInput").value = getTomorrowKey();
+  if (el("postponeTimeInput")) el("postponeTimeInput").value = task.startTime || "";
+
   document.querySelectorAll("[data-close-postpone]").forEach((b) => {
     b.onclick = () => el("postponeModal")?.classList.add("hidden");
   });
 
-el("postponeOk").onclick = () => {
-  const date = el("postponeDateInput").value;
-  const time = el("postponeTimeInput").value || _postponeTask.startTime;
-
-  if (!date) return;
-
-  moveTaskToDate(_postponeTask, date, time);
-  el("postponeModal").classList.add("hidden");
-};
+  el("postponeOk").onclick = async () => {
+    const date = el("postponeDateInput").value;
+    const time = el("postponeTimeInput").value || null;
+    if (!date) return;
+    el("postponeModal").classList.add("hidden");
+    await moveItemsToDate([_postponeTask], date, time);
+    showToast(`📅 נדחה ל-${formatShortDateHe(date)}${time ? " " + time : ""}`);
+  };
 }
 async function deleteTaskSmart(task) {
   const id = task._id || task.id;
@@ -5219,9 +5589,11 @@ async function materializeRecurringTask(task) {
   const end = new Date(start);
   end.setFullYear(end.getFullYear() + 1);
 
+  const multi = {};
   for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
     const dk = dateKeyFromDate(d);
 
+    // daily = כל יום, ללא סינון
     if (task.recurring === "weekly" && d.getDay() !== start.getDay()) continue;
     if (task.recurring === "monthly_greg" && d.getDate() !== start.getDate()) continue;
     if (
@@ -5230,14 +5602,20 @@ async function materializeRecurringTask(task) {
     ) continue;
 
     const id = `${task._id}_${dk}`;
-    await set(ref(db, `events/${dk}/${id}`), {
+    const inst = {
       ...task,
       _id: id,
       parentId: task._id,
+      isRecurringParent: null,
       isRecurringInstance: true,
       dateKey: dk
-    });
+    };
+    multi[`${dk}/${id}`] = inst;
+    if (!state.cache.events[dk]) state.cache.events[dk] = {};
+    state.cache.events[dk][id] = inst;
   }
+  // כתיבה אחת מרוכזת – מהיר גם לחזרה יומית (365 מופעים)
+  await update(ref(db, "events"), multi);
 }
 // ===============================
 // =========================
@@ -5272,9 +5650,14 @@ function openGoalsModal() {
   const ownerSelect = el("goalOwner");
   if (ownerSelect) {
     ownerSelect.value = state.currentUser;
+    ownerSelect.onchange = () => {
+      renderGoals();
+      renderGoalsProgress();
+    };
   }
 
   renderGoals();
+  renderGoalsProgress();
 
   // סגירה ב־X או רקע
   modal.querySelectorAll("[data-close-goals]").forEach(b => {
@@ -5283,6 +5666,611 @@ function openGoalsModal() {
 
   const backdrop = modal.querySelector(".modal-backdrop");
   if (backdrop) backdrop.onclick = () => modal.classList.add("hidden");
+}
+
+function doesItemMatchGoal(ev, goalTitle) {
+  if (!ev || !ev.title || !goalTitle) return false;
+  const normEv = normalizeStatCategoryTitle(ev.title).toLowerCase();
+  const normGoal = normalizeStatCategoryTitle(goalTitle).toLowerCase();
+  if (!normEv || !normGoal) return false;
+  if (normEv === normGoal || normEv.includes(normGoal) || normGoal.includes(normEv)) {
+    return true;
+  }
+  const smartEv = (detectSmartDomainCategory(ev.title) || "").toLowerCase();
+  const smartGoal = (detectSmartDomainCategory(goalTitle) || "").toLowerCase();
+  if (smartEv && (smartEv === normGoal || (smartGoal && smartEv === smartGoal))) {
+    return true;
+  }
+  return false;
+}
+
+function findBestFreeSlotToday(user) {
+  const todayKey = dateKeyFromDate(new Date());
+  const dayEvents = Object.values(state.cache.events?.[todayKey] || {}).filter(
+    (ev) => ev && isEventRelevantForUser(ev, user) && !isDefaultEvent(ev) && ev.startTime
+  );
+  const busy = new Array(1440).fill(false);
+  dayEvents.forEach((ev) => {
+    const st = Math.max(0, Math.min(1439, timeToMinutes(ev.startTime)));
+    const dur = Math.max(30, getEffectiveDurationMinutes(ev) || 60);
+    const et = Math.min(1440, st + dur);
+    for (let m = st; m < et; m++) busy[m] = true;
+  });
+
+  const now = new Date();
+  const minStart = Math.max(18 * 60, (now.getHours() + 1) * 60);
+  for (let m = minStart; m <= 22 * 60; m += 30) {
+    let free = true;
+    for (let k = m; k < m + 60 && k < 1440; k++) {
+      if (busy[k]) { free = false; break; }
+    }
+    if (free) return minutesToTime(m);
+  }
+  return "19:00";
+}
+
+function renderGoalsProgress() {
+  const container = el("goalsProgress");
+  if (!container) return;
+
+  const owner = el("goalOwner")?.value || state.currentUser;
+  const userLabel = owner === "binyamin" ? "בנימין" : "נוי";
+  const goalsObj = state.goals?.[owner] || {};
+  const goalEntries = Object.entries(goalsObj);
+
+  // חישוב לפי טווח הסטטיסטיקות (או 7 ימים אחרונים אם נמצאים על יום בודד כדי להשוות ליעד שבועי)
+  let dates = getStatsDates(state.statsRange || "week");
+  let isWeeklyContext = false;
+  if (!dates || dates.length <= 1) {
+    dates = [];
+    const now = new Date();
+    now.setHours(12, 0, 0, 0);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      dates.push(d);
+    }
+    isWeeklyContext = true;
+  }
+
+  const weeks = Math.max(1 / 7, dates.length / 7);
+  const stats = computeStatsForDatesList(dates, owner);
+  const todayKey = dateKeyFromDate(new Date());
+
+  if (!goalEntries.length) {
+    container.innerHTML = `
+      <div class="goals-empty-box">
+        <div class="goals-empty-title">🎯 עדיין לא הוגדרו מטרות שבועיות עבור ${userLabel}</div>
+        <div class="goals-empty-sub">בחרו מטרה מהירה להוספה בלחיצה או פתחו את "ניהול והוספת מטרות" למטה:</div>
+        <div class="goals-preset-chips">
+          <button type="button" class="chip" onclick="window.quickAddPresetGoal('אימון כושר', 3)">💪 אימון כושר (3 ש׳/שבוע)</button>
+          <button type="button" class="chip" onclick="window.quickAddPresetGoal('לימודים וקריאה', 4)">📚 לימודים וקריאה (4 ש׳/שבוע)</button>
+          <button type="button" class="chip" onclick="window.quickAddPresetGoal('זמן זוגי איכותי', 5)">💑 זמן זוגי (5 ש׳/שבוע)</button>
+          <button type="button" class="chip" onclick="window.quickAddPresetGoal('ספורט והליכה', 2.5)">🏃 ספורט והליכה (2.5 ש׳/שבוע)</button>
+        </div>
+      </div>
+    `;
+    const detailsEl = el("goalsManageDetails");
+    if (detailsEl) detailsEl.open = true;
+    return;
+  }
+
+  let totalGoalsCount = goalEntries.length;
+  let achievedGoalsCount = 0;
+
+  const cardsHtml = goalEntries.map(([goalId, g]) => {
+    const targetHours = Number((g.weeklyHours * weeks).toFixed(1));
+    const completedItems = [];
+    const uncompletedItems = [];
+    const seenIds = new Set();
+
+    dates.forEach((d) => {
+      const dk = dateKeyFromDate(d);
+      const dayEvents = state.cache.events?.[dk] || {};
+      Object.entries(dayEvents).forEach(([id, ev]) => {
+        if (!ev) return;
+        if (ev.isRecurringParent && dayEvents[`${id}_${dk}`]) return;
+        if (!isEventRelevantForUser(ev, owner)) return;
+        if (isDefaultEvent(ev)) return;
+        if (!doesItemMatchGoal(ev, g.title)) return;
+
+        const key = `${dk}/${id}`;
+        if (seenIds.has(key)) return;
+        seenIds.add(key);
+
+        const durMins = Math.max(15, getEffectiveDurationMinutes(ev) || 60);
+        const itemObj = {
+          ...ev,
+          _id: id,
+          dateKey: dk,
+          durMins,
+          durHours: durMins / 60
+        };
+
+        if (ev.completed || ev.completedAt) {
+          completedItems.push(itemObj);
+        } else {
+          uncompletedItems.push(itemObj);
+        }
+      });
+    });
+
+    // גם משימות ללא תאריך שתואמות למטרה
+    Object.entries(state.cache.events?.undated || {}).forEach(([id, ev]) => {
+      if (!ev || !isEventRelevantForUser(ev, owner)) return;
+      if (!doesItemMatchGoal(ev, g.title)) return;
+      const durMins = Math.max(15, getEffectiveDurationMinutes(ev) || 60);
+      const itemObj = { ...ev, _id: id, dateKey: "undated", durMins, durHours: durMins / 60 };
+      if (ev.completed || ev.completedAt) {
+        completedItems.push(itemObj);
+      } else {
+        uncompletedItems.push(itemObj);
+      }
+    });
+
+    const normGoal = normalizeStatCategoryTitle(g.title);
+    let doneHours = completedItems.reduce((acc, it) => acc + it.durHours, 0);
+    if (normGoal === "שינה") doneHours = stats.sleepMinutes / 60;
+    else if (normGoal === "עבודה") doneHours = stats.workMinutes / 60;
+    else if (normGoal === "אוכל ומקלחת") doneHours = stats.foodShowerMinutes / 60;
+    else if (normGoal === "זמן פנוי") doneHours = stats.freeMinutes / 60;
+    else if (stats.otherMap[normGoal] && stats.otherMap[normGoal] / 60 > doneHours) {
+      doneHours = stats.otherMap[normGoal] / 60;
+    }
+
+    const uncompletedHours = uncompletedItems.reduce((acc, it) => acc + it.durHours, 0);
+    const pct = targetHours > 0 ? Math.min(100, Math.round((doneHours / targetHours) * 100)) : 0;
+    const missingHours = Math.max(0, Number((targetHours - doneHours).toFixed(1)));
+
+    if (pct >= 95 || missingHours <= 0.1) achievedGoalsCount++;
+
+    let statusBadge = `<span class="goal-status-badge low">⚠️ חסרות ${missingHours} ש׳</span>`;
+    let barColor = "linear-gradient(90deg, #f59e0b, #ef4444)";
+    if (pct >= 95 || missingHours <= 0.1) {
+      statusBadge = `<span class="goal-status-badge ok">🏆 היעד הושג! (${pct}%)</span>`;
+      barColor = "linear-gradient(90deg, #10b981, #22c55e)";
+    } else if (pct >= 50) {
+      statusBadge = `<span class="goal-status-badge mid">🔥 בדרך ליעד (${pct}%)</span>`;
+      barColor = "linear-gradient(90deg, #3b82f6, #06b6d4)";
+    }
+
+    // בניית המלצות חכמות ומעשיות לשיפור
+    const bestSlot = findBestFreeSlotToday(owner);
+    const potentialPct = targetHours > 0
+      ? Math.min(100, Math.round(((doneHours + uncompletedHours) / targetHours) * 100))
+      : 100;
+
+    let tipsHtml = "";
+    if (pct >= 95 || missingHours <= 0.1) {
+      tipsHtml = `
+        <div class="goal-rec-item">✨ כל הכבוד! עמדתם ביעד של <strong>"${g.title}"</strong> (${doneHours.toFixed(1)} מתוך ${targetHours} ש׳).</div>
+        <div class="goal-rec-item">🚀 <strong>טיפ לצמיחה:</strong> אם תרצו לאתגר את עצמכם בשבוע הבא, נסו להעלות את היעד השבועי ב-30 דקות.</div>
+      `;
+    } else {
+      const sessionsNeeded = Math.max(1, Math.ceil((missingHours * 60) / 45));
+      if (uncompletedItems.length > 0) {
+        tipsHtml += `
+          <div class="goal-rec-item">
+            📌 יש לכם <strong>${uncompletedItems.length} משימות שהוגדרו למטרה זו ולא בוצעו</strong> (${uncompletedHours.toFixed(1)} ש׳). השלמה שלהן תקפיץ אתכם מ-<strong>${pct}% ל-${potentialPct}%</strong> מהיעד!
+          </div>
+        `;
+      }
+      tipsHtml += `
+        <div class="goal-rec-item">
+          💡 <strong>איך להשלים את הפער (${missingHours} ש׳):</strong> פרקו את הזמן החסר ל-<strong>${sessionsNeeded} מפגשים קצרים של 45 דק׳</strong> במקום לחכות לבלוק זמן ארוך.
+        </div>
+        <div class="goal-rec-item">
+          ⏰ <strong>הזמן הפנוי הטוב ביותר היום:</strong> סביב השעה <strong>${bestSlot}</strong> הלו"ז שלכם פנוי – מומלץ לשבץ שם משימת "${g.title}" עכשיו.
+        </div>
+      `;
+    }
+
+    const completedListHtml = completedItems.length
+      ? completedItems.map((it) => `
+          <div class="goal-mini-item done">
+            <span>✔ <strong>${it.title}</strong> <small>(${it.dateKey !== "undated" ? formatDateHeShort(it.dateKey) : "ללא תאריך"}${it.startTime ? " • " + it.startTime : ""} • ${formatMinutesReadable(it.durMins)})</small></span>
+          </div>
+        `).join("")
+      : `<div class="goal-mini-empty">עדיין לא סומנו משימות שבוצעו למטרה זו בטווח הנבחר</div>`;
+
+    const uncompletedListHtml = uncompletedItems.length
+      ? uncompletedItems.map((it) => `
+          <div class="goal-mini-item missed">
+            <div class="goal-mini-info">
+              <span>⏳ <strong>${it.title}</strong> <small>(${it.dateKey !== "undated" ? formatDateHeShort(it.dateKey) : "ללא תאריך"}${it.startTime ? " • " + it.startTime : ""} • ${formatMinutesReadable(it.durMins)})</small></span>
+            </div>
+            <div class="goal-mini-actions">
+              <button type="button" class="ghost-pill small" onclick="window.completeGoalItemInline('${it.dateKey}','${it._id}')">✔ בוצע</button>
+              <button type="button" class="ghost-pill small" onclick="window.moveGoalItemInline('${it.dateKey}','${it._id}')">⏭️ ${it.dateKey < todayKey ? "להיום" : "למחר"}</button>
+            </div>
+          </div>
+        `).join("")
+      : `<div class="goal-mini-empty">אין משימות פתוחות שלא בוצעו למטרה זו 🎉</div>`;
+
+    const safeTitle = String(g.title).replace(/'/g, "\\'");
+
+    return `
+      <div class="goal-card-box">
+        <div class="goal-card-top">
+          <div>
+            <div class="goal-card-title">🎯 ${g.title}</div>
+            <div class="goal-card-sub">בוצעו <strong>${doneHours.toFixed(1)} ש׳</strong> מתוך יעד של <strong>${targetHours} ש׳</strong> (${g.weeklyHours} ש׳/שבוע)</div>
+          </div>
+          ${statusBadge}
+        </div>
+
+        <div class="goal-progress-track">
+          <div class="goal-progress-fill" style="width:${pct}%; background:${barColor};"></div>
+        </div>
+
+        <div class="goal-lists-grid">
+          <div class="goal-list-col done-col">
+            <div class="goal-list-header">✅ בוצעו (${completedItems.length})</div>
+            ${completedListHtml}
+          </div>
+          <div class="goal-list-col missed-col">
+            <div class="goal-list-header">❌ לא בוצעו (${uncompletedItems.length})</div>
+            ${uncompletedListHtml}
+          </div>
+        </div>
+
+        <div class="goal-rec-box">
+          <div class="goal-rec-title">💡 מה כדאי לעשות כדי לשפר את השגת המטרה:</div>
+          ${tipsHtml}
+          <div class="goal-rec-actions">
+            <button type="button" class="primary-pill small" onclick="window.quickScheduleGoal('${safeTitle}', '${bestSlot}', '${owner}')">
+              ➕ שבץ "${g.title}" להיום (${bestSlot})
+            </button>
+            ${uncompletedItems.length > 0 ? `
+              <button type="button" class="ghost-pill small" onclick="window.rolloverAllGoalUncompleted('${safeTitle}', '${owner}')">
+                ⏭️ העבר ${uncompletedItems.length} שלא בוצעו להיום/מחר
+              </button>
+            ` : ""}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  const rangeLabel = isWeeklyContext
+    ? "7 ימים אחרונים (השוואה ליעד שבועי)"
+    : `${formatDateHeShort(dateKeyFromDate(dates[0]))} – ${formatDateHeShort(dateKeyFromDate(dates[dates.length - 1]))}`;
+
+  container.innerHTML = `
+    <div class="goals-summary-banner">
+      <div>
+        <div class="goals-summary-title">📊 מעקב מטרות – ${userLabel}</div>
+        <div class="goals-summary-sub">טווח בדיקה: ${rangeLabel}</div>
+      </div>
+      <div class="goals-summary-score">
+        <strong>${achievedGoalsCount}/${totalGoalsCount}</strong> מטרות הושגו
+      </div>
+    </div>
+    ${cardsHtml}
+  `;
+}
+
+async function quickAddPresetGoal(title, weeklyHours) {
+  const owner = el("goalOwner")?.value || state.currentUser;
+  if (!state.goals[owner]) state.goals[owner] = {};
+  const id = Date.now();
+  state.goals[owner][id] = { title, weeklyHours: Number(weeklyHours) };
+  await update(ref(db, "goals"), state.goals);
+  renderGoals();
+  renderGoalsProgress();
+  try { updateStats(); } catch {}
+  showToast(`🎯 המטרה "${title}" נוספה!`);
+}
+
+async function completeGoalItemInline(dateKey, id) {
+  const ev = state.cache.events?.[dateKey]?.[id];
+  if (!ev) return;
+  const nowTs = Date.now();
+  ev.completed = true;
+  ev.completedAt = nowTs;
+  await update(ref(db, `events/${dateKey}/${id}`), { completed: true, completedAt: nowTs });
+  showToast("✔ סומן כבוצע! המטרות והסטטיסטיקה עודכנו");
+  renderGoalsProgress();
+  try { updateStats(); } catch {}
+  renderCalendar();
+  renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+}
+
+async function moveGoalItemInline(dateKey, id) {
+  const todayKey = dateKeyFromDate(new Date());
+  const targetKey = dateKey < todayKey ? todayKey : getNextDayKey(todayKey);
+  await moveItemsToDate([{ dateKey, id }], targetKey);
+  renderGoalsProgress();
+  try { updateStats(); } catch {}
+}
+
+async function rolloverAllGoalUncompleted(goalTitle, owner) {
+  const dates = getStatsDates(state.statsRange || "week");
+  const checkDates = dates && dates.length > 1 ? dates : (() => {
+    const arr = [];
+    const now = new Date();
+    now.setHours(12, 0, 0, 0);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      arr.push(d);
+    }
+    return arr;
+  })();
+
+  const todayKey = dateKeyFromDate(new Date());
+  const toToday = [];
+  const toTomorrow = [];
+
+  checkDates.forEach((d) => {
+    const dk = dateKeyFromDate(d);
+    const dayEvents = state.cache.events?.[dk] || {};
+    Object.entries(dayEvents).forEach(([id, ev]) => {
+      if (!ev || ev.completed || ev.completedAt) return;
+      if (ev.isRecurringParent && dayEvents[`${id}_${dk}`]) return;
+      if (!isEventRelevantForUser(ev, owner)) return;
+      if (!doesItemMatchGoal(ev, goalTitle)) return;
+      if (dk < todayKey) toToday.push({ dateKey: dk, id });
+      else if (dk === todayKey) toTomorrow.push({ dateKey: dk, id });
+    });
+  });
+
+  if (toToday.length) await moveItemsToDate(toToday, todayKey);
+  if (toTomorrow.length) await moveItemsToDate(toTomorrow, getNextDayKey(todayKey));
+  renderGoalsProgress();
+  try { updateStats(); } catch {}
+}
+
+function quickScheduleGoal(goalTitle, startTime, owner) {
+  el("goalsModal")?.classList.add("hidden");
+  const todayKey = dateKeyFromDate(new Date());
+  const st = startTime || "19:00";
+  const endMins = Math.min(23 * 60 + 59, timeToMinutes(st) + 45);
+  openEditModal({
+    dateKey: todayKey,
+    type: "task",
+    title: goalTitle,
+    startTime: st,
+    endTime: minutesToTime(endMins),
+    owner: owner || state.currentUser
+  });
+}
+
+// =========================
+// Daily Summary Notification & Modal (21:00 default, configurable)
+// =========================
+function getDailySummaryTime() {
+  return (
+    state.settings?.dailySummaryTime ||
+    localStorage.getItem("bnapp_daily_summary_time") ||
+    "21:00"
+  );
+}
+
+async function saveDailySummaryTime() {
+  const input = el("settingsSummaryTime");
+  const val = (input?.value || "21:00").trim();
+  if (!/^\d{2}:\d{2}$/.test(val)) {
+    showToast("נא לבחור שעה תקינה");
+    return;
+  }
+  state.settings.dailySummaryTime = val;
+  try {
+    localStorage.setItem("bnapp_daily_summary_time", val);
+    // איפוס הדגל של היום כדי שאם בחרו שעה עתידית היום זה יקפוץ בשעה החדשה
+    const todayKey = dateKeyFromDate(new Date());
+    localStorage.removeItem(`bnapp_daily_summary_fired_${todayKey}`);
+  } catch {}
+  scheduleDailySummaryAlarm();
+  try {
+    await update(ref(db, "settings"), { dailySummaryTime: val });
+  } catch (e) {
+    console.warn("Failed saving dailySummaryTime to Firebase", e);
+  }
+  showToast(`🕘 שעת הסיכום היומי עודכנה ל-${val}`);
+}
+
+function scheduleDailySummaryAlarm() {
+  const timeStr = getDailySummaryTime();
+  const [hh, mm] = timeStr.split(":").map(Number);
+  if (isNaN(hh) || isNaN(mm)) return;
+
+  const now = new Date();
+  const target = new Date();
+  target.setHours(hh, mm, 0, 0);
+  if (target.getTime() <= now.getTime()) {
+    target.setDate(target.getDate() + 1);
+  }
+
+  if (hasNativeAndroidBridge()) {
+    try {
+      window.AndroidBridge.scheduleAlarm(
+        "daily_summary_alarm",
+        "📊 הסיכום היומי שלכם מוכן!",
+        "לחצו לצפייה בסטטיסטיקה היומית ולהעברת משימות שלא בוצעו למחר",
+        Math.round(target.getTime())
+      );
+    } catch (e) {
+      console.warn("scheduleDailySummaryAlarm native error", e);
+    }
+  }
+}
+
+function checkDailySummaryDue() {
+  const timeStr = getDailySummaryTime();
+  const [hh, mm] = timeStr.split(":").map(Number);
+  if (isNaN(hh) || isNaN(mm)) return;
+
+  const now = new Date();
+  const todayKey = dateKeyFromDate(now);
+  const firedKey = `bnapp_daily_summary_fired_${todayKey}`;
+  if (localStorage.getItem(firedKey) === "1") return;
+
+  const target = new Date(now);
+  target.setHours(hh, mm, 0, 0);
+  const diffMs = now.getTime() - target.getTime();
+
+  // אם הגיעה שעת הסיכום היומי (ועד שעתיים אחריה אם פתחו את האפליקציה קצת אחרי)
+  if (diffMs >= 0 && diffMs <= 2 * 60 * 60 * 1000) {
+    try {
+      localStorage.setItem(firedKey, "1");
+    } catch {}
+
+    playReminderSound();
+    showSystemNotification(
+      `📊 סיכום יומי (${timeStr}) – בנימין & נוי`,
+      "בואו לראות את הסטטיסטיקה של היום ולהעביר משימות שלא בוצעו למחר בלחיצה אחת!",
+      `daily-summary-${todayKey}`
+    );
+    openDailySummaryModal(todayKey);
+    // קובעים מראש את ההתראה למחר
+    setTimeout(scheduleDailySummaryAlarm, 2000);
+  }
+}
+
+function openDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
+  const modal = el("dailySummaryModal");
+  if (!modal) return;
+
+  modal.classList.remove("hidden");
+  renderDailySummaryModal(dateKey);
+
+  qsa("[data-close-daily-summary]", modal).forEach((b) => {
+    b.onclick = () => modal.classList.add("hidden");
+  });
+  const backdrop = modal.querySelector(".modal-backdrop");
+  if (backdrop) backdrop.onclick = () => modal.classList.add("hidden");
+}
+
+function renderDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
+  const body = el("dailySummaryBody");
+  const titleEl = el("dailySummaryTitle");
+  if (!body) return;
+
+  const user = state.currentUser;
+  const userName = user === "binyamin" ? "בנימין" : "נוי";
+  if (titleEl) {
+    titleEl.textContent = `📊 סיכום יומי – ${userName} (${formatDateHeShort(dateKey)})`;
+  }
+
+  const dayDate = dateFromKey(dateKey);
+  const stats = computeStatsForDatesList([dayDate], user);
+
+  const dayEventsObj = state.cache.events?.[dateKey] || {};
+  const completedToday = [];
+  const uncompletedToday = [];
+
+  Object.entries(dayEventsObj).forEach(([id, ev]) => {
+    if (!ev) return;
+    if (ev.isRecurringParent && dayEventsObj[`${id}_${dateKey}`]) return;
+    if (!isEventRelevantForUser(ev, user)) return;
+    if (isDefaultEvent(ev) || isRoutineStatEvent(ev)) return;
+
+    const item = { ...ev, _id: id, dateKey };
+    if (ev.completed || ev.completedAt) {
+      completedToday.push(item);
+    } else {
+      uncompletedToday.push(item);
+    }
+  });
+
+  const totalActionable = completedToday.length + uncompletedToday.length;
+  const scorePct = totalActionable > 0
+    ? Math.round((completedToday.length / totalActionable) * 100)
+    : 100;
+
+  const customCatsHtml = Object.entries(stats.otherMap || {})
+    .map(([cat, mins]) => `<span class="summary-stat-pill custom">✨ ${cat}: <strong>${formatMinutesReadable(mins)}</strong></span>`)
+    .join("");
+
+  const uncompletedHtml = uncompletedToday.length
+    ? uncompletedToday.map((it) => `
+        <div class="summary-missed-row">
+          <div class="summary-missed-info">
+            <strong>${it.type === "task" ? "📝" : "📅"} ${it.title}</strong>
+            <small>${it.startTime ? it.startTime : "ללא שעה"} • ${it.owner === "shared" ? "משותף" : userName}</small>
+          </div>
+          <div class="summary-missed-actions">
+            <button type="button" class="ghost-pill small" onclick="window.completeDailySummaryItem('${dateKey}','${it._id}')">✔ בוצע</button>
+            <button type="button" class="ghost-pill small" onclick="window.moveDailySummaryItemToTomorrow('${dateKey}','${it._id}')">⏭️ למחר</button>
+          </div>
+        </div>
+      `).join("")
+    : `<div class="goal-mini-empty">🎉 מדהים! כל המשימות והאירועים של היום בוצעו במלואם!</div>`;
+
+  const completedHtml = completedToday.length
+    ? completedToday.map((it) => `
+        <div class="goal-mini-item done">
+          <span>✔ <strong>${it.title}</strong> ${it.startTime ? `<small>(${it.startTime})</small>` : ""}</span>
+        </div>
+      `).join("")
+    : `<div class="goal-mini-empty">עדיין לא סומנו משימות שבוצעו היום</div>`;
+
+  body.innerHTML = `
+    <div class="daily-summary-score-card">
+      <div>
+        <div class="daily-summary-score-title">מד עמידה במשימות היום</div>
+        <div class="daily-summary-score-sub">בוצעו ${completedToday.length} מתוך ${totalActionable} משימות ואירועים</div>
+      </div>
+      <div class="daily-summary-score-badge">${scorePct}%</div>
+    </div>
+
+    <div class="daily-summary-24h-box">
+      <div class="daily-summary-sec-title">🕒 פילוח 24 שעות היממה (${userName}):</div>
+      <div class="summary-stat-pills">
+        <span class="summary-stat-pill">💼 עבודה: <strong>${formatMinutesReadable(stats.workMinutes)}</strong></span>
+        <span class="summary-stat-pill">🟢 זמן פנוי: <strong>${formatMinutesReadable(stats.freeMinutes)}</strong></span>
+        <span class="summary-stat-pill">🍽️ אוכל ומקלחת: <strong>${formatMinutesReadable(stats.foodShowerMinutes)}</strong></span>
+        <span class="summary-stat-pill">😴 שינה: <strong>${formatMinutesReadable(stats.sleepMinutes)}</strong></span>
+        ${customCatsHtml}
+      </div>
+    </div>
+
+    <div class="daily-summary-section">
+      <div class="daily-summary-sec-title">⏳ מה לא בוצע היום (${uncompletedToday.length}):</div>
+      <div class="daily-summary-list">${uncompletedHtml}</div>
+      ${uncompletedToday.length > 0 ? `
+        <button type="button" class="primary-pill full-width" style="margin-top:8px;" onclick="window.rolloverAllTodayToTomorrow('${dateKey}')">
+          ⏭️ העבר את כל מה שלא בוצע למחר (${uncompletedToday.length})
+        </button>
+      ` : ""}
+    </div>
+
+    <div class="daily-summary-section">
+      <div class="daily-summary-sec-title">✅ מה בוצע היום (${completedToday.length}):</div>
+      <div class="daily-summary-list">${completedHtml}</div>
+    </div>
+  `;
+}
+
+async function completeDailySummaryItem(dateKey, id) {
+  const ev = state.cache.events?.[dateKey]?.[id];
+  if (!ev) return;
+  const nowTs = Date.now();
+  ev.completed = true;
+  ev.completedAt = nowTs;
+  await update(ref(db, `events/${dateKey}/${id}`), { completed: true, completedAt: nowTs });
+  showToast("✔ סומן כבוצע!");
+  renderDailySummaryModal(dateKey);
+  renderCalendar();
+  renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+  try { updateStats(); } catch {}
+}
+
+async function moveDailySummaryItemToTomorrow(dateKey, id) {
+  const nextKey = getNextDayKey(dateKey);
+  await moveItemsToDate([{ dateKey, id }], nextKey);
+  renderDailySummaryModal(dateKey);
+  try { updateStats(); } catch {}
+}
+
+async function rolloverAllTodayToTomorrow(dateKey) {
+  const items = getUncompletedItemsOfDay(dateKey);
+  if (!items.length) return;
+  const nextKey = getNextDayKey(dateKey);
+  await moveItemsToDate(items, nextKey);
+  renderDailySummaryModal(dateKey);
+  try { updateStats(); } catch {}
 }
 
    
@@ -5350,6 +6338,8 @@ div.querySelector(".edit-goal").onclick = () => {
   el("goalOwner").value = owner;
 
   el("btnAddGoal").textContent = "שמור שינויים";
+  const detailsEl = el("goalsManageDetails");
+  if (detailsEl) detailsEl.open = true;
   el("goalsModal").classList.remove("hidden");
 };
 
@@ -5361,6 +6351,7 @@ div.querySelector(".edit-goal").onclick = () => {
           delete state.goals[owner][id];
           update(ref(db, "goals"), state.goals);
           renderGoals();
+          renderGoalsProgress();
           updateStats();
         }
       });
@@ -5414,6 +6405,23 @@ function statsApplyPresetDates(range, force = false) {
     const y = now.getFullYear();
     fromDate = new Date(y, 0, 1, 12, 0, 0, 0);
     toDate = new Date(y, 11, 31, 12, 0, 0, 0);
+  } else if (range === "yesterday") {
+    fromDate = new Date(now);
+    fromDate.setDate(now.getDate() - 1);
+    toDate = new Date(fromDate);
+  } else if (range === "lastweek") {
+    // שבוע קודם מלא: ראשון עד שבת
+    const thisSunday = new Date(now);
+    thisSunday.setDate(now.getDate() - now.getDay());
+    fromDate = new Date(thisSunday);
+    fromDate.setDate(thisSunday.getDate() - 7);
+    toDate = new Date(thisSunday);
+    toDate.setDate(thisSunday.getDate() - 1);
+  } else if (range === "lastmonth") {
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    fromDate = new Date(y, m - 1, 1, 12, 0, 0, 0);
+    toDate = new Date(y, m, 0, 12, 0, 0, 0);
   }
 
   fromInput.value = dateKeyFromDate(fromDate);
@@ -5474,15 +6482,16 @@ if (savedUser) {
     el("goalHours").value = "";
     el("btnAddGoal").textContent = "הוסף מטרה";
 
-    el("goalsModal").classList.add("hidden");
     renderGoals();
+    renderGoalsProgress();
+    showToast("🎯 המטרה נשמרה בהצלחה!");
     try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
   };
 
   // =========================
   // Stats range selector & custom dates
   // =========================
-  const rangeButtons = document.querySelectorAll("#statsRangeSelector .segmented-btn");
+  const rangeButtons = document.querySelectorAll("#statsRangeSelector .segmented-btn, #statsPastSelector .segmented-btn");
   const fromInput = el("completedFromDate");
   const toInput = el("completedToDate");
   const customDatesCard = el("statsCustomDatesCard");
@@ -5594,6 +6603,20 @@ if (userSel) {
 
   el("btnCity").onclick = () => qs('[data-target="settingsSection"]')?.click();
   el("btnSaveCity").onclick = saveCitySettings;
+  if (el("btnUseGps")) {
+    el("btnUseGps").onclick = useGpsLocation;
+  }
+  if (el("settingsSummaryTime")) {
+    el("settingsSummaryTime").value = getDailySummaryTime();
+  }
+  if (el("btnSaveSummaryTime")) {
+    el("btnSaveSummaryTime").onclick = saveDailySummaryTime;
+  }
+  if (el("btnShowSummaryNow")) {
+    el("btnShowSummaryNow").onclick = () => openDailySummaryModal();
+  }
+  scheduleDailySummaryAlarm();
+
   el("btnThemeToggle").onclick = toggleTheme;
   el("btnRequestNotifications").onclick = requestNotifications;
   if (el("btnTestNotificationNow")) {
@@ -5628,6 +6651,17 @@ if (userSel) {
   window.openSpecialEventsModal = openSpecialEventsModal;
   window.openStatCategoryBreakdown = openStatCategoryBreakdown;
   window.rolloverPastUncompletedToToday = rolloverPastUncompletedToToday;
+  window.moveItemToNextDay = moveItemToNextDay;
+  window.postponeItemById = postponeItemById;
+  window.quickAddPresetGoal = quickAddPresetGoal;
+  window.completeGoalItemInline = completeGoalItemInline;
+  window.moveGoalItemInline = moveGoalItemInline;
+  window.rolloverAllGoalUncompleted = rolloverAllGoalUncompleted;
+  window.quickScheduleGoal = quickScheduleGoal;
+  window.openDailySummaryModal = openDailySummaryModal;
+  window.completeDailySummaryItem = completeDailySummaryItem;
+  window.moveDailySummaryItemToTomorrow = moveDailySummaryItemToTomorrow;
+  window.rolloverAllTodayToTomorrow = rolloverAllTodayToTomorrow;
 }
 
 if (document.readyState === "loading") {

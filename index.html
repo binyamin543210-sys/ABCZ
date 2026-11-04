@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=blue15" />
-  <link rel="stylesheet" href="theme.css?v=blue15" />
+  <link rel="stylesheet" href="styles.css?v=blue16" />
+  <link rel="stylesheet" href="theme.css?v=blue16" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -31,7 +31,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue15"></script>
+  <script defer src="app.js?v=blue16"></script>
 </head>
 
 <body>
@@ -154,7 +154,14 @@
             <button type="button" class="segmented-btn" data-range="year">שנתי</button>
             <button type="button" class="segmented-btn" id="btnToggleCustomDates" data-range="custom">📅 תאריכים</button>
           </div>
-          <button id="btnOpenGoals" type="button" class="ghost-pill small">🎯 מטרות</button>
+          <div class="stats-second-row">
+            <div id="statsPastSelector" class="stats-past-selector">
+              <button type="button" class="segmented-btn" data-range="yesterday">אתמול</button>
+              <button type="button" class="segmented-btn" data-range="lastweek">שבוע שעבר</button>
+              <button type="button" class="segmented-btn" data-range="lastmonth">חודש שעבר</button>
+            </div>
+            <button id="btnOpenGoals" type="button" class="ghost-pill small stats-goals-btn">🎯 מטרות</button>
+          </div>
           <h2>סטטיסטיקות</h2>
         </div>
 
@@ -213,8 +220,17 @@
 
           <div class="setting-row">
             <span class="setting-icon">📍</span>
-            <input id="settingsCityInput" type="text" placeholder="Jerusalem,IL" />
+            <input id="settingsCityInput" type="text" placeholder="לדוגמה: תל אביב / חיפה" />
+            <button id="btnUseGps" type="button" class="ghost-pill small" title="השתמש במיקום הנוכחי">🛰️</button>
             <button id="btnSaveCity" class="primary-pill small">שמור</button>
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-icon">🌙</span>
+            <span class="setting-label">סיכום יומי</span>
+            <input id="settingsSummaryTime" type="time" value="21:00" class="summary-time-input" />
+            <button id="btnSaveSummaryTime" type="button" class="primary-pill small">שמור</button>
+            <button id="btnShowSummaryNow" type="button" class="ghost-pill small" title="הצג סיכום עכשיו">👁️</button>
           </div>
 
           <div class="setting-row notif-card">
@@ -267,6 +283,7 @@
 
       <div class="task-actions">
         <button id="btnAddFromDay" class="primary-pill">+ הוסף</button>
+        <button id="btnDayRollover" type="button" class="ghost-pill small rollover-btn hidden">⏭️ העבר שלא בוצעו</button>
         <button id="btnToggleDayWeather" class="ghost-pill small">מזג אוויר</button>
       </div>
 
@@ -311,7 +328,7 @@
         </div>
 
         <div class="grid-date-time">
-          <div class="field">
+          <div class="field gdt-date">
             <label>תאריך</label>
             <input name="date" type="date" />
           </div>
@@ -326,29 +343,31 @@
         </div>
 
         <div class="field time-quick-wheels">
-          <div class="reminder-chips" id="editQuickStartTimes" title="בחירת שעת התחלה מהירה">
-            <span class="quick-wheel-lbl">🕒 שעה:</span>
-            <button type="button" class="ghost-pill small" data-quick-start="08:00">08:00</button>
-            <button type="button" class="ghost-pill small" data-quick-start="09:00">09:00</button>
-            <button type="button" class="ghost-pill small" data-quick-start="10:00">10:00</button>
-            <button type="button" class="ghost-pill small" data-quick-start="12:00">12:00</button>
-            <button type="button" class="ghost-pill small" data-quick-start="14:00">14:00</button>
-            <button type="button" class="ghost-pill small" data-quick-start="16:00">16:00</button>
-            <button type="button" class="ghost-pill small" data-quick-start="17:00">17:00</button>
-            <button type="button" class="ghost-pill small" data-quick-start="18:00">18:00</button>
-            <button type="button" class="ghost-pill small" data-quick-start="19:00">19:00</button>
-            <button type="button" class="ghost-pill small" data-quick-start="20:00">20:00</button>
-            <button type="button" class="ghost-pill small" data-quick-start="21:00">21:00</button>
-            <button type="button" class="ghost-pill small" data-quick-start="22:00">22:00</button>
+          <span class="quick-wheel-lbl">🕒 שעה מהירה</span>
+          <div class="quick-grid quick-grid-6" id="editQuickStartTimes">
+            <button type="button" class="ghost-pill small" data-quick-start="08:00">08</button>
+            <button type="button" class="ghost-pill small" data-quick-start="09:00">09</button>
+            <button type="button" class="ghost-pill small" data-quick-start="10:00">10</button>
+            <button type="button" class="ghost-pill small" data-quick-start="12:00">12</button>
+            <button type="button" class="ghost-pill small" data-quick-start="14:00">14</button>
+            <button type="button" class="ghost-pill small" data-quick-start="16:00">16</button>
+            <button type="button" class="ghost-pill small" data-quick-start="17:00">17</button>
+            <button type="button" class="ghost-pill small" data-quick-start="18:00">18</button>
+            <button type="button" class="ghost-pill small" data-quick-start="19:00">19</button>
+            <button type="button" class="ghost-pill small" data-quick-start="20:00">20</button>
+            <button type="button" class="ghost-pill small" data-quick-start="21:00">21</button>
+            <button type="button" class="ghost-pill small" data-quick-start="22:00">22</button>
           </div>
-          <div class="reminder-chips" id="editQuickDurations" style="margin-top:4px;" title="קיצור משך ושעת סיום">
-            <span class="quick-wheel-lbl">⏱️ משך:</span>
-            <button type="button" class="ghost-pill small" data-quick-dur="30">+30 דק׳</button>
-            <button type="button" class="ghost-pill small" data-quick-dur="45">+45 דק׳</button>
-            <button type="button" class="ghost-pill small active" data-quick-dur="60">+1 שעה</button>
-            <button type="button" class="ghost-pill small" data-quick-dur="90">+1.5 ש׳</button>
-            <button type="button" class="ghost-pill small" data-quick-dur="120">+2 שעות</button>
-            <button type="button" class="ghost-pill small" data-quick-dur="180">+3 שעות</button>
+          <span class="quick-wheel-lbl">⏱️ משך</span>
+          <div class="quick-grid quick-grid-4" id="editQuickDurations">
+            <button type="button" class="ghost-pill small" data-quick-dur="10">10 דק׳</button>
+            <button type="button" class="ghost-pill small" data-quick-dur="20">20 דק׳</button>
+            <button type="button" class="ghost-pill small" data-quick-dur="30">30 דק׳</button>
+            <button type="button" class="ghost-pill small" data-quick-dur="45">45 דק׳</button>
+            <button type="button" class="ghost-pill small active" data-quick-dur="60">שעה</button>
+            <button type="button" class="ghost-pill small" data-quick-dur="90">1.5 ש׳</button>
+            <button type="button" class="ghost-pill small" data-quick-dur="120">2 ש׳</button>
+            <button type="button" class="ghost-pill small" data-quick-dur="180">3 ש׳</button>
           </div>
         </div>
 
@@ -416,6 +435,7 @@
               <label>חזרה</label>
               <select name="recurring">
                 <option value="none">ללא</option>
+                <option value="daily">יומי (כל יום)</option>
                 <option value="weekly">שבועי</option>
                 <option value="monthly_greg">חודשי (לועזי)</option>
                 <option value="yearly_greg">שנתי (לועזי)</option>
@@ -587,35 +607,48 @@
   <div class="modal-backdrop" data-close-goals></div>
   <div class="modal-content">
     <div class="modal-header">
-      <div class="modal-title">🎯 ניהול מטרות</div>
+      <div class="modal-title">🎯 המטרות שלי – השבוע</div>
       <button class="icon-btn" data-close-goals>✕</button>
     </div>
 
-    <div class="form">
-      <div class="field">
-        <label>נושא</label>
-        <input id="goalTitle" placeholder="לדוגמה: שיעור" />
-      </div>
+    <div id="goalsProgress" class="goals-progress"></div>
 
-      <div class="field">
-        <label>שעות לשבוע</label>
-        <input id="goalHours" type="number" min="0" step="0.5" />
+    <details id="goalsManageDetails" class="more-fields" style="margin-top:8px;">
+      <summary>⚙️ הוספה / עריכה של מטרות</summary>
+      <div class="form more-body">
+        <div class="grid-2">
+          <div class="field">
+            <label>נושא</label>
+            <input id="goalTitle" placeholder="לדוגמה: כושר / פגישות / ללמוד" />
+          </div>
+          <div class="field">
+            <label>שעות לשבוע</label>
+            <input id="goalHours" type="number" min="0" step="0.5" />
+          </div>
+        </div>
+        <div class="field">
+          <label>שייך ל</label>
+          <select id="goalOwner">
+            <option value="binyamin">בנימין</option>
+            <option value="nana">ננה</option>
+          </select>
+        </div>
+        <button id="btnAddGoal" class="primary-pill full-width">הוסף מטרה</button>
+        <div id="goalsList" class="list-container" style="margin-top:6px"></div>
       </div>
-
-<div class="field">
-  <label>שייך ל</label>
-  <select id="goalOwner">
-    <option value="binyamin">בנימין</option>
-    <option value="nana">ננה</option>
-  </select>
+    </details>
+  </div>
 </div>
-      
-      <button id="btnAddGoal" class="primary-pill full-width">
-        הוסף מטרה
-      </button>
-    </div>
 
-    <div id="goalsList" class="list-container" style="margin-top:10px"></div>
+<!-- DAILY SUMMARY MODAL -->
+<div id="dailySummaryModal" class="modal hidden">
+  <div class="modal-backdrop" data-close-summary></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title" id="dailySummaryTitle">🌙 סיכום יומי</div>
+      <button type="button" class="icon-btn" data-close-summary>✕</button>
+    </div>
+    <div id="dailySummaryBody"></div>
   </div>
 </div>
 
