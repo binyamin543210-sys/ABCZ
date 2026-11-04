@@ -2119,3 +2119,108 @@ body.dark .stats-goals-inline-link {
   display: flex;
   gap: 8px;
 }
+
+/* ---------- סדר יום קבוע (משימות + חלונית יום) ---------- */
+.routine-intro-card {
+  border-right: 4px solid #22c55e;
+  background: color-mix(in srgb, #22c55e 10%, var(--bg-elevated));
+}
+.badge-auto-done {
+  background: rgba(34, 197, 94, 0.16);
+  color: #16a34a;
+  font-weight: 800;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+body.dark .badge-auto-done {
+  color: #4ade80;
+}
+.routine-group-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.routine-rows-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.routine-row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: var(--bg-soft);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+.routine-row-free {
+  border-style: dashed;
+  opacity: 0.92;
+}
+.routine-row-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.routine-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 10px;
+}
+.routine-row-title {
+  font-size: .8rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.routine-row-cat {
+  font-size: .68rem;
+  color: var(--text-soft);
+}
+.routine-row-time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+.routine-row-dur {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text);
+  font-size: .68rem;
+}
+.routine-auto-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: .66rem;
+  font-weight: 800;
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+body.dark .routine-auto-tag {
+  color: #4ade80;
+}
+.day-routine-divider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  margin-top: 6px;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.14);
+  font-size: .76rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.routine-day-card {
+  opacity: 0.9;
+  padding: 8px 11px !important;
+}

@@ -9,7 +9,7 @@ function hasNativeAndroidBridge() {
 }
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue21").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue22").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
@@ -122,11 +122,16 @@ const state = {
 };
 
 const GOAL_COLORS = {
-  "שינה": "#60a5fa",          // תכלת (7 שעות: 00:00–07:00)
-  "עבודה": "#ef4444",         // אדום (10 שעות: 07:00–17:00)
-  "אוכל ומקלחת": "#f59e0b",   // כתום (שעה: 17:00–18:00)
+  "שינה": "#60a5fa",          // תכלת
+  "התארגנות": "#38bdf8",      // תכלת-טורקיז
+  "נסיעות": "#6366f1",        // אינדיגו
+  "נסיעה לעבודה": "#6366f1",  // אינדיגו
+  "נסיעה לבית": "#6366f1",    // אינדיגו
+  "עבודה": "#ef4444",         // אדום
+  "אוכל ומקלחות": "#f59e0b",  // כתום
+  "אוכל ומקלחת": "#f59e0b",   // כתום
   "אוכל + מקלחת": "#f59e0b",  // כתום
-  "זמן פנוי": "#22c55e",      // ירוק (6 שעות: 18:00–00:00)
+  "זמן פנוי": "#22c55e",      // ירוק
   "פגישות": "#8b5cf6",        // סגול
   "תחזוקת בית": "#06b6d4",    // טורקיז
   "כושר ובריאות": "#10b981",  // אמרלד
@@ -151,17 +156,16 @@ function matchesQuickOwnerFilter(ev, filterMode = "all", dateKey = "") {
     return false;
   }
 
-  // בדיקת אירועי ברירת מחדל (שינה, עבודה, אוכל ומקלחת)
+  // בדיקת אירועי סדר יום קבועים (שינה, התארגנות, נסיעה לעבודה, עבודה, נסיעה לבית, אוכל ומקלחות)
   if (isDefaultEvent(ev)) {
     const dk = dateKey || ev.dateKey || "";
     const isTue = dk && dk !== "undated" && /^\d{4}-\d{2}-\d{2}$/.test(dk) && parseDateKey(dk).getDay() === 2;
-    if (titleTrim === "עבודה" && (isTue || ev.owner === "binyamin")) {
-      // ביום שלישי: עבודה היא של בנימין בלבד! ננה לא רואה עבודה ביום שלישי
+    if (isTue || ev.owner === "binyamin") {
+      // ביום שלישי: כל הגדרות סדר היום הקבועות הן של בנימין בלבד!
       if (state.currentUser === "nana") return false;
       if (filterMode === "shared") return false;
       return true;
     }
-    if (ev.owner === "binyamin" && state.currentUser !== "binyamin" && filterMode === "mine") return false;
     if (ev.owner === "nana" && state.currentUser !== "nana" && filterMode === "mine") return false;
     return true;
   }
@@ -230,6 +234,20 @@ function addMinutesToTimeStr(timeStr, minsToAdd) {
   const nm = String(total % 60).padStart(2, "0");
   return `${nh}:${nm}`;
 }
+const DEFAULT_ROUTINE_TITLES = new Set([
+  "שינה",
+  "התארגנות",
+  "נסיעה לעבודה",
+  "עבודה",
+  "נסיעה לבית",
+  "אוכל ומקלחות",
+  "אוכל ומקלחת",
+  "אוכל + מקלחת",
+  "יום חופש לננה",
+  "🌴 יום חופש לננה",
+  "חופש לננה"
+]);
+
 function isDefaultEvent(ev) {
   if (!ev) return false;
 
@@ -246,10 +264,7 @@ function isDefaultEvent(ev) {
   const owner = ev.owner || "";
 
   if (ev.type === "event" && (owner === "shared" || owner === "binyamin" || owner === "nana")) {
-    if (t === "שינה" && ev.startTime === "00:00" && (ev.endTime === "08:00" || ev.endTime === "07:00")) return true;
-    if (t === "עבודה" && (ev.startTime === "08:00" || ev.startTime === "07:00") && ev.endTime === "17:00") return true;
-    if ((t === "אוכל + מקלחת" || t === "אוכל ומקלחת") && ev.startTime === "17:00" && (ev.endTime === "18:30" || ev.endTime === "18:00")) return true;
-    if (t === "יום חופש לננה" || t === "🌴 יום חופש לננה" || t === "חופש לננה") return true;
+    if (DEFAULT_ROUTINE_TITLES.has(t)) return true;
   }
 
   return false;
@@ -542,60 +557,95 @@ function isSameDay(d1, d2) {
 const isShabbat = (date) => date.getDay() === 6;
 const isFriday  = (date) => date.getDay() === 5;
 
+function getDailyRoutineSpecsForDay(day) {
+  // בימים ב, ה (Monday = 1, Thursday = 4)
+  if (day === 1 || day === 4) {
+    return [
+      { key: "def_sleep", title: "שינה", startTime: "00:00", endTime: "06:30", owner: "shared", statCategory: "שינה" },
+      { key: "def_prep", title: "התארגנות", startTime: "06:30", endTime: "07:00", owner: "shared", statCategory: "התארגנות" },
+      { key: "def_drive_work", title: "נסיעה לעבודה", startTime: "07:00", endTime: "07:30", owner: "shared", statCategory: "נסיעות" },
+      { key: "def_work", title: "עבודה", startTime: "07:30", endTime: "16:30", owner: "shared", statCategory: "עבודה" },
+      { key: "def_drive_home", title: "נסיעה לבית", startTime: "16:30", endTime: "16:50", owner: "shared", statCategory: "נסיעות" },
+      { key: "def_food_shower", title: "אוכל ומקלחות", startTime: "16:50", endTime: "18:30", owner: "shared", statCategory: "אוכל ומקלחות" }
+    ];
+  }
+  // בימים א, ד (Sunday = 0, Wednesday = 3)
+  if (day === 0 || day === 3) {
+    return [
+      { key: "def_sleep", title: "שינה", startTime: "00:00", endTime: "06:45", owner: "shared", statCategory: "שינה" },
+      { key: "def_prep", title: "התארגנות", startTime: "06:45", endTime: "07:15", owner: "shared", statCategory: "התארגנות" },
+      { key: "def_drive_work", title: "נסיעה לעבודה", startTime: "07:15", endTime: "07:50", owner: "shared", statCategory: "נסיעות" },
+      { key: "def_work", title: "עבודה", startTime: "07:50", endTime: "16:30", owner: "shared", statCategory: "עבודה" },
+      { key: "def_drive_home", title: "נסיעה לבית", startTime: "16:30", endTime: "16:50", owner: "shared", statCategory: "נסיעות" },
+      { key: "def_food_shower", title: "אוכל ומקלחות", startTime: "16:50", endTime: "18:30", owner: "shared", statCategory: "אוכל ומקלחות" }
+    ];
+  }
+  // ביום ג (Tuesday = 2) – ההגדרות רק לבנימין!
+  if (day === 2) {
+    return [
+      { key: "def_sleep", title: "שינה", startTime: "00:00", endTime: "07:45", owner: "binyamin", statCategory: "שינה" },
+      { key: "def_prep", title: "התארגנות", startTime: "07:45", endTime: "08:15", owner: "binyamin", statCategory: "התארגנות" },
+      { key: "def_drive_work", title: "נסיעה לעבודה", startTime: "08:15", endTime: "08:30", owner: "binyamin", statCategory: "נסיעות" },
+      { key: "def_work", title: "עבודה", startTime: "08:30", endTime: "16:30", owner: "binyamin", statCategory: "עבודה" },
+      { key: "def_drive_home", title: "נסיעה לבית", startTime: "16:30", endTime: "16:50", owner: "binyamin", statCategory: "נסיעות" },
+      { key: "def_food_shower", title: "אוכל ומקלחות", startTime: "16:50", endTime: "18:30", owner: "binyamin", statCategory: "אוכל ומקלחות" }
+    ];
+  }
+  // שישי ושבת (5, 6)
+  return [
+    { key: "def_sleep", title: "שינה", startTime: "00:00", endTime: "07:00", owner: "shared", statCategory: "שינה" }
+  ];
+}
+
 async function ensureDefaultDayEvents(date) {
   const dateKey = dateKeyFromDate(date);
   const day = date.getDay();
+  const specs = getDailyRoutineSpecsForDay(day);
 
-  const existing = state.cache.events[dateKey] || {};
-  const titles = Object.values(existing).map(e => (e.title || "").trim());
+  if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
+  const existing = state.cache.events[dateKey];
+  const dbUpdates = {};
 
-  const toCreate = [];
+  // הסרת אירועי ברירת מחדל ישנים שלא תואמים למפרט החדש של אותו יום
+  const specKeys = new Set(specs.map((s) => s.key));
+  for (const [id, ev] of Object.entries(existing)) {
+    if (!ev || !isDefaultEvent(ev)) continue;
+    if (!specKeys.has(id)) {
+      delete existing[id];
+      dbUpdates[`events/${dateKey}/${id}`] = null;
+    }
+  }
 
-  // שינה – 00:00 עד 07:00 (7 שעות)
-  if (!titles.includes("שינה")) {
-    toCreate.push({
+  for (const spec of specs) {
+    const cur = existing[spec.key];
+    const desired = {
+      _id: spec.key,
       type: "event",
-      owner: "shared",
-      title: "שינה",
-      startTime: "00:00",
-      endTime: "07:00",
+      owner: spec.owner,
+      title: spec.title,
+      startTime: spec.startTime,
+      endTime: spec.endTime,
+      statCategory: spec.statCategory,
       dateKey,
       isDefault: true
-    });
-  }
-
-  // ימי חול: עבודה (07:00 עד 17:00 – 10 שעות) ואוכל ומקלחת (17:00 עד 18:00 – שעה)
-  // ביום שלישי (day === 2) העבודה היא של בנימין בלבד, ולננה אין עבודה (נכנס לזמן פנוי אם אין לה דברים)
-  if (day >= 0 && day <= 4) {
-    const isTuesday = day === 2;
-    if (!titles.includes("עבודה")) {
-      toCreate.push({
-        type: "event",
-        owner: isTuesday ? "binyamin" : "shared",
-        title: "עבודה",
-        startTime: "07:00",
-        endTime: "17:00",
-        dateKey,
-        isDefault: true
-      });
-    }
-
-    if (!titles.includes("אוכל + מקלחת") && !titles.includes("אוכל ומקלחת")) {
-      toCreate.push({
-        type: "event",
-        owner: "shared",
-        title: "אוכל ומקלחת",
-        startTime: "17:00",
-        endTime: "18:00",
-        dateKey,
-        isDefault: true
-      });
+    };
+    if (
+      !cur ||
+      cur.title !== desired.title ||
+      cur.startTime !== desired.startTime ||
+      cur.endTime !== desired.endTime ||
+      cur.owner !== desired.owner ||
+      cur.isDefault !== true
+    ) {
+      existing[spec.key] = desired;
+      dbUpdates[`events/${dateKey}/${spec.key}`] = desired;
     }
   }
 
-  for (const ev of toCreate) {
-    const refNew = push(ref(db, `events/${dateKey}`));
-    await set(refNew, { ...ev, _id: refNew.key });
+  if (Object.keys(dbUpdates).length > 0) {
+    try {
+      await update(ref(db), dbUpdates);
+    } catch {}
   }
 }
 // --- יצירת אירועי ברירת מחדל לכל ימי החודש המוצג ---
@@ -610,11 +660,6 @@ async function preloadDefaultEventsForVisibleMonth() {
     const lastDay  = new Date(year, month + 1, 0);
 
     for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-      const dateKey = dateKeyFromDate(d);
-
-      // אם כבר יש אירועים – לא לגעת
-      if (state.cache.events[dateKey]) continue;
-
       await ensureDefaultDayEvents(new Date(d));
     }
   } finally {
@@ -1753,116 +1798,327 @@ async function rolloverPastUncompletedToToday(typeFilter = "all") {
 // =========================
 // Tasks
 // =========================
+function formatRecurrenceLabelHe(ev) {
+  if (!ev) return "חוזר";
+  const r = ev.recurring || "none";
+  if (r === "daily") return "🔄 כל יום";
+  if (r === "weekly") return "🔄 כל שבוע";
+  if (r === "monthly_greg") return "🔄 כל חודש";
+  if (r === "yearly_greg") return "🔄 כל שנה";
+  if (r === "custom") {
+    const rule = parseCustomRecurrenceRule({
+      weekdays: ev.recurringWeekdays || [],
+      monthDaysStr: Array.isArray(ev.recurringMonthDays) ? ev.recurringMonthDays.join(",") : (ev.recurringMonthDays || ""),
+      freeText: ev.recurringCustomText || ""
+    });
+    return describeCustomRecurrenceRule(rule) || "🔄 מותאם אישית";
+  }
+  return "🔄 סדרה חוזרת";
+}
+
+function renderRoutineScheduleList(list) {
+  const ownerFilter = state.ui.tasksOwnerFilter || "all";
+  const groups = [
+    {
+      title: "📅 ימים ב׳, ה׳ (שני וחמישי)",
+      owner: "shared",
+      ownerBadge: "משותף 👥",
+      items: getDailyRoutineSpecsForDay(1),
+      freeNote: "18:30 – 00:00 • 🟢 זמן פנוי (5.5 ש׳)"
+    },
+    {
+      title: "📅 ימים א׳, ד׳ (ראשון ורביעי)",
+      owner: "shared",
+      ownerBadge: "משותף 👥",
+      items: getDailyRoutineSpecsForDay(0),
+      freeNote: "18:30 – 00:00 • 🟢 זמן פנוי (5.5 ש׳)"
+    },
+    {
+      title: "📅 יום ג׳ (שלישי) – בנימין בלבד",
+      owner: "binyamin",
+      ownerBadge: "בנימין 💙 (לננה חופש)",
+      items: getDailyRoutineSpecsForDay(2),
+      freeNote: "18:30 – 00:00 • 🟢 זמן פנוי (5.5 ש׳)"
+    },
+    {
+      title: "📅 שישי ושבת",
+      owner: "shared",
+      ownerBadge: "משותף 👥",
+      items: getDailyRoutineSpecsForDay(5),
+      freeNote: "07:00 – 00:00 • 🟢 זמן פנוי"
+    }
+  ];
+
+  const intro = document.createElement("div");
+  intro.className = "task-item routine-intro-card";
+  intro.innerHTML = `
+    <div class="task-item-header">
+      <div class="task-title">🗓️ סדר יום קבוע (מבוצע אוטומטית)</div>
+      <span class="badge badge-auto-done">✔ אוטומטי בסטטיסטיקות</span>
+    </div>
+    <div class="task-meta">
+      אירועי סדר היום הקבועים אינם דורשים סימון "בוצע" — הם מתעדכנים אוטומטית ונכנסים ישירות לחישוב 24 השעות בדף הסטטיסטיקות (כולל שינה, התארגנות, נסיעות, עבודה ואוכל ומקלחות).
+    </div>
+  `;
+  list.appendChild(intro);
+
+  groups.forEach((grp) => {
+    if (ownerFilter === "mine" && grp.owner === "binyamin" && state.currentUser === "nana") return;
+    if (ownerFilter === "shared" && grp.owner !== "shared") return;
+
+    const card = document.createElement("div");
+    card.className = "task-item routine-group-card";
+
+    const header = document.createElement("div");
+    header.className = "task-item-header";
+    header.innerHTML = `
+      <div class="task-title">${grp.title}</div>
+      <span class="badge badge-owner-${grp.owner}">${grp.ownerBadge}</span>
+    `;
+    card.appendChild(header);
+
+    const rowsWrap = document.createElement("div");
+    rowsWrap.className = "routine-rows-wrap";
+
+    grp.items.forEach((spec) => {
+      const sMin = parseMinutes(spec.startTime) || 0;
+      const eMin = parseMinutes(spec.endTime) || 0;
+      const durMins = Math.max(0, eMin - sMin);
+      const durTxt = formatMinutesReadable(durMins);
+      const catColor = GOAL_COLORS[spec.statCategory] || "#60a5fa";
+
+      const row = document.createElement("div");
+      row.className = "routine-row-item";
+      row.innerHTML = `
+        <div class="routine-row-main">
+          <span class="routine-dot" style="background:${catColor}"></span>
+          <strong class="routine-row-title">${spec.title}</strong>
+          <span class="routine-row-cat">(${spec.statCategory})</span>
+        </div>
+        <div class="routine-row-time">
+          <span>🕒 ${spec.startTime} – ${spec.endTime}</span>
+          <span class="routine-row-dur">${durTxt}</span>
+          <span class="routine-auto-tag">✔ אוטומטי</span>
+        </div>
+      `;
+      rowsWrap.appendChild(row);
+    });
+
+    const freeRow = document.createElement("div");
+    freeRow.className = "routine-row-item routine-row-free";
+    freeRow.innerHTML = `
+      <div class="routine-row-main">
+        <span class="routine-dot" style="background:${GOAL_COLORS["זמן פנוי"]}"></span>
+        <strong class="routine-row-title">${grp.freeNote}</strong>
+      </div>
+      <div class="routine-row-time">
+        <span class="routine-auto-tag">מתקזז עם משימות שבוצעו</span>
+      </div>
+    `;
+    rowsWrap.appendChild(freeRow);
+
+    card.appendChild(rowsWrap);
+    list.appendChild(card);
+  });
+}
+
 function renderTasks(filter = "undated") {
   updateRolloverMissedButton();
   const list = el("tasksList");
   if (!list) return;
   list.innerHTML = "";
-  const allTasks = [];
 
+  if (filter === "routine") {
+    renderRoutineScheduleList(list);
+    return;
+  }
+
+  const allTasks = [];
+  const registeredSeriesKeys = new Set();
+  const orphanCandidatesBySeries = new Map();
+  const todayKey = dateKeyFromDate(new Date());
+
+  const getSeriesIdentity = (id, ev) => {
+    const baseParentId = ev.parentId || (ev.isRecurringParent ? (ev._id || id) : String(id).replace(/_\d{4}-\d{2}-\d{2}$/, ""));
+    return `${ev.type || "event"}|${baseParentId}|${(ev.title || "").trim()}`;
+  };
+
+  // סריקה ראשונה: איסוף משימות רגילות, אירועים רגילים, ואבות של סדרות חוזרות (גם אם סומנו כבוצעו ביום הראשון!)
   Object.entries(state.cache.events).forEach(([dateKey, items]) => {
     Object.entries(items || {}).forEach(([id, ev]) => {
-      // ⛔ לא מציג פריטים שבוצעו
-      if (ev.completed === true) return;
+      if (!ev || isDefaultEvent(ev)) return;
 
       // סינון מהיר לפי משתמש (הכל / רק שלי / משותף)
-      if (!matchesQuickOwnerFilter(ev, state.ui.tasksOwnerFilter || "all")) return;
+      if (!matchesQuickOwnerFilter(ev, state.ui.tasksOwnerFilter || "all", dateKey)) return;
 
-      // ⛔ חסימה מוחלטת של מופעי חזרות (משימות + אירועים)
-      if (ev.isRecurringInstance === true) {
-        return;
-      }
+      const hasRecurringRule = Boolean(ev.recurring && ev.recurring !== "none");
+      const isParentRecord = ev.isRecurringParent === true || (!ev.isRecurringInstance && hasRecurringRule);
 
-      // משימות רגילות – רק אם זה לא מופע
-      if (ev.type === "task" && !ev.isRecurringInstance) {
-        allTasks.push({ id, dateKey, ...ev });
-        return;
-      }
-
-      // אירועים רגילים (לא חוזרים) – ❌ בלי ברירת מחדל
-      if (
-        ev.type === "event" &&
-        (!ev.recurring || ev.recurring === "none") &&
-        !isDefaultEvent(ev)
-      ) {
-        allTasks.push({ id, dateKey, ...ev });
-        return;
-      }
-      // אירועים חוזרים בלבד
-      if (
-        ev.type === "event" &&
-        ev.recurring &&
-        ev.recurring !== "none" &&
-        ev.isRecurringParent === true
-      ) {
+      if (isParentRecord) {
+        const sKey = getSeriesIdentity(id, ev);
+        registeredSeriesKeys.add(sKey);
+        registeredSeriesKeys.add(`title|${ev.type || "event"}|${(ev.title || "").trim()}`);
         allTasks.push({
           id,
           dateKey,
           ...ev,
-          __recurringEvent: true
+          isRecurringParent: true,
+          __recurringEvent: ev.type === "event",
+          __seriesParentId: ev._id || id
         });
+        return;
+      }
+
+      // אם זה מופע חוזר (isRecurringInstance / parentId / recurring) – נשמור כמועמד למקרה שהאב נמחק או אבד!
+      if (ev.isRecurringInstance === true || ev.parentId || hasRecurringRule) {
+        const sKey = getSeriesIdentity(id, ev);
+        const existingCand = orphanCandidatesBySeries.get(sKey);
+        if (!existingCand) {
+          orphanCandidatesBySeries.set(sKey, { id, dateKey, ev, count: 1 });
+        } else {
+          existingCand.count++;
+          // נעדיף מופע שלא בוצע מהיום והלאה כדי להציג תאריך עדכני
+          const curIsFutureUncompleted = !ev.completed && dateKey >= todayKey;
+          const oldIsFutureUncompleted = !existingCand.ev.completed && existingCand.dateKey >= todayKey;
+          if (curIsFutureUncompleted && (!oldIsFutureUncompleted || dateKey < existingCand.dateKey)) {
+            orphanCandidatesBySeries.set(sKey, { id, dateKey, ev, count: existingCand.count });
+          }
+        }
+        return;
+      }
+
+      // ⛔ למשימות/אירועים חד-פעמיים: לא מציגים פריטים שכבר בוצעו
+      if (ev.completed === true) return;
+
+      if (ev.type === "task") {
+        allTasks.push({ id, dateKey, ...ev });
+        return;
+      }
+
+      if (ev.type === "event") {
+        allTasks.push({ id, dateKey, ...ev });
       }
     });
   });
 
- const urgencyRank = {
-  today: 0,
-  week: 1,
-  month: 2,
-  none: 3
-};
+  // השלמת סדרות חוזרות "יתומות" (כמו "בדיקה" או "לצאת לאוטו" שהאב המקורי שלהן נמחק/הועבר או סומן כבוצע, ונשארו מופעים בלוח)
+  orphanCandidatesBySeries.forEach(({ id, dateKey, ev, count }, sKey) => {
+    const titleKey = `title|${ev.type || "event"}|${(ev.title || "").trim()}`;
+    if (registeredSeriesKeys.has(sKey) || registeredSeriesKeys.has(titleKey)) return;
+    registeredSeriesKeys.add(sKey);
+    registeredSeriesKeys.add(titleKey);
 
-allTasks.sort((a, b) => {
-  const aHasDate = a.dateKey && a.dateKey !== "undated";
-  const bHasDate = b.dateKey && b.dateKey !== "undated";
+    const rawParentId = ev.parentId || String(ev._id || id).replace(/_\d{4}-\d{2}-\d{2}$/, "");
+    allTasks.push({
+      id,
+      dateKey,
+      ...ev,
+      isRecurringParent: true,
+      isRecurringInstance: false,
+      __isOrphanSeries: true,
+      __instancesCount: count,
+      __seriesParentId: rawParentId,
+      __recurringEvent: ev.type === "event"
+    });
+  });
 
-  // קודם מתוארכות
-  if (aHasDate && bHasDate) {
-    if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
-    return compareEventsByTimeAndContainment(a, b);
+  // זיהוי פריטים שנוצרו בכפילות על פני 2+ תאריכים שונים ללא דגל recurring (כדי שניתן יהיה לראות, לערוך ולמחוק אותם במרוכז גם מחוזרים)
+  const byTitleAndType = new Map();
+  Object.entries(state.cache.events).forEach(([dateKey, items]) => {
+    if (!dateKey || dateKey === "undated") return;
+    Object.entries(items || {}).forEach(([id, ev]) => {
+      if (!ev || isDefaultEvent(ev)) return;
+      if (!matchesQuickOwnerFilter(ev, state.ui.tasksOwnerFilter || "all", dateKey)) return;
+      const t = (ev.title || "").trim();
+      if (!t) return;
+      const key = `${ev.type || "event"}|${t}`;
+      if (!byTitleAndType.has(key)) byTitleAndType.set(key, []);
+      byTitleAndType.get(key).push({ id, dateKey, ev });
+    });
+  });
+
+  byTitleAndType.forEach((arr, key) => {
+    if (arr.length < 2) return;
+    const sample = arr[0];
+    const titleKey = `title|${sample.ev.type || "event"}|${(sample.ev.title || "").trim()}`;
+    if (registeredSeriesKeys.has(titleKey)) return;
+    // אם יש לפחות 2 מופעים באותה כותרת והם לא רשומים עדיין כחוזרים – נוסיף ייצוג שלהם גם בלשונית החוזרים כדי שהמשתמש יוכל למחוק/לערוך הכל!
+    const upcoming = arr.find((x) => !x.ev.completed && x.dateKey >= todayKey) || arr[0];
+    allTasks.push({
+      id: upcoming.id,
+      dateKey: upcoming.dateKey,
+      ...upcoming.ev,
+      recurring: upcoming.ev.recurring && upcoming.ev.recurring !== "none" ? upcoming.ev.recurring : "custom",
+      isRecurringParent: true,
+      __isMultiDateSeries: true,
+      __instancesCount: arr.length,
+      __recurringEvent: (upcoming.ev.type || "event") === "event"
+    });
+  });
+
+  const urgencyRank = {
+    today: 0,
+    week: 1,
+    month: 2,
+    none: 3
+  };
+
+  allTasks.sort((a, b) => {
+    const aHasDate = a.dateKey && a.dateKey !== "undated";
+    const bHasDate = b.dateKey && b.dateKey !== "undated";
+
+    if (aHasDate && bHasDate) {
+      if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
+      return compareEventsByTimeAndContainment(a, b);
+    }
+
+    if (aHasDate && !bHasDate) return -1;
+    if (!aHasDate && bHasDate) return 1;
+
+    const ua = urgencyRank[a.urgency || "none"];
+    const ub = urgencyRank[b.urgency || "none"];
+    return ua - ub;
+  });
+
+  const filtered = allTasks.filter((task) => {
+    const hasDate = task.dateKey && task.dateKey !== "undated";
+    const isRecurringParent = task.isRecurringParent === true;
+
+    switch (filter) {
+      case "undated":
+        return task.type === "task" && !hasDate && !isRecurringParent;
+
+      case "dated":
+        return task.type === "task" && hasDate && !isRecurringParent;
+
+      case "recurring":
+        return task.type === "task" && isRecurringParent;
+
+      case "dated-events":
+        return (
+          task.type === "event" &&
+          hasDate &&
+          !isRecurringParent &&
+          !isDefaultEvent(task)
+        );
+
+      case "recurring-events":
+        return task.type === "event" && isRecurringParent;
+
+      default:
+        return false;
+    }
+  });
+
+  if (!filtered.length) {
+    const emptyEl = document.createElement("div");
+    emptyEl.className = "task-meta";
+    emptyEl.style.textAlign = "center";
+    emptyEl.style.padding = "18px 10px";
+    emptyEl.textContent = "אין פריטים בקטגוריה זו כרגע ✨";
+    list.appendChild(emptyEl);
+    return;
   }
-
-  // מתוארכת לפני לא מתוארכת
-  if (aHasDate && !bHasDate) return -1;
-  if (!aHasDate && bHasDate) return 1;
-
-  // שתיהן ללא תאריך → לפי דחיפות
-  const ua = urgencyRank[a.urgency || "none"];
-  const ub = urgencyRank[b.urgency || "none"];
-  return ua - ub;
-});
-
- const filtered = allTasks.filter((task) => {
-  const hasDate = task.dateKey && task.dateKey !== "undated";
-  const isRecurringParent = task.isRecurringParent === true;
-
-  switch (filter) {
-
-    // משימות
-    case "undated":
-      return task.type === "task" && !hasDate;
-
-    case "dated":
-      return task.type === "task" && hasDate && !isRecurringParent;
-
-    case "recurring":
-      return task.type === "task" && isRecurringParent;
-
-    // אירועים
-case "dated-events":
-  return (
-    task.type === "event" &&
-    hasDate &&
-    !isRecurringParent &&
-    !isDefaultEvent(task)
-  );
-    case "recurring-events":
-      return task.type === "event" && isRecurringParent;
-
-    default:
-      return false;
-  }
-});
 
   filtered.forEach((task) => {
     const item = document.createElement("div");
@@ -1873,10 +2129,14 @@ case "dated-events":
 
     const title = document.createElement("div");
     title.className = "task-title";
-    title.textContent = task.title || "(ללא כותרת)";
+    const smartIcon = !isDefaultEvent(task) ? getSmartFunnyEventIcon(task) : "";
+    const rawTitle = task.title || "(ללא כותרת)";
+    title.textContent = smartIcon && !rawTitle.startsWith(smartIcon) ? `${smartIcon} ${rawTitle}` : rawTitle;
     if (task.__recurringEvent) {
-  title.textContent += " (אירוע חוזר)";
-}
+      title.textContent += " (אירוע חוזר)";
+    } else if (task.isRecurringParent && task.type === "task") {
+      title.textContent += " (משימה חוזרת)";
+    }
 
     const ownerBadge = document.createElement("span");
     ownerBadge.className = "badge";
@@ -1895,8 +2155,17 @@ case "dated-events":
     } else {
       parts.push("ללא תאריך");
     }
+    if (task.startTime) {
+      parts.push(`🕒 ${task.startTime}${task.endTime ? "–" + task.endTime : ""}`);
+    }
+    if (task.isRecurringParent) {
+      parts.push(formatRecurrenceLabelHe(task));
+      if (task.__instancesCount && task.__instancesCount > 1) {
+        parts.push(`${task.__instancesCount} מופעים בלוח`);
+      }
+    }
     if (task.duration) parts.push(`${task.duration} דק'`);
-    if (task.urgency) {
+    if (task.urgency && task.urgency !== "none") {
       const map = { today: "היום", week: "השבוע", month: "החודש", none: "לא דחוף" };
       parts.push(`דחיפות: ${map[task.urgency] || task.urgency}`);
     }
@@ -1907,28 +2176,17 @@ case "dated-events":
     const actions = document.createElement("div");
     actions.className = "task-actions";
 
-    if (filter === "recurring") {
+    const isRecTab = filter === "recurring" || filter === "recurring-events";
+    const delBtn = document.createElement("button");
+    delBtn.className = "ghost-pill small";
+    delBtn.textContent = isRecTab ? "🗑 מחק הכל" : "🗑 מחיקה";
+    delBtn.onclick = () => deleteTaskSmart(task);
+    actions.appendChild(delBtn);
 
-      
-      const delAllBtn = document.createElement("button");
-      delAllBtn.className = "ghost-pill small";
-      delAllBtn.textContent = "🗑 מחק הכל";
-      delAllBtn.onclick = () => deleteTaskSmart(task);
-      actions.appendChild(delAllBtn);
-    }
-
-    // מחיקה רגילה (ללא תאריך / עם תאריך)
-if (filter !== "recurring") {
-  const delBtn = document.createElement("button");
-  delBtn.className = "ghost-pill small";
-  delBtn.textContent = "🗑 מחיקה";
-  delBtn.onclick = () => deleteTaskSmart(task);
-  actions.appendChild(delBtn);
-}
     const doneBtn = document.createElement("button");
     doneBtn.className = "ghost-pill small";
-  doneBtn.textContent = task.completed ? "↩ בטל בוצע" : "✔ בוצע";
-doneBtn.onclick = () => toggleTaskDone(task);
+    doneBtn.textContent = task.completed ? "↩ בטל בוצע" : "✔ בוצע";
+    doneBtn.onclick = () => toggleTaskDone(task);
 
     const remBtn = document.createElement("button");
     remBtn.className = "ghost-pill small" + (remLabel ? " reminder-set" : "");
@@ -2061,19 +2319,32 @@ function renderDayEvents(dateKey) {
 
   const events = state.cache.events[dateKey] || {};
 
-  const list = Object.entries(events)
+  const allFiltered = Object.entries(events)
     .filter(
       ([id, ev]) =>
         ev &&
         !(ev.isRecurringParent && events[`${id}_${dateKey}`]) &&
         matchesQuickOwnerFilter(ev, state.ui.calendarOwnerFilter || "all", dateKey)
     )
-    .map(([id, ev]) => ({ id, ...ev }))
-    .sort(compareEventsByTimeAndContainment);
+    .map(([id, ev]) => ({ id, ...ev }));
 
+  const customList = allFiltered.filter((ev) => !isDefaultEvent(ev)).sort(compareEventsByTimeAndContainment);
+  const routineList = allFiltered.filter((ev) => isDefaultEvent(ev)).sort(compareEventsByTimeAndContainment);
+  const list = [...customList, ...routineList];
+
+  let routineHeaderAdded = false;
   list.forEach((ev) => {
+    const isRoutineDef = isDefaultEvent(ev);
+    if (isRoutineDef && !routineHeaderAdded) {
+      routineHeaderAdded = true;
+      const divider = document.createElement("div");
+      divider.className = "day-routine-divider";
+      divider.innerHTML = `<span>🗓️ סדר יום קבוע</span><span class="routine-auto-tag">✔ מבוצע אוטומטית ונכנס לסטטיסטיקות</span>`;
+      container.appendChild(divider);
+    }
+
     const card = document.createElement("div");
-    card.className = "card";
+    card.className = "card" + (isRoutineDef ? " routine-day-card" : "");
     if (ev.owner) card.classList.add(`owner-${ev.owner}`);
 
     const header = document.createElement("div");
@@ -2082,7 +2353,7 @@ function renderDayEvents(dateKey) {
     const title = document.createElement("div");
     title.className = "task-title";
     const rawTitle = ev.title || "(ללא כותרת)";
-    const smartIcon = !isDefaultEvent(ev) ? getSmartFunnyEventIcon(ev) : "";
+    const smartIcon = !isRoutineDef ? getSmartFunnyEventIcon(ev) : "";
     title.textContent = smartIcon && !rawTitle.startsWith(smartIcon) ? `${smartIcon} ${rawTitle}` : rawTitle;
 
     const ownerBadge = document.createElement("span");
@@ -2102,7 +2373,12 @@ function renderDayEvents(dateKey) {
       parts.push(timeText);
     }
     if (ev.duration) parts.push(`${ev.duration} דק'`);
-    parts.push(ev.type === "task" ? "משימה" : "אירוע");
+    if (isRoutineDef) {
+      parts.push(`קטגוריה: ${normalizeStatCategoryTitle(ev.title)}`);
+      parts.push("✔ מבוצע אוטומטית");
+    } else {
+      parts.push(ev.type === "task" ? "משימה" : "אירוע");
+    }
     const remLabel = formatReminderLabel(ev);
     if (remLabel) parts.push(remLabel);
     meta.textContent = parts.join(" • ");
@@ -2111,13 +2387,14 @@ function renderDayEvents(dateKey) {
     desc.className = "task-meta";
     desc.textContent = ev.description || "";
 
-    const actions = document.createElement("div");
-    actions.className = "task-actions";
+    card.appendChild(header);
+    card.appendChild(meta);
+    if (ev.description) card.appendChild(desc);
 
-    // =========================
-    // DONE BUTTON (DAY MODAL)
-    // =========================
-    if (!isDefaultEvent(ev)) {
+    if (!isRoutineDef) {
+      const actions = document.createElement("div");
+      actions.className = "task-actions";
+
       const doneBtn = document.createElement("button");
       doneBtn.className = "ghost-pill small";
       doneBtn.textContent = (ev.completed || ev.completedAt) ? "↩ בטל בוצע" : "✔ בוצע";
@@ -2131,51 +2408,46 @@ function renderDayEvents(dateKey) {
       };
 
       actions.appendChild(doneBtn);
+
+      const remBtn = document.createElement("button");
+      remBtn.className = "ghost-pill small" + (remLabel ? " reminder-set" : "");
+      remBtn.textContent = remLabel ? "🔔 ערוך תזכורת" : "🔔 תזכורת";
+      remBtn.onclick = () => openQuickReminderModal({ ...ev, dateKey, id: ev._id || ev.id });
+      actions.appendChild(remBtn);
+
+      const editBtn = document.createElement("button");
+      editBtn.className = "ghost-pill small";
+      editBtn.textContent = "עריכה";
+      editBtn.onclick = () => {
+        if (ev.isAuto) {
+          openEditModal({
+            type: "task",
+            title: ev.title,
+            startTime: ev.startTime,
+            endTime: ev.endTime,
+            dateKey
+          });
+        } else {
+          openEditModal({ dateKey, id: ev._id || ev.id });
+        }
+      };
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "ghost-pill small";
+      delBtn.textContent = "מחיקה";
+      delBtn.onclick = () => deleteTaskSmart({ ...ev, dateKey });
+
+      const wazeBtn = document.createElement("button");
+      wazeBtn.className = "ghost-pill small";
+      wazeBtn.textContent = "Waze";
+      if (ev.address) wazeBtn.onclick = () => window.open(`https://waze.com/ul?q=${encodeURIComponent(ev.address)}`, "_blank");
+      else wazeBtn.disabled = true;
+
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+      actions.appendChild(wazeBtn);
+      card.appendChild(actions);
     }
-
-    const remBtn = document.createElement("button");
-    remBtn.className = "ghost-pill small" + (remLabel ? " reminder-set" : "");
-    remBtn.textContent = remLabel ? "🔔 ערוך תזכורת" : "🔔 תזכורת";
-    remBtn.onclick = () => openQuickReminderModal({ ...ev, dateKey, id: ev._id || ev.id });
-    actions.appendChild(remBtn);
-
-
-    const editBtn = document.createElement("button");
-    editBtn.className = "ghost-pill small";
-    editBtn.textContent = "עריכה";
-   editBtn.onclick = () => {
-  if (ev.isAuto) {
-    openEditModal({
-      type: "task",
-      title: ev.title,
-      startTime: ev.startTime,
-      endTime: ev.endTime,
-      dateKey
-    });
-  } else {
-    openEditModal({ dateKey, id: ev._id || ev.id });
-  }
-};
-
-    const delBtn = document.createElement("button");
-    delBtn.className = "ghost-pill small";
-    delBtn.textContent = "מחיקה";
-    delBtn.onclick = () => deleteTaskSmart({ ...ev, dateKey });
-
-    const wazeBtn = document.createElement("button");
-    wazeBtn.className = "ghost-pill small";
-    wazeBtn.textContent = "Waze";
-    if (ev.address) wazeBtn.onclick = () => window.open(`https://waze.com/ul?q=${encodeURIComponent(ev.address)}`, "_blank");
-    else wazeBtn.disabled = true;
-
-    actions.appendChild(editBtn);
-    actions.appendChild(delBtn);
-    actions.appendChild(wazeBtn);
-
-    card.appendChild(header);
-    card.appendChild(meta);
-    if (ev.description) card.appendChild(desc);
-    card.appendChild(actions);
 
     container.appendChild(card);
   });
@@ -2665,11 +2937,23 @@ async function handleEditFormSubmit(ev) {
   }
   
 if (existingId) {
+  const prevDk = form.dataset.editDateKey || dateKey;
+  const prevObj = state.cache.events?.[prevDk]?.[existingId] || state.cache.events?.[dateKey]?.[existingId] || {};
+  const isRecNow = Boolean(eventObj.recurring && eventObj.recurring !== "none");
+  const baseSeriesId = prevObj.parentId || String(existingId).replace(/_\d{4}-\d{2}-\d{2}$/, "");
+
+  if (prevDk !== dateKey && state.cache.events?.[prevDk]?.[existingId]) {
+    delete state.cache.events[prevDk][existingId];
+    remove(ref(db, `events/${prevDk}/${existingId}`)).catch(() => {});
+  }
+
   if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
   const updatedExisting = {
     ...eventObj,
     _id: existingId,
-    isRecurringParent: eventObj.recurring && eventObj.recurring !== "none" ? true : null
+    parentId: isRecNow ? null : (prevObj.parentId || null),
+    isRecurringInstance: isRecNow ? null : (prevObj.isRecurringInstance || null),
+    isRecurringParent: isRecNow ? true : null
   };
   state.cache.events[dateKey][existingId] = updatedExisting;
   el("editModal").classList.add("hidden");
@@ -2685,9 +2969,10 @@ if (existingId) {
     showToast("עודכן", 2500);
   }
   await update(ref(db, `events/${dateKey}/${existingId}`), updatedExisting);
-  if (eventObj.recurring && eventObj.recurring !== "none") {
-    await materializeRecurringTask(updatedExisting);
+  if (isRecNow) {
+    await materializeRecurringTask({ ...updatedExisting, __cleanSeriesId: baseSeriesId });
     renderCalendar();
+    renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
   }
   try { updateStats(); } catch {}
 } else {
@@ -2758,15 +3043,40 @@ function openConflictModal({ newEvent, conflicts, form }) {
     modal.classList.add("hidden");
 
     const dateKey = newEvent.dateKey;
+    const isRec = Boolean(newEvent.recurring && newEvent.recurring !== "none");
+    const existingEditId = form?.dataset?.editId || null;
+
+    if (existingEditId) {
+      const updatedExisting = {
+        ...newEvent,
+        _id: existingEditId,
+        isRecurringParent: isRec ? true : null
+      };
+      if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
+      state.cache.events[dateKey][existingEditId] = updatedExisting;
+      el("editModal").classList.add("hidden");
+      await update(ref(db, `events/${dateKey}/${existingEditId}`), updatedExisting);
+      if (isRec) {
+        await materializeRecurringTask(updatedExisting);
+      }
+      renderCalendar();
+      renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
+      if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
+      showToast("עודכן למרות ההתנגשות", 2500);
+      return;
+    }
+
     const newRef = push(ref(db, `events/${dateKey}`));
     const newId = newRef.key || String(Date.now());
-    const fullObj = { ...newEvent, _id: newId };
+    const fullObj = {
+      ...newEvent,
+      _id: newId,
+      parentId: null,
+      isRecurringParent: isRec ? true : null
+    };
     if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
     state.cache.events[dateKey][newId] = fullObj;
     el("editModal").classList.add("hidden");
-    renderCalendar();
-    renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
-    if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
     const rTs = getEventReminderTimestamp(fullObj, dateKey);
     if (rTs && rTs > Date.now()) {
       scheduleDirectReminder({ id: newId, dateKey, ev: fullObj, targetTs: rTs });
@@ -2775,6 +3085,12 @@ function openConflictModal({ newEvent, conflicts, form }) {
       showToast("נשמר למרות ההתנגשות", 2500);
     }
     await set(newRef, fullObj);
+    if (isRec) {
+      await materializeRecurringTask(fullObj);
+    }
+    renderCalendar();
+    renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
+    if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
   };
 
   qsa("[data-close-conflict]", modal).forEach(
@@ -3458,38 +3774,55 @@ async function migrateDefaultsOnce() {
   const all = state.cache.events || {};
   const shouldWriteDb = !state._migratedDefaultsDbOnce;
   state._migratedDefaultsDbOnce = true;
+  const dbUpdates = {};
 
   for (const [dk, items] of Object.entries(all)) {
-    const isTue = dk && dk !== "undated" && /^\d{4}-\d{2}-\d{2}$/.test(dk) && parseDateKey(dk).getDay() === 2;
+    if (!dk || dk === "undated" || !/^\d{4}-\d{2}-\d{2}$/.test(dk)) continue;
+    const day = parseDateKey(dk).getDay();
+    const specs = getDailyRoutineSpecsForDay(day);
+    const specKeys = new Set(specs.map((s) => s.key));
+
     for (const [id, ev] of Object.entries(items || {})) {
-      if (!ev || ev.type !== "event") continue;
-
-      if (isDefaultEvent(ev)) {
-        const titleTrim = (ev.title || "").trim();
-        // מחיקת אירוע "יום חופש לננה" דיפולטיבי אם נוצר בעבר – ננה פשוט לא רואה עבודה ביום שלישי
-        if (titleTrim === "🌴 יום חופש לננה" || titleTrim === "יום חופש לננה" || titleTrim === "חופש לננה") {
-          delete items[id];
-          if (shouldWriteDb) {
-            remove(ref(db, `events/${dk}/${id}`)).catch(() => {});
-          }
-          continue;
-        }
-
-        if (ev.isDefault !== true) {
-          ev.isDefault = true;
-          if (shouldWriteDb) {
-            update(ref(db, `events/${dk}/${id}`), { isDefault: true }).catch(() => {});
-          }
-        }
-        // ביום שלישי: אירוע עבודה דיפולטיבי שייך לבנימין בלבד (לננה אין עבודה ביום שלישי)
-        if (isTue && titleTrim === "עבודה" && ev.owner === "shared") {
-          ev.owner = "binyamin";
-          if (shouldWriteDb) {
-            update(ref(db, `events/${dk}/${id}`), { owner: "binyamin", isDefault: true }).catch(() => {});
-          }
+      if (!ev) continue;
+      if (isDefaultEvent(ev) && !specKeys.has(id)) {
+        delete items[id];
+        if (shouldWriteDb) {
+          dbUpdates[`${dk}/${id}`] = null;
         }
       }
     }
+
+    for (const spec of specs) {
+      const cur = items[spec.key];
+      const desired = {
+        _id: spec.key,
+        type: "event",
+        owner: spec.owner,
+        title: spec.title,
+        startTime: spec.startTime,
+        endTime: spec.endTime,
+        statCategory: spec.statCategory,
+        dateKey: dk,
+        isDefault: true
+      };
+      if (
+        !cur ||
+        cur.title !== desired.title ||
+        cur.startTime !== desired.startTime ||
+        cur.endTime !== desired.endTime ||
+        cur.owner !== desired.owner ||
+        cur.isDefault !== true
+      ) {
+        items[spec.key] = desired;
+        if (shouldWriteDb) {
+          dbUpdates[`${dk}/${spec.key}`] = desired;
+        }
+      }
+    }
+  }
+
+  if (shouldWriteDb && Object.keys(dbUpdates).length > 0) {
+    update(ref(db, "events"), dbUpdates).catch(() => {});
   }
 }
 
@@ -4993,7 +5326,12 @@ function moveTaskToDate(task, newDateKey) {
 
 const ROUTINE_STAT_TITLES = [
   "שינה",
+  "התארגנות",
+  "נסיעות",
+  "נסיעה לעבודה",
+  "נסיעה לבית",
   "עבודה",
+  "אוכל ומקלחות",
   "אוכל ומקלחת",
   "אוכל + מקלחת",
   "זמן פנוי"
@@ -5064,7 +5402,12 @@ function isRoutineStatEvent(ev) {
 function normalizeStatCategoryTitle(rawTitle) {
   const t = (rawTitle || "").trim();
   if (!t) return "משימה";
-  if (t === "אוכל + מקלחת" || t === "אוכל" || t === "מקלחת") return "אוכל ומקלחת";
+  if (t === "אוכל + מקלחת" || t === "אוכל ומקלחת" || t === "אוכל ומקלחות" || t === "אוכל" || t === "מקלחת") {
+    return "אוכל ומקלחות";
+  }
+  if (t === "נסיעה לעבודה" || t === "נסיעה לבית" || t === "נסיעות") {
+    return "נסיעות";
+  }
   return t;
 }
 
@@ -5207,6 +5550,8 @@ function computeStatsForDatesList(dates, user) {
   const totalHours = totalDays * 24;
 
   let sleepMinutes = 0;
+  let prepMinutes = 0;
+  let travelMinutes = 0;
   let workMinutes = 0;
   let foodShowerMinutes = 0;
   let freeMinutes = 0;
@@ -5233,7 +5578,7 @@ function computeStatsForDatesList(dates, user) {
 
   const resolveCategory = buildSmartTitleResolver(allCompletedTitles);
 
-  const addBreakdownItem = (catLabel, ev, durMins) => {
+  const addBreakdownItem = (catLabel, ev, durMins, isAutoRoutine = false) => {
     if (!categoryBreakdown[catLabel]) categoryBreakdown[catLabel] = [];
     categoryBreakdown[catLabel].push({
       _id: ev._id || ev.id,
@@ -5243,23 +5588,47 @@ function computeStatsForDatesList(dates, user) {
       endTime: ev.endTime || null,
       owner: ev.owner || "shared",
       type: ev.type || "event",
-      effectiveDuration: durMins
+      effectiveDuration: durMins,
+      isAutoRoutine
     });
   };
 
   dates.forEach((date) => {
     const dk = dateKeyFromDate(date);
-    // 1440 דקות ביממה (24 שעות = 100%)
-    // 00:00-07:00 (0..419) -> 7 שעות שינה
-    // 07:00-17:00 (420..1019) -> 10 שעות עבודה (וביום שלישי לננה: יום חופש -> זמן פנוי!)
-    // 17:00-18:00 (1020..1079) -> 1 שעה אוכל ומקלחת
-    // 18:00-00:00 (1080..1439) -> 6 שעות זמן פנוי
-    const isNanaTuesdayOff = user === "nana" && date.getDay() === 2;
-    const dayTimeline = new Array(1440);
-    for (let m = 0; m < 420; m++) dayTimeline[m] = "שינה";
-    for (let m = 420; m < 1020; m++) dayTimeline[m] = isNanaTuesdayOff ? "זמן פנוי" : "עבודה";
-    for (let m = 1020; m < 1080; m++) dayTimeline[m] = "אוכל ומקלחת";
-    for (let m = 1080; m < 1440; m++) dayTimeline[m] = "זמן פנוי";
+    const day = date.getDay();
+    const dayTimeline = new Array(1440).fill("זמן פנוי");
+
+    const isNanaTuesdayOff = user === "nana" && day === 2;
+    if (isNanaTuesdayOff) {
+      // ביום שלישי ההגדרות הקבועות הן של בנימין בלבד; לננה שינה 00:00-07:00 ושאר היום זמן פנוי
+      for (let m = 0; m < 420; m++) dayTimeline[m] = "שינה";
+      addBreakdownItem("שינה", { _id: "def_sleep", title: "שינה", dateKey: dk, startTime: "00:00", endTime: "07:00", owner: "nana", type: "event" }, 420, true);
+    } else {
+      const routineSpecs = getDailyRoutineSpecsForDay(day);
+      routineSpecs.forEach((spec) => {
+        if (spec.owner === "binyamin" && user !== "binyamin") return;
+        const sMin = Math.max(0, Math.min(1439, timeToMinutes(spec.startTime)));
+        const eMin = Math.max(sMin + 1, Math.min(1440, timeToMinutes(spec.endTime)));
+        const cat = spec.statCategory || normalizeStatCategoryTitle(spec.title);
+        for (let m = sMin; m < eMin; m++) {
+          dayTimeline[m] = cat;
+        }
+        addBreakdownItem(
+          cat,
+          {
+            _id: spec.key,
+            title: spec.title,
+            dateKey: dk,
+            startTime: spec.startTime,
+            endTime: spec.endTime,
+            owner: spec.owner,
+            type: "event"
+          },
+          eMin - sMin,
+          true
+        );
+      });
+    }
 
     const dayEventsObj = state.cache.events?.[dk] || {};
     const dayItems = Object.entries(dayEventsObj).map(([id, ev]) => ({
@@ -5295,7 +5664,6 @@ function computeStatsForDatesList(dates, user) {
       if (!isRoutine && !isDone) return;
 
       const rawClean = normalizeStatCategoryTitle(ev.title);
-      // בדיקה האם המשימה משויכת למטרה שבועית (ישירות או לפי התאמת נושא) – כדי שהמטרות ייכנסו לסטטיסטיקה השבועית!
       let matchedGoalTitle = ev.goalTitle || null;
       if (!matchedGoalTitle && userGoalsList.length > 0 && typeof doesItemMatchGoal === "function") {
         const foundGoal = userGoalsList.find((g) => doesItemMatchGoal(ev, g.title));
@@ -5312,7 +5680,7 @@ function computeStatsForDatesList(dates, user) {
       if (dur <= 0) dur = 60;
 
       if (!isRoutine) {
-        addBreakdownItem(label, ev, dur);
+        addBreakdownItem(label, ev, dur, false);
       }
 
       if (ev.startTime) {
@@ -5329,7 +5697,7 @@ function computeStatsForDatesList(dates, user) {
     // משימות/אירועים שבוצעו ללא שעת התחלה מקזזים מזמן פנוי (או משאר היום אם נגמר הזמן הפנוי)
     untimedCompleted.forEach(({ label, dur }) => {
       let remaining = dur;
-      const replaceOrder = ["זמן פנוי", "עבודה", "אוכל ומקלחת", "שינה"];
+      const replaceOrder = ["זמן פנוי", "עבודה", "אוכל ומקלחות", "נסיעות", "התארגנות", "שינה"];
       for (const targetCat of replaceOrder) {
         if (remaining <= 0) break;
         for (let m = 1439; m >= 0 && remaining > 0; m--) {
@@ -5344,8 +5712,10 @@ function computeStatsForDatesList(dates, user) {
     for (let m = 0; m < 1440; m++) {
       const cat = dayTimeline[m];
       if (cat === "שינה") sleepMinutes++;
+      else if (cat === "התארגנות") prepMinutes++;
+      else if (cat === "נסיעות") travelMinutes++;
       else if (cat === "עבודה") workMinutes++;
-      else if (cat === "אוכל ומקלחת") foodShowerMinutes++;
+      else if (cat === "אוכל ומקלחות" || cat === "אוכל ומקלחת") foodShowerMinutes++;
       else if (cat === "זמן פנוי") freeMinutes++;
       else otherMap[cat] = (otherMap[cat] || 0) + 1;
     }
@@ -5361,6 +5731,8 @@ function computeStatsForDatesList(dates, user) {
     totalDays,
     totalHours,
     sleepMinutes,
+    prepMinutes,
+    travelMinutes,
     workMinutes,
     foodShowerMinutes,
     freeMinutes,
@@ -5387,9 +5759,13 @@ function computeTargetStatuses(stats) {
 
     if (normGoal === "שינה") {
       actualHours = stats.sleepMinutes / 60;
+    } else if (normGoal === "התארגנות") {
+      actualHours = (stats.prepMinutes || 0) / 60;
+    } else if (normGoal === "נסיעות") {
+      actualHours = (stats.travelMinutes || 0) / 60;
     } else if (normGoal === "עבודה") {
       actualHours = stats.workMinutes / 60;
-    } else if (normGoal === "אוכל ומקלחת") {
+    } else if (normGoal === "אוכל ומקלחות" || normGoal === "אוכל ומקלחת") {
       actualHours = stats.foodShowerMinutes / 60;
     } else if (normGoal === "זמן פנוי") {
       actualHours = stats.freeMinutes / 60;
@@ -5623,10 +5999,13 @@ function openStatCategoryBreakdown(categoryLabel) {
                 <span>${timeStr}</span>
               </div>
               <div class="stat-card-actions">
-                <button type="button" class="ghost-pill small"
-                  onclick="toggleTaskDone({ _id: '${safeId}', dateKey: '${safeDk}', completed: true }); document.getElementById('statCategoryBreakdownModal').classList.add('hidden');">
-                  ↩ בטל בוצע
-                </button>
+                ${i.isAutoRoutine
+                  ? `<span class="routine-auto-tag">✔ מבוצע אוטומטית (סדר יום קבוע)</span>`
+                  : `<button type="button" class="ghost-pill small"
+                      onclick="toggleTaskDone({ _id: '${safeId}', dateKey: '${safeDk}', completed: true }); document.getElementById('statCategoryBreakdownModal').classList.add('hidden');">
+                      ↩ בטל בוצע
+                    </button>`
+                }
               </div>
             </div>
           `;
@@ -5746,6 +6125,8 @@ function updateStats() {
   if (!canvas || !window.Chart) return;
 
   const sleepHours = stats.sleepMinutes / 60;
+  const prepHours = (stats.prepMinutes || 0) / 60;
+  const travelHours = (stats.travelMinutes || 0) / 60;
   const workHours = stats.workMinutes / 60;
   const foodShowerHours = stats.foodShowerMinutes / 60;
   const freeHours = stats.freeMinutes / 60;
@@ -5758,7 +6139,9 @@ function updateStats() {
     { label: "עבודה", hours: workHours },
     { label: "שינה", hours: sleepHours },
     { label: "זמן פנוי", hours: freeHours },
-    { label: "אוכל ומקלחת", hours: foodShowerHours },
+    { label: "אוכל ומקלחות", hours: foodShowerHours },
+    { label: "נסיעות", hours: travelHours },
+    { label: "התארגנות", hours: prepHours },
     ...otherEntries.map(([label, mins]) => ({ label, hours: mins / 60 }))
   ].filter((item) => item.hours > 0.001);
 
@@ -6178,75 +6561,141 @@ async function deleteTaskSmart(task) {
   const id = task._id || task.id;
   if (!id || !task.dateKey) return;
 
-  // אם זה אב של חזרה – מוחקים רק מופעים עתידיים
-  if (task.isRecurringParent) {
-    const now = new Date();
+  const isRecSeries = Boolean(
+    task.isRecurringParent ||
+    task.__isOrphanSeries ||
+    task.__isMultiDateSeries ||
+    (task.recurring && task.recurring !== "none" && !task.isRecurringInstance)
+  );
+
+  // אם מוחקים סדרה חוזרת (או כרטיס מחלונית משימות חוזרות / אירועים חוזרים) – מוחקים את כל המופעים שלה מהלוח!
+  if (isRecSeries) {
+    const seriesParentId = task.__seriesParentId || task.parentId || String(id).replace(/_\d{4}-\d{2}-\d{2}$/, "");
+    const targetTitle = (task.title || "").trim();
+    const targetType = task.type || "event";
+    const removals = {};
 
     Object.entries(state.cache.events).forEach(([dk, items]) => {
-      const d = parseDateKey(dk);
-      if (d < now) return; // ⛔ לא מוחקים עבר
-
       Object.entries(items || {}).forEach(([cid, ev]) => {
-        if (ev.parentId === id) {
-          remove(ref(db, `events/${dk}/${cid}`));
+        if (!ev || isDefaultEvent(ev)) return;
+        const evBaseId = ev.parentId || String(ev._id || cid).replace(/_\d{4}-\d{2}-\d{2}$/, "");
+        const sameSeriesId = seriesParentId && (
+          cid === seriesParentId ||
+          ev.parentId === seriesParentId ||
+          evBaseId === seriesParentId ||
+          String(cid).startsWith(seriesParentId + "_")
+        );
+        const sameTitleAndType =
+          targetTitle &&
+          (ev.title || "").trim() === targetTitle &&
+          (ev.type || "event") === targetType &&
+          (ev.isRecurringInstance || ev.isRecurringParent || (ev.recurring && ev.recurring !== "none") || task.__isMultiDateSeries);
+
+        if (sameSeriesId || sameTitleAndType) {
+          delete items[cid];
+          removals[`${dk}/${cid}`] = null;
         }
       });
     });
 
-    // מוחקים את האב עצמו
-    await remove(ref(db, `events/${task.dateKey}/${id}`));
+    if (state.cache.events[task.dateKey]?.[id]) {
+      delete state.cache.events[task.dateKey][id];
+    }
+    removals[`${task.dateKey}/${id}`] = null;
 
-    showToast("נמחקו מופעים עתידיים");
+    renderCalendar();
+    renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+    if (!el("dayModal")?.classList.contains("hidden") && state.ui.openDayKey) {
+      renderDayEvents(state.ui.openDayKey);
+    }
+    try { updateStats(); } catch {}
+
+    await update(ref(db, "events"), removals);
+    showToast("🗑 כל מופעי הסדרה החוזרת נמחקו");
   } else {
-    // מחיקה רגילה
+    // מחיקה רגילה של מופע בודד
+    if (state.cache.events[task.dateKey]?.[id]) {
+      delete state.cache.events[task.dateKey][id];
+    }
+    renderCalendar();
+    renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+    if (!el("dayModal")?.classList.contains("hidden") && state.ui.openDayKey) {
+      renderDayEvents(state.ui.openDayKey);
+    }
+    try { updateStats(); } catch {}
+
     await remove(ref(db, `events/${task.dateKey}/${id}`));
     showToast("נמחק");
   }
 
-  // סגירת חלוניות
+  // סגירת חלונית עריכה אם פתוחה
   el("editModal")?.classList.add("hidden");
-  el("dayModal")?.classList.add("hidden");
 }
 // ===============================
 // Recurring materializer
 async function materializeRecurringTask(task) {
   if (!task || !task.dateKey || task.dateKey === "undated" || !task._id) return;
 
-  const start = parseDateKey(task.dateKey);
+  const baseSeriesId = task.__cleanSeriesId || task.parentId || String(task._id).replace(/_\d{4}-\d{2}-\d{2}$/, "");
+  const cleanTask = { ...task };
+  delete cleanTask.__cleanSeriesId;
+  delete cleanTask.__isOrphanSeries;
+  delete cleanTask.__isMultiDateSeries;
+  delete cleanTask.__instancesCount;
+  delete cleanTask.__seriesParentId;
+  delete cleanTask.__recurringEvent;
+
+  const start = parseDateKey(cleanTask.dateKey);
   const end = new Date(start);
   end.setFullYear(end.getFullYear() + 1);
 
   const customRule =
-    task.recurring === "custom"
+    cleanTask.recurring === "custom"
       ? parseCustomRecurrenceRule({
-          weekdays: task.recurringWeekdays || [],
-          monthDaysStr: Array.isArray(task.recurringMonthDays)
-            ? task.recurringMonthDays.join(",")
-            : task.recurringMonthDays || "",
-          freeText: task.recurringCustomText || ""
+          weekdays: cleanTask.recurringWeekdays || [],
+          monthDaysStr: Array.isArray(cleanTask.recurringMonthDays)
+            ? cleanTask.recurringMonthDays.join(",")
+            : cleanTask.recurringMonthDays || "",
+          freeText: cleanTask.recurringCustomText || ""
         })
       : null;
 
   const multi = {};
+
+  // ניקוי מופעים ישנים של אותה סדרה לפני יצירה מחדש (למשל בעת עריכת ימים/שעות של משימה חוזרת)
+  Object.entries(state.cache.events || {}).forEach(([dk, items]) => {
+    Object.entries(items || {}).forEach(([cid, ev]) => {
+      if (!ev || cid === cleanTask._id) return;
+      if (
+        ev.parentId === cleanTask._id ||
+        ev.parentId === baseSeriesId ||
+        String(cid).startsWith(baseSeriesId + "_")
+      ) {
+        delete items[cid];
+        multi[`${dk}/${cid}`] = null;
+      }
+    });
+  });
+
   for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
     const dk = dateKeyFromDate(d);
 
     // daily = כל יום, ללא סינון
-    if (task.recurring === "weekly" && d.getDay() !== start.getDay()) continue;
-    if (task.recurring === "monthly_greg" && d.getDate() !== start.getDate()) continue;
+    if (cleanTask.recurring === "weekly" && d.getDay() !== start.getDay()) continue;
+    if (cleanTask.recurring === "monthly_greg" && d.getDate() !== start.getDate()) continue;
     if (
-      task.recurring === "yearly_greg" &&
+      cleanTask.recurring === "yearly_greg" &&
       (d.getDate() !== start.getDate() || d.getMonth() !== start.getMonth())
     ) continue;
-    if (task.recurring === "custom") {
+    if (cleanTask.recurring === "custom") {
       if (!doesDateMatchCustomRecurrence(d, start, customRule)) continue;
     }
 
-    const id = `${task._id}_${dk}`;
+    const id = `${baseSeriesId}_${dk}`;
     const inst = {
-      ...task,
+      ...cleanTask,
       _id: id,
-      parentId: task._id,
+      parentId: cleanTask._id,
       isRecurringParent: null,
       isRecurringInstance: true,
       dateKey: dk
@@ -6991,7 +7440,9 @@ function renderDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
       <div class="summary-stat-pills">
         <span class="summary-stat-pill">💼 עבודה: <strong>${formatMinutesReadable(stats.workMinutes)}</strong></span>
         <span class="summary-stat-pill">🟢 זמן פנוי: <strong>${formatMinutesReadable(stats.freeMinutes)}</strong></span>
-        <span class="summary-stat-pill">🍽️ אוכל ומקלחת: <strong>${formatMinutesReadable(stats.foodShowerMinutes)}</strong></span>
+        <span class="summary-stat-pill">🍽️ אוכל ומקלחות: <strong>${formatMinutesReadable(stats.foodShowerMinutes)}</strong></span>
+        <span class="summary-stat-pill">🚗 נסיעות: <strong>${formatMinutesReadable(stats.travelMinutes || 0)}</strong></span>
+        <span class="summary-stat-pill">🪥 התארגנות: <strong>${formatMinutesReadable(stats.prepMinutes || 0)}</strong></span>
         <span class="summary-stat-pill">😴 שינה: <strong>${formatMinutesReadable(stats.sleepMinutes)}</strong></span>
         ${customCatsHtml}
       </div>
