@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=blue16" />
-  <link rel="stylesheet" href="theme.css?v=blue16" />
+  <link rel="stylesheet" href="styles.css?v=blue17" />
+  <link rel="stylesheet" href="theme.css?v=blue17" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -31,7 +31,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue16"></script>
+  <script defer src="app.js?v=blue17"></script>
 </head>
 
 <body>
@@ -394,8 +394,53 @@
           </div>
         </div>
 
+        <div class="grid-2">
+          <div class="field">
+            <label>🔄 חזרה קבועה</label>
+            <select name="recurring" id="editRecurringSelect">
+              <option value="none">ללא</option>
+              <option value="daily">יומי (כל יום)</option>
+              <option value="weekly">שבועי</option>
+              <option value="monthly_greg">חודשי (לועזי)</option>
+              <option value="yearly_greg">שנתי (לועזי)</option>
+              <option value="custom">✨ מותאם אישית (ימים / תאריכים / מלל חופשי)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>🎯 שיוך למטרה שבועית</label>
+            <select name="goalTitle" id="editGoalSelect">
+              <option value="">ללא מטרה</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="customRecurringBox" class="custom-recurring-box hidden">
+          <div class="custom-rec-title">📅 בחר ימים בשבוע (אפשר כמה יחד):</div>
+          <div class="weekday-pills-row" id="customRecWeekdays">
+            <button type="button" class="weekday-pill" data-wd="0">א׳</button>
+            <button type="button" class="weekday-pill" data-wd="1">ב׳</button>
+            <button type="button" class="weekday-pill" data-wd="2">ג׳</button>
+            <button type="button" class="weekday-pill" data-wd="3">ד׳</button>
+            <button type="button" class="weekday-pill" data-wd="4">ה׳</button>
+            <button type="button" class="weekday-pill" data-wd="5">ו׳</button>
+            <button type="button" class="weekday-pill" data-wd="6">ש׳</button>
+          </div>
+
+          <div class="custom-rec-title" style="margin-top:6px;">📆 או ימים קבועים בחודש (למשל: 1, 15):</div>
+          <div class="custom-rec-month-row">
+            <input type="text" id="customRecMonthDays" name="recurringMonthDays" placeholder="למשל: 1, 10, 15" />
+            <button type="button" class="ghost-pill small" data-mday-chip="1">כל 1 לחודש</button>
+            <button type="button" class="ghost-pill small" data-mday-chip="10">כל 10</button>
+            <button type="button" class="ghost-pill small" data-mday-chip="15">כל 15</button>
+          </div>
+
+          <div class="custom-rec-title" style="margin-top:6px;">✍️ או כתוב במלל חופשי כל קומבינציה:</div>
+          <input type="text" id="customRecFreeText" name="recurringCustomText" placeholder="למשל: כל יום שלישי, כל 1 לחודש, שני וחמישי, כל שבועיים ביום ג׳" />
+          <div id="customRecurringPreview" class="custom-rec-preview"></div>
+        </div>
+
         <details class="more-fields">
-          <summary>⚙️ עוד אפשרויות – תיאור, דחיפות, משך, כתובת, חזרה</summary>
+          <summary>⚙️ עוד אפשרויות – תיאור, דחיפות, משך, כתובת</summary>
           <div class="more-body">
             <div class="field">
               <label>תיאור</label>
@@ -429,17 +474,6 @@
               <div class="task-actions">
                 <button id="btnOpenWaze" type="button" class="ghost-pill small">פתח Waze</button>
               </div>
-            </div>
-
-            <div class="field">
-              <label>חזרה</label>
-              <select name="recurring">
-                <option value="none">ללא</option>
-                <option value="daily">יומי (כל יום)</option>
-                <option value="weekly">שבועי</option>
-                <option value="monthly_greg">חודשי (לועזי)</option>
-                <option value="yearly_greg">שנתי (לועזי)</option>
-              </select>
             </div>
           </div>
         </details>
@@ -595,7 +629,7 @@
 <script>
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js?v=blue10').then((reg) => {
+      navigator.serviceWorker.register('./sw.js?v=blue17').then((reg) => {
         try { reg.update(); } catch (e) {}
       }).catch(() => {});
     });
@@ -642,13 +676,36 @@
 
 <!-- DAILY SUMMARY MODAL -->
 <div id="dailySummaryModal" class="modal hidden">
-  <div class="modal-backdrop" data-close-summary></div>
+  <div class="modal-backdrop" data-close-daily-summary data-close-summary></div>
   <div class="modal-content">
     <div class="modal-header">
       <div class="modal-title" id="dailySummaryTitle">🌙 סיכום יומי</div>
-      <button type="button" class="icon-btn" data-close-summary>✕</button>
+      <button type="button" class="icon-btn" data-close-daily-summary data-close-summary>✕</button>
     </div>
     <div id="dailySummaryBody"></div>
+  </div>
+</div>
+
+<!-- ROLLOVER SELECT MODAL (בחירת משימות שחלפו להעברה) -->
+<div id="rolloverSelectModal" class="modal hidden">
+  <div class="modal-backdrop" data-close-rollover></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title" id="rolloverModalTitle">⏭️ העברת משימות שלא בוצעו</div>
+      <button type="button" class="icon-btn" data-close-rollover>✕</button>
+    </div>
+    <div class="rollover-modal-toolbar">
+      <label class="rollover-select-all-lbl">
+        <input type="checkbox" id="rolloverSelectAllChk" checked />
+        <span>בחר הכל</span>
+      </label>
+      <span id="rolloverModalSub" class="task-meta"></span>
+    </div>
+    <div id="rolloverModalList" class="list-container rollover-modal-list"></div>
+    <div class="rollover-modal-actions">
+      <button type="button" id="btnRolloverMoveSelected" class="ghost-pill full-width">☑️ העבר מסומנות</button>
+      <button type="button" id="btnRolloverMoveAll" class="primary-pill full-width">⏭️ העבר הכל</button>
+    </div>
   </div>
 </div>
 

@@ -1701,3 +1701,381 @@ body.dark .goals-manage-summary { color: #93c5fd; }
   gap: 4px;
   flex: 0 0 auto;
 }
+
+/* ---------- 9. תיקון יציבות ונראות מודאלים + כפתור X בולט ודביק בראש החלונית ---------- */
+:root {
+  --bg-soft: rgba(148, 163, 184, 0.14);
+}
+body.dark {
+  --bg-soft: rgba(255, 255, 255, 0.08);
+}
+.modal {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)) !important;
+  box-sizing: border-box !important;
+}
+.modal.hidden {
+  display: none !important;
+}
+.modal-content {
+  position: relative !important;
+  z-index: 2 !important;
+  width: min(95vw, 440px) !important;
+  max-width: 95vw !important;
+  max-height: 85vh !important;
+  max-height: 85dvh !important;
+  border-radius: 22px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+  padding: 0 14px 16px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+body.dark .modal-content {
+  background: #131a2a !important;
+  color: #f8fafc !important;
+}
+.modal-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 30 !important;
+  background: inherit !important;
+  padding: 12px 0 10px !important;
+  margin-bottom: 10px !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+}
+.modal-header .icon-btn,
+.modal-header [data-close-goals],
+.modal-header [data-close-summary],
+.modal-header [data-close-daily-summary],
+.modal-header [data-close-rollover],
+.modal-header [data-close-modal],
+.modal-header [data-close-postpone],
+.modal-header [data-close-reminder],
+.modal-header [data-close-special],
+.modal-header [data-close-cat-breakdown],
+.modal-header [data-close-picker],
+.modal-header [data-close-conflict] {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  border-radius: 50% !important;
+  background: rgba(239, 68, 68, 0.16) !important;
+  color: #ef4444 !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  font-size: 1.05rem !important;
+  font-weight: 900 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  flex: 0 0 36px !important;
+}
+body.dark .modal-header .icon-btn {
+  background: rgba(239, 68, 68, 0.25) !important;
+  color: #fca5a5 !important;
+}
+
+/* ---------- 10. תגיות אירועים קריאות בלוח השנה במקום נקודות קטנות + חופש לננה בשלישי ---------- */
+.day-nana-off {
+  font-size: .52rem !important;
+  font-weight: 800;
+  line-height: 1.15;
+  padding: 1px 4px;
+  border-radius: 5px;
+  background: rgba(236, 72, 153, 0.18);
+  color: #db2777;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+body.dark .day-nana-off {
+  background: rgba(236, 72, 153, 0.26);
+  color: #f9a8d4;
+}
+.day-points {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-end !important;
+  gap: 2px !important;
+  width: 100% !important;
+  margin-top: auto !important;
+}
+.cal-event-pill {
+  font-size: .55rem !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  padding: 1.5px 4px !important;
+  border-radius: 5px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  text-align: right !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  background: rgba(59, 130, 246, 0.2);
+  color: #1d4ed8;
+  border-right: 2.5px solid #3b82f6;
+}
+body.dark .cal-event-pill {
+  background: rgba(59, 130, 246, 0.28);
+  color: #bfdbfe;
+}
+.cal-event-pill.owner-nana {
+  background: rgba(236, 72, 153, 0.2);
+  color: #be185d;
+  border-right-color: #ec4899;
+}
+body.dark .cal-event-pill.owner-nana {
+  background: rgba(236, 72, 153, 0.28);
+  color: #fbcfe8;
+}
+.cal-event-pill.owner-shared {
+  background: rgba(16, 185, 129, 0.2);
+  color: #047857;
+  border-right-color: #10b981;
+}
+body.dark .cal-event-pill.owner-shared {
+  background: rgba(16, 185, 129, 0.28);
+  color: #a7f3d0;
+}
+.cal-event-pill.done {
+  opacity: .68;
+  text-decoration: line-through;
+}
+.cal-event-more {
+  font-size: .5rem !important;
+  font-weight: 800;
+  text-align: center;
+  color: var(--accent);
+  line-height: 1;
+}
+body.dark .cal-event-more {
+  color: #93c5fd;
+}
+
+/* ---------- 11. חזרה מותאמת אישית (ימים בשבוע / תאריכים בחודש / מלל חופשי) ---------- */
+.custom-recurring-box {
+  background: var(--bg-soft);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 14px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.custom-rec-title {
+  font-size: .73rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.weekday-pills-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.weekday-pill {
+  padding: 6px 2px !important;
+  font-size: .74rem !important;
+  font-weight: 800 !important;
+  border-radius: 10px !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(148, 163, 184, 0.4) !important;
+  text-align: center;
+}
+.weekday-pill.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+.custom-rec-month-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.custom-rec-month-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.custom-rec-month-row button {
+  flex: 0 0 auto;
+  padding: 5px 7px !important;
+  font-size: .68rem !important;
+}
+.custom-rec-preview {
+  font-size: .72rem;
+  font-weight: 800;
+  color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+  padding: 5px 8px;
+  border-radius: 8px;
+  margin-top: 2px;
+}
+body.dark .custom-rec-preview {
+  color: #93c5fd;
+}
+
+/* ---------- 12. מטרות בתוך דף הסטטיסטיקה השבועית + באנר מוצ"ש ---------- */
+.stats-goals-inline-empty {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--bg-soft);
+  font-size: .74rem;
+  text-align: center;
+  cursor: pointer;
+  color: var(--text);
+}
+.stats-goals-inline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  margin-bottom: 6px;
+  font-size: .76rem;
+  font-weight: 800;
+  color: var(--text);
+  cursor: pointer;
+}
+.stats-goals-inline-link {
+  font-size: .7rem;
+  color: var(--accent);
+}
+body.dark .stats-goals-inline-link {
+  color: #93c5fd;
+}
+.stats-goals-inline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 6px;
+}
+.stats-goal-card-inline {
+  background: var(--bg-soft);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+.stats-goal-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: .73rem;
+}
+.stats-goal-card-hours {
+  font-size: .68rem;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+.stats-goal-card-status {
+  font-size: .68rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.motzash-goals-banner {
+  background: linear-gradient(135deg, #6366f1, #ec4899);
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 14px;
+  margin-bottom: 8px;
+}
+.motzash-goals-title {
+  font-size: .88rem;
+  font-weight: 800;
+}
+.motzash-goals-sub {
+  font-size: .73rem;
+  opacity: .95;
+}
+
+/* ---------- 13. חלונית בחירת משימות שחלפו להעברה (#rolloverSelectModal) ---------- */
+.rollover-modal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-soft);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+.rollover-select-all-lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.rollover-modal-list {
+  max-height: 48vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.rollover-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: var(--bg-soft);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+.rollover-item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: pointer;
+}
+.rollover-item-chk,
+#rolloverSelectAllChk {
+  width: 18px !important;
+  height: 18px !important;
+  flex: 0 0 18px !important;
+  accent-color: var(--accent);
+}
+.rollover-item-info {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.rollover-item-title {
+  font-size: .82rem;
+  font-weight: 800;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rollover-item-meta {
+  font-size: .68rem;
+  color: var(--text-soft);
+}
+.rollover-single-btn {
+  flex: 0 0 auto;
+  padding: 5px 10px !important;
+  font-size: .72rem !important;
+}
+.rollover-modal-actions {
+  display: flex;
+  gap: 8px;
+}

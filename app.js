@@ -179,10 +179,11 @@ function isDefaultEvent(ev) {
   const t = (ev.title || "").trim();
   const owner = ev.owner || "";
 
-  if (ev.type === "event" && owner === "shared") {
+  if (ev.type === "event" && (owner === "shared" || owner === "binyamin" || owner === "nana")) {
     if (t === "שינה" && ev.startTime === "00:00" && (ev.endTime === "08:00" || ev.endTime === "07:00")) return true;
     if (t === "עבודה" && (ev.startTime === "08:00" || ev.startTime === "07:00") && ev.endTime === "17:00") return true;
     if ((t === "אוכל + מקלחת" || t === "אוכל ומקלחת") && ev.startTime === "17:00" && (ev.endTime === "18:30" || ev.endTime === "18:00")) return true;
+    if (t === "יום חופש לננה" || t === "🌴 יום חופש לננה" || t === "חופש לננה") return true;
   }
 
   return false;
@@ -498,12 +499,26 @@ async function ensureDefaultDayEvents(date) {
   }
 
   // ימי חול: עבודה (07:00 עד 17:00 – 10 שעות) ואוכל ומקלחת (17:00 עד 18:00 – שעה)
+  // יום שלישי (day === 2) הוא יום חופש לננה! לכן בשלישי העבודה היא של בנימין בלבד
   if (day >= 0 && day <= 4) {
+    const isTuesday = day === 2;
     if (!titles.includes("עבודה")) {
       toCreate.push({
         type: "event",
-        owner: "shared",
+        owner: isTuesday ? "binyamin" : "shared",
         title: "עבודה",
+        startTime: "07:00",
+        endTime: "17:00",
+        dateKey,
+        isDefault: true
+      });
+    }
+
+    if (isTuesday && !titles.includes("🌴 יום חופש לננה") && !titles.includes("יום חופש לננה")) {
+      toCreate.push({
+        type: "event",
+        owner: "nana",
+        title: "🌴 יום חופש לננה",
         startTime: "07:00",
         endTime: "17:00",
         dateKey,
@@ -955,6 +970,17 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
       cell.appendChild(holidayEl);
     }
 
+    // יום שלישי – חופש לננה
+    if (
+      cellDate.getDay() === 2 &&
+      (state.ui.calendarOwnerFilter !== "mine" || state.currentUser === "nana")
+    ) {
+      const nanaOffEl = document.createElement("div");
+      nanaOffEl.className = "day-nana-off";
+      nanaOffEl.textContent = "🌴 חופש לננה";
+      cell.appendChild(nanaOffEl);
+    }
+
     // ערב שבת ושבת – עם זמני הדלקה/צאת שבת
     let shabbatLabel = null;
     let fridayForTimes = null;
@@ -994,15 +1020,24 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
     const pointsRow = document.createElement("div");
     pointsRow.className = "day-points";
 
-    let eventCount = 0;
-    realEvents.forEach((ev) => {
-      const dot = document.createElement("div");
-      dot.className = "event-dot";
-      if (ev.type === "task") dot.classList.add("task");
-      if (ev.owner) dot.classList.add(`owner-${ev.owner}`);
-      pointsRow.appendChild(dot);
-      eventCount++;
+    const maxVisiblePills = shabbatLabel ? 1 : 2;
+    realEvents.slice(0, maxVisiblePills).forEach((ev) => {
+      const pill = document.createElement("div");
+      pill.className = "cal-event-pill";
+      if (ev.type === "task") pill.classList.add("task");
+      if (ev.completed || ev.completedAt) pill.classList.add("done");
+      if (ev.owner) pill.classList.add(`owner-${ev.owner}`);
+      const prefix = ev.completed || ev.completedAt ? "✓ " : ev.type === "task" ? "• " : "";
+      pill.textContent = `${prefix}${ev.title || "אירוע"}`;
+      pointsRow.appendChild(pill);
     });
+
+    if (realEvents.length > maxVisiblePills) {
+      const moreBadge = document.createElement("div");
+      moreBadge.className = "cal-event-more";
+      moreBadge.textContent = `+${realEvents.length - maxVisiblePills}`;
+      pointsRow.appendChild(moreBadge);
+    }
 
     if (realEvents.length > 0) cell.appendChild(pointsRow);
     if (realEvents.length >= 2) cell.classList.add("day-border-glow");
@@ -1367,10 +1402,144 @@ function updateDayRolloverButton(dk) {
   const label = dk < todayKey ? "להיום" : "למחר";
   btn.classList.remove("hidden");
   btn.textContent = `⏭️ העבר ${items.length} שלא בוצעו ${label}`;
-  btn.onclick = async () => {
-    const n = await moveItemsToDate(getUncompletedItemsOfDay(dk), toDk);
-    showToast(`⏭️ הועברו ${n} פריטים ${label}!`);
+  btn.onclick = () => {
+    openRolloverSelectModal({
+      items: getUncompletedItemsOfDay(dk),
+      targetDateKey: toDk,
+      targetLabel: label,
+      titleText: `⏭️ העברת משימות שלא בוצעו ${label}`
+    });
   };
+}
+
+function openRolloverSelectModal({ items, targetDateKey, targetLabel = "להיום", titleText = "⏭️ העברת משימות שחלפו להיום" }) {
+  const modal = el("rolloverSelectModal");
+  if (!modal) return;
+
+  const close = () => modal.classList.add("hidden");
+  qsa("[data-close-rollover]", modal).forEach((b) => (b.onclick = close));
+  const bd = qs(".modal-backdrop", modal);
+  if (bd) bd.onclick = close;
+
+  let currentItems = [...(items || [])];
+  if (!currentItems.length) {
+    showToast("אין משימות שחלפו להעברה");
+    close();
+    return;
+  }
+
+  const titleEl = el("rolloverModalTitle");
+  const subEl = el("rolloverModalSub");
+  const listEl = el("rolloverModalList");
+  const selectAllChk = el("rolloverSelectAllChk");
+  const btnMoveSelected = el("btnRolloverMoveSelected");
+  const btnMoveAll = el("btnRolloverMoveAll");
+
+  if (titleEl) titleEl.textContent = titleText;
+
+  const ownerBadgeText = (owner) =>
+    owner === "shared" ? "משותף 👥" : owner === "nana" ? "ננה 💖" : "בנימין 💙";
+
+  const renderList = () => {
+    if (!currentItems.length) {
+      close();
+      showToast(`✅ כל המשימות שנבחרו הועברו ${targetLabel}!`);
+      return;
+    }
+
+    if (subEl) subEl.textContent = `${currentItems.length} פריטים זמינים להעברה`;
+    if (btnMoveAll) btnMoveAll.textContent = `⏭️ העבר הכל ${targetLabel} (${currentItems.length})`;
+
+    listEl.innerHTML = currentItems
+      .map((it, idx) => {
+        const timeStr = it.startTime
+          ? `🕒 ${it.startTime}${it.endTime ? "–" + it.endTime : ""}`
+          : "ללא שעה";
+        const typeIco = it.type === "task" ? "📝" : "📅";
+        return `
+          <div class="rollover-item-row" data-idx="${idx}">
+            <label class="rollover-item-label">
+              <input type="checkbox" class="rollover-item-chk" data-idx="${idx}" checked />
+              <div class="rollover-item-info">
+                <div class="rollover-item-title">${typeIco} ${it.title || "(ללא כותרת)"}</div>
+                <div class="rollover-item-meta">📅 ${formatShortDateHe(it.dateKey)} • ${timeStr} • ${ownerBadgeText(it.owner)}</div>
+              </div>
+            </label>
+            <button type="button" class="ghost-pill small rollover-single-btn" data-single-idx="${idx}">
+              ⏭️ העבר
+            </button>
+          </div>
+        `;
+      })
+      .join("");
+
+    const syncSelectedCount = () => {
+      const checkedBoxes = qsa(".rollover-item-chk:checked", listEl);
+      const count = checkedBoxes.length;
+      if (btnMoveSelected) {
+        btnMoveSelected.disabled = count === 0;
+        btnMoveSelected.textContent = `☑️ העבר נבחרות ${targetLabel} (${count})`;
+      }
+      if (selectAllChk) {
+        selectAllChk.checked = count === currentItems.length && currentItems.length > 0;
+      }
+    };
+
+    qsa(".rollover-item-chk", listEl).forEach((chk) => {
+      chk.onchange = syncSelectedCount;
+    });
+
+    qsa(".rollover-single-btn", listEl).forEach((btn) => {
+      btn.onclick = async () => {
+        const idx = Number(btn.dataset.singleIdx);
+        const item = currentItems[idx];
+        if (!item) return;
+        await moveItemsToDate([item], targetDateKey);
+        currentItems.splice(idx, 1);
+        showToast(`⏭️ "${item.title || "משימה"}" הועברה ${targetLabel}`);
+        renderList();
+      };
+    });
+
+    if (selectAllChk) {
+      selectAllChk.checked = true;
+      selectAllChk.onchange = () => {
+        const val = selectAllChk.checked;
+        qsa(".rollover-item-chk", listEl).forEach((chk) => {
+          chk.checked = val;
+        });
+        syncSelectedCount();
+      };
+    }
+
+    syncSelectedCount();
+  };
+
+  if (btnMoveSelected) {
+    btnMoveSelected.onclick = async () => {
+      const selectedIndices = qsa(".rollover-item-chk:checked", listEl).map((c) => Number(c.dataset.idx));
+      const toMove = selectedIndices.map((i) => currentItems[i]).filter(Boolean);
+      if (!toMove.length) {
+        showToast("בחר לפחות משימה אחת להעברה");
+        return;
+      }
+      const n = await moveItemsToDate(toMove, targetDateKey);
+      close();
+      showToast(`⏭️ הועברו ${n} פריטים ${targetLabel}!`);
+    };
+  }
+
+  if (btnMoveAll) {
+    btnMoveAll.onclick = async () => {
+      if (!currentItems.length) return;
+      const n = await moveItemsToDate(currentItems, targetDateKey);
+      close();
+      showToast(`⏭️ הועברו כל ${n} הפריטים ${targetLabel}!`);
+    };
+  }
+
+  renderList();
+  modal.classList.remove("hidden");
 }
 
 async function rolloverPastUncompletedToToday(typeFilter = "all") {
@@ -1379,8 +1548,12 @@ async function rolloverPastUncompletedToToday(typeFilter = "all") {
     showToast("אין פריטים שחלפו להעברה להיום");
     return;
   }
-  const n = await moveItemsToDate(items, dateKeyFromDate(new Date()));
-  showToast(`⏭️ הועברו ${n} פריטים להיום!`);
+  openRolloverSelectModal({
+    items,
+    targetDateKey: dateKeyFromDate(new Date()),
+    targetLabel: "להיום",
+    titleText: "⏭️ בחירת משימות שחלפו להעברה להיום"
+  });
 }
 
 // =========================
@@ -1823,9 +1996,114 @@ const list = Object.entries(events)
 
 
 // =========================
+// Custom Recurrence Parser (ימים בשבוע / תאריכים בחודש / מלל חופשי)
+// =========================
+const HEB_WEEKDAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+
+function parseCustomRecurrenceRule({ weekdays = [], monthDaysStr = "", freeText = "" } = {}) {
+  const wdSet = new Set((weekdays || []).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6));
+  const mdSet = new Set();
+  let weekInterval = 1;
+  let dayInterval = 1;
+
+  // 1) פירוק ימים בחודש מהשדה הייעודי (למשל "1, 15")
+  String(monthDaysStr || "")
+    .split(/[^0-9]+/)
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= 31)
+    .forEach((n) => mdSet.add(n));
+
+  // 2) פירוק מלל חופשי בעברית (כל קומבינציה אפשרית!)
+  const txt = String(freeText || "").trim();
+  if (txt) {
+    if (/אמצע\s*שבוע|ראשון\s*עד\s*חמישי|א['׳]?\s*-\s*ה['׳]?/.test(txt)) {
+      [0, 1, 2, 3, 4].forEach((d) => wdSet.add(d));
+    }
+    if (/ראשון|יום\s*א(?![א-ת])|ימי\s*א(?![א-ת])/.test(txt)) wdSet.add(0);
+    if (/שני|יום\s*ב(?![א-ת])|ימי\s*ב(?![א-ת])/.test(txt)) wdSet.add(1);
+    if (/שלישי|יום\s*ג(?![א-ת])|ימי\s*ג(?![א-ת])/.test(txt)) wdSet.add(2);
+    if (/רביעי|יום\s*ד(?![א-ת])|ימי\s*ד(?![א-ת])/.test(txt)) wdSet.add(3);
+    if (/חמישי|יום\s*ה(?![א-ת])|ימי\s*ה(?![א-ת])/.test(txt)) wdSet.add(4);
+    if (/שישי|יום\s*ו(?![א-ת])|ימי\s*ו(?![א-ת])/.test(txt)) wdSet.add(5);
+    if (/שבת|יום\s*ש(?![א-ת])/.test(txt)) wdSet.add(6);
+
+    if (/שבועיים|פעמיים\s*בחודש/.test(txt)) weekInterval = 2;
+    const weekIntMatch = txt.match(/כל\s*(\d+)\s*שבועות/);
+    if (weekIntMatch) weekInterval = Math.max(1, Number(weekIntMatch[1]));
+
+    if (/כל\s*יומיים/.test(txt)) dayInterval = 2;
+    const dayIntMatch = txt.match(/כל\s*(\d+)\s*ימים/);
+    if (dayIntMatch) dayInterval = Math.max(1, Number(dayIntMatch[1]));
+
+    // זיהוי מספרי ימים בחודש מתוך המלל החופשי (למשל: "כל 1 לחודש", "1 ו-15 לחודש", "ב-10 בחודש")
+    if (/חודש/.test(txt)) {
+      const nums = txt.match(/\b([1-9]|[12][0-9]|3[01])\b/g) || [];
+      nums.forEach((nStr) => {
+        const n = Number(nStr);
+        if (n >= 1 && n <= 31) mdSet.add(n);
+      });
+    } else {
+      const explicitMonthMatches = txt.matchAll(/(?:כל|ב-?)\s*([1-9]|[12][0-9]|3[01])\s*(?:ל|ב)?חודש/g);
+      for (const m of explicitMonthMatches) {
+        const n = Number(m[1]);
+        if (n >= 1 && n <= 31) mdSet.add(n);
+      }
+    }
+  }
+
+  return {
+    weekdays: Array.from(wdSet).sort((a, b) => a - b),
+    monthDays: Array.from(mdSet).sort((a, b) => a - b),
+    weekInterval,
+    dayInterval
+  };
+}
+
+function describeCustomRecurrenceRule(rule) {
+  if (!rule) return "";
+  const parts = [];
+  if (rule.weekdays && rule.weekdays.length) {
+    const names = rule.weekdays.map((d) => `יום ${HEB_WEEKDAY_NAMES[d]}`).join(", ");
+    parts.push(rule.weekInterval > 1 ? `כל ${rule.weekInterval} שבועות ב-${names}` : `בכל ${names}`);
+  }
+  if (rule.monthDays && rule.monthDays.length) {
+    parts.push(`בכל ${rule.monthDays.join(", ")} לחודש`);
+  }
+  if (!parts.length && rule.dayInterval > 1) {
+    parts.push(`כל ${rule.dayInterval} ימים`);
+  }
+  return parts.length ? `🔄 יחזור: ${parts.join(" • וגם ")}` : "💡 בחר ימים בשבוע, תאריך בחודש, או הקלד במלל חופשי";
+}
+
+function doesDateMatchCustomRecurrence(d, start, rule) {
+  if (!rule) return false;
+  const hasWd = rule.weekdays && rule.weekdays.length > 0;
+  const hasMd = rule.monthDays && rule.monthDays.length > 0;
+
+  let matched = false;
+  if (hasWd && rule.weekdays.includes(d.getDay())) {
+    if (rule.weekInterval > 1) {
+      const diffDays = Math.round((d.getTime() - start.getTime()) / 86400000);
+      const diffWeeks = Math.floor(diffDays / 7);
+      if (diffWeeks % rule.weekInterval === 0) matched = true;
+    } else {
+      matched = true;
+    }
+  }
+  if (hasMd && rule.monthDays.includes(d.getDate())) {
+    matched = true;
+  }
+  if (!hasWd && !hasMd && rule.dayInterval > 1) {
+    const diffDays = Math.round((d.getTime() - start.getTime()) / 86400000);
+    if (diffDays >= 0 && diffDays % rule.dayInterval === 0) matched = true;
+  }
+  return matched;
+}
+
+// =========================
 // Edit modal + CRUD
 // =========================
-function openEditModal({ dateKey, id, title, startTime, endTime, type, owner } = {}) {
+function openEditModal({ dateKey, id, title, startTime, endTime, type, owner, goalTitle } = {}) {
   const modal = el("editModal");
   const form = el("editForm");
   if (!modal || !form) return;
@@ -1835,10 +2113,28 @@ function openEditModal({ dateKey, id, title, startTime, endTime, type, owner } =
 
   const dk = dateKey || dateKeyFromDate(state.currentDate);
   form.elements["date"].value = dk;
-  form.elements["owner"].value = state.currentUser === "shared" ? "shared" : state.currentUser;
+  form.elements["owner"].value = owner || (state.currentUser === "shared" ? "shared" : state.currentUser);
 
   form.dataset.editDateKey = dk || "";
   form.dataset.editId = id || "";
+
+  // מילוי רשימת המטרות של המשתמש לשיוך ישיר לסטטיסטיקה השבועית
+  const goalSelect = el("editGoalSelect");
+  const populateGoalSelect = (forOwner, selectedGoal = "") => {
+    if (!goalSelect) return;
+    const effOwner = forOwner === "shared" ? state.currentUser : (forOwner || state.currentUser);
+    const userGoals = Object.values(state.goals?.[effOwner] || {});
+    goalSelect.innerHTML = `<option value="">ללא מטרה</option>` +
+      userGoals
+        .filter((g) => g && g.title)
+        .map((g) => `<option value="${g.title.replace(/"/g, "&quot;")}">🎯 ${g.title} (${g.weeklyHours} ש׳/שבוע)</option>`)
+        .join("");
+    if (selectedGoal) {
+      goalSelect.value = selectedGoal;
+    }
+  };
+  populateGoalSelect(form.elements["owner"].value, goalTitle || title || "");
+  form.elements["owner"].onchange = () => populateGoalSelect(form.elements["owner"].value, goalSelect?.value || "");
 
   // מילוי מוקדם (למשל משיבוץ מטרה)
   if (!id) {
@@ -1849,11 +2145,24 @@ function openEditModal({ dateKey, id, title, startTime, endTime, type, owner } =
     if (owner) form.elements["owner"].value = owner;
   }
 
+  // איפוס בורר חזרה מותאמת אישית
+  const recSelect = el("editRecurringSelect");
+  const customRecBox = el("customRecurringBox");
+  const wdBtns = qsa("#customRecWeekdays .weekday-pill");
+  const mdayInput = el("customRecMonthDays");
+  const freeTxtInput = el("customRecFreeText");
+  const previewEl = el("customRecurringPreview");
+
+  wdBtns.forEach((b) => b.classList.remove("active"));
+  if (mdayInput) mdayInput.value = "";
+  if (freeTxtInput) freeTxtInput.value = "";
+
   // אם עריכה - למלא
   if (id && dk && state.cache.events[dk] && state.cache.events[dk][id]) {
     const ev = state.cache.events[dk][id];
     form.elements["type"].value = ev.type || "event";
     form.elements["owner"].value = ev.owner || state.currentUser;
+    populateGoalSelect(ev.owner || state.currentUser, ev.goalTitle || "");
     form.elements["title"].value = ev.title || "";
     form.elements["description"].value = ev.description || "";
     form.elements["date"].value = ev.dateKey || dk;
@@ -1866,7 +2175,64 @@ function openEditModal({ dateKey, id, title, startTime, endTime, type, owner } =
     if (form.elements["reminderTime"]) form.elements["reminderTime"].value = ev.reminderTime || "";
     form.elements["recurring"].value = ev.recurring || "none";
     form.elements["urgency"].value = ev.urgency || "none";
+
+    if (Array.isArray(ev.recurringWeekdays)) {
+      wdBtns.forEach((b) => {
+        if (ev.recurringWeekdays.includes(Number(b.dataset.wd))) b.classList.add("active");
+      });
+    }
+    if (mdayInput && ev.recurringMonthDays) {
+      mdayInput.value = Array.isArray(ev.recurringMonthDays) ? ev.recurringMonthDays.join(", ") : String(ev.recurringMonthDays);
+    }
+    if (freeTxtInput && ev.recurringCustomText) {
+      freeTxtInput.value = ev.recurringCustomText;
+    }
   }
+
+  const updateCustomRecUI = () => {
+    const isCustom = recSelect && recSelect.value === "custom";
+    if (customRecBox) customRecBox.classList.toggle("hidden", !isCustom);
+    if (isCustom && previewEl) {
+      const selectedWds = wdBtns.filter((b) => b.classList.contains("active")).map((b) => Number(b.dataset.wd));
+      const rule = parseCustomRecurrenceRule({
+        weekdays: selectedWds,
+        monthDaysStr: mdayInput?.value || "",
+        freeText: freeTxtInput?.value || ""
+      });
+      previewEl.textContent = describeCustomRecurrenceRule(rule);
+    }
+  };
+
+  if (recSelect) {
+    recSelect.onchange = updateCustomRecUI;
+  }
+  wdBtns.forEach((btn) => {
+    btn.onclick = () => {
+      btn.classList.toggle("active");
+      if (recSelect && recSelect.value !== "custom") recSelect.value = "custom";
+      updateCustomRecUI();
+    };
+  });
+  qsa("[data-mday-chip]").forEach((chip) => {
+    chip.onclick = () => {
+      const num = chip.dataset.mdayChip;
+      if (!mdayInput) return;
+      const cur = mdayInput.value
+        .split(/[^0-9]+/)
+        .filter(Boolean);
+      if (cur.includes(num)) {
+        mdayInput.value = cur.filter((x) => x !== num).join(", ");
+      } else {
+        cur.push(num);
+        mdayInput.value = cur.join(", ");
+      }
+      if (recSelect && recSelect.value !== "custom") recSelect.value = "custom";
+      updateCustomRecUI();
+    };
+  });
+  if (mdayInput) mdayInput.oninput = updateCustomRecUI;
+  if (freeTxtInput) freeTxtInput.oninput = updateCustomRecUI;
+  updateCustomRecUI();
 
   // כפתורי בחירה מהירה של תזכורת בטופס עריכה
   form.dataset.remInMinutes = "";
@@ -2037,6 +2403,13 @@ async function handleEditFormSubmit(ev) {
     }
   }
 
+  const selectedWds = qsa("#customRecWeekdays .weekday-pill.active").map((b) => Number(b.dataset.wd));
+  const customRule = parseCustomRecurrenceRule({
+    weekdays: selectedWds,
+    monthDaysStr: data.recurringMonthDays || "",
+    freeText: data.recurringCustomText || ""
+  });
+
   const eventObj = {
     type: data.type,
     owner: data.owner,
@@ -2056,6 +2429,10 @@ async function handleEditFormSubmit(ev) {
     remindedAt_nana: null,
     remindedAt_shared: null,
     recurring: data.recurring || "none",
+    recurringWeekdays: data.recurring === "custom" ? customRule.weekdays : null,
+    recurringMonthDays: data.recurring === "custom" ? customRule.monthDays : null,
+    recurringCustomText: data.recurring === "custom" ? (data.recurringCustomText || "").trim() : null,
+    goalTitle: (data.goalTitle || "").trim() || null,
     urgency: data.urgency || "none"
   };
 
@@ -2102,20 +2479,30 @@ async function handleEditFormSubmit(ev) {
   
 if (existingId) {
   if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
-  state.cache.events[dateKey][existingId] = { ...eventObj, _id: existingId };
+  const updatedExisting = {
+    ...eventObj,
+    _id: existingId,
+    isRecurringParent: eventObj.recurring && eventObj.recurring !== "none" ? true : null
+  };
+  state.cache.events[dateKey][existingId] = updatedExisting;
   el("editModal").classList.add("hidden");
   renderCalendar();
   renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
   if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
   const rTs = getEventReminderTimestamp(eventObj, dateKey);
   if (rTs && rTs > Date.now()) {
-    scheduleDirectReminder({ id: existingId, dateKey, ev: { ...eventObj, _id: existingId }, targetTs: rTs });
+    scheduleDirectReminder({ id: existingId, dateKey, ev: updatedExisting, targetTs: rTs });
     showToast(`🔔 עודכן! תזכורת ב-${formatTimeHM(new Date(rTs))}`, 3500);
   } else {
     cancelDirectReminder(`${dateKey}/${existingId}`);
     showToast("עודכן", 2500);
   }
-  update(ref(db, `events/${dateKey}/${existingId}`), eventObj);
+  await update(ref(db, `events/${dateKey}/${existingId}`), updatedExisting);
+  if (eventObj.recurring && eventObj.recurring !== "none") {
+    await materializeRecurringTask(updatedExisting);
+    renderCalendar();
+  }
+  try { updateStats(); } catch {}
 } else {
   const newRef = push(ref(db, `events/${dateKey}`));
   const newId = newRef.key || String(Date.now());
@@ -2869,11 +3256,20 @@ async function migrateDefaultsOnce() {
   const all = state.cache.events || {};
 
   for (const [dk, items] of Object.entries(all)) {
+    const isTue = dk && dk !== "undated" && /^\d{4}-\d{2}-\d{2}$/.test(dk) && parseDateKey(dk).getDay() === 2;
     for (const [id, ev] of Object.entries(items || {})) {
       if (!ev || ev.type !== "event") continue;
 
-      if (isDefaultEvent(ev) && ev.isDefault !== true) {
-        await update(ref(db, `events/${dk}/${id}`), { isDefault: true });
+      if (isDefaultEvent(ev)) {
+        if (ev.isDefault !== true) {
+          ev.isDefault = true;
+          update(ref(db, `events/${dk}/${id}`), { isDefault: true }).catch(() => {});
+        }
+        // ביום שלישי: חופש לננה! אירוע עבודה דיפולטיבי שייך לבנימין בלבד
+        if (isTue && (ev.title || "").trim() === "עבודה" && ev.owner === "shared") {
+          ev.owner = "binyamin";
+          update(ref(db, `events/${dk}/${id}`), { owner: "binyamin", isDefault: true }).catch(() => {});
+        }
       }
     }
   }
@@ -3306,17 +3702,9 @@ function getBgAudioPlayer() {
   audio.setAttribute("playsinline", "true");
   audio.setAttribute("webkit-playsinline", "true");
   audio.referrerPolicy = "no-referrer";
-  audio.preload = "auto";
+  audio.preload = "none";
   audio.style.display = "none";
   document.body.appendChild(audio);
-
-  // אם אנדרואיד מנסה להשהות את האודיו בעת כיבוי המסך כשיש תזכורת פעילה – נחדש מיד!
-  audio.addEventListener("pause", () => {
-    if (_isAlarmRinging) return;
-    if (hasActivePendingReminders() && areNotificationsEnabled()) {
-      audio.play().catch(() => {});
-    }
-  });
 
   _bgAudioEl = audio;
   return _bgAudioEl;
@@ -3327,35 +3715,9 @@ function hasActivePendingReminders() {
   return Object.values(directReminders).some((r) => r && !r.fired && r.targetTs > now - 5000);
 }
 
-function startBackgroundKeepAliveAudio() {
-  if (!areNotificationsEnabled()) return;
-  if (_isAlarmRinging) return;
-  try {
-    const audio = getBgAudioPlayer();
-    const keepUrl = getKeepAliveWavUrl();
-    audio.onended = null;
-    audio.onerror = null;
-    if (audio.src !== keepUrl) {
-      audio.src = keepUrl;
-    }
-    audio.loop = true;
-    audio.volume = 0.05;
-    audio.play().catch(() => {});
-
-    if ("mediaSession" in navigator) {
-      try {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: "תזכורת פעילה ביומן 🔔",
-          artist: "BNAPP – ג'יחרי מתזכר ברקע",
-          album: "BNAPP"
-        });
-        navigator.mediaSession.playbackState = "playing";
-      } catch {}
-    }
-  } catch {}
-}
-
-function stopKeepAliveAudio() {
+// שחרור מלא של ערוץ השמע (Audio Focus) כאשר לא מושמעת התראה פעילה,
+// כדי שעוצמת המוזיקה בטלפון (Spotify / YouTube / Apple Music) תישאר רגילה ב-100%!
+function releaseAudioFocusIfIdle() {
   if (_isAlarmRinging) return;
   try {
     if (_bgAudioEl) {
@@ -3363,44 +3725,36 @@ function stopKeepAliveAudio() {
       _bgAudioEl.onerror = null;
       _bgAudioEl.loop = false;
       _bgAudioEl.pause();
+      _bgAudioEl.removeAttribute("src");
+      try { _bgAudioEl.load(); } catch {}
+    }
+    if (window._bnappAudioCtx && window._bnappAudioCtx.state === "running") {
+      window._bnappAudioCtx.suspend().catch(() => {});
     }
     if ("mediaSession" in navigator) {
-      try { navigator.mediaSession.playbackState = "none"; } catch {}
+      try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = "none";
+      } catch {}
     }
   } catch {}
+}
+
+function startBackgroundKeepAliveAudio() {
+  // מבוטל בכוונה: לא מפעילים אודיו שקט ברקע כדי לא להנמיך את המוזיקה בטלפון כל עוד אין התראה!
+}
+
+function stopKeepAliveAudio() {
+  releaseAudioFocusIfIdle();
 }
 
 function warmUpSpeechEngine() {
-  try {
-    if ("speechSynthesis" in window) {
-      speechSynthesis.cancel();
-      speechSynthesis.resume();
-      const warm = new SpeechSynthesisUtterance(" ");
-      warm.lang = "he-IL";
-      warm.volume = 0.01;
-      speechSynthesis.speak(warm);
-    }
-  } catch {}
+  // מופעל רק בעת התראה אמיתית כדי לא לתפוס Audio Focus סתם
 }
 
-document.addEventListener("click", () => {
-  getSharedAudioCtx();
-  if (hasActivePendingReminders() && areNotificationsEnabled() && !_isAlarmRinging) {
-    startBackgroundKeepAliveAudio();
-  }
-}, { passive: true });
-
-document.addEventListener("touchstart", () => {
-  getSharedAudioCtx();
-  if (hasActivePendingReminders() && areNotificationsEnabled() && !_isAlarmRinging) {
-    startBackgroundKeepAliveAudio();
-  }
-}, { passive: true });
-
-// צליל אישור קצר בעת לחיצה על הגדרת תזכורת + פתיחת ערוץ שמע ודיבור לרקע/מסך כבוי
+// צליל אישור קצר בעת לחיצה על הגדרת תזכורת – משחרר מיד את ערוץ השמע בסיום
 function playConfirmTick() {
   try {
-    warmUpSpeechEngine();
     const ctx = getSharedAudioCtx();
     if (!ctx) return;
     const osc = ctx.createOscillator();
@@ -3413,6 +3767,7 @@ function playConfirmTick() {
     gain.connect(ctx.destination);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.13);
+    setTimeout(releaseAudioFocusIfIdle, 250);
   } catch {}
 }
 
@@ -3434,6 +3789,7 @@ function playReminderSound() {
       osc.start(ctx.currentTime + i * 0.16);
       osc.stop(ctx.currentTime + i * 0.16 + 0.35);
     });
+    setTimeout(releaseAudioFocusIfIdle, 1600);
   } catch (e) {
     console.warn("Audio reminder failed:", e);
   }
@@ -3545,11 +3901,7 @@ function stopAlarmLoop() {
     if ("speechSynthesis" in window) speechSynthesis.cancel();
   } catch {}
 
-  if (hasActivePendingReminders() && areNotificationsEnabled()) {
-    startBackgroundKeepAliveAudio();
-  } else {
-    stopKeepAliveAudio();
-  }
+  releaseAudioFocusIfIdle();
 }
 
 async function postToServiceWorker(message) {
@@ -4677,12 +5029,13 @@ function computeStatsForDatesList(dates, user) {
     const dk = dateKeyFromDate(date);
     // 1440 דקות ביממה (24 שעות = 100%)
     // 00:00-07:00 (0..419) -> 7 שעות שינה
-    // 07:00-17:00 (420..1019) -> 10 שעות עבודה
+    // 07:00-17:00 (420..1019) -> 10 שעות עבודה (וביום שלישי לננה: יום חופש -> זמן פנוי!)
     // 17:00-18:00 (1020..1079) -> 1 שעה אוכל ומקלחת
     // 18:00-00:00 (1080..1439) -> 6 שעות זמן פנוי
+    const isNanaTuesdayOff = user === "nana" && date.getDay() === 2;
     const dayTimeline = new Array(1440);
     for (let m = 0; m < 420; m++) dayTimeline[m] = "שינה";
-    for (let m = 420; m < 1020; m++) dayTimeline[m] = "עבודה";
+    for (let m = 420; m < 1020; m++) dayTimeline[m] = isNanaTuesdayOff ? "זמן פנוי" : "עבודה";
     for (let m = 1020; m < 1080; m++) dayTimeline[m] = "אוכל ומקלחת";
     for (let m = 1080; m < 1440; m++) dayTimeline[m] = "זמן פנוי";
 
@@ -4706,6 +5059,7 @@ function computeStatsForDatesList(dates, user) {
 
     const seen = new Set();
     const untimedCompleted = [];
+    const userGoalsList = Object.values(state.goals?.[user] || {}).filter((g) => g && g.title);
 
     dayItems.forEach((ev) => {
       if (!ev) return;
@@ -4719,7 +5073,15 @@ function computeStatsForDatesList(dates, user) {
       if (!isRoutine && !isDone) return;
 
       const rawClean = normalizeStatCategoryTitle(ev.title);
-      const label = resolveCategory(ev.title);
+      // בדיקה האם המשימה משויכת למטרה שבועית (ישירות או לפי התאמת נושא) – כדי שהמטרות ייכנסו לסטטיסטיקה השבועית!
+      let matchedGoalTitle = ev.goalTitle || null;
+      if (!matchedGoalTitle && userGoalsList.length > 0 && typeof doesItemMatchGoal === "function") {
+        const foundGoal = userGoalsList.find((g) => doesItemMatchGoal(ev, g.title));
+        if (foundGoal) matchedGoalTitle = foundGoal.title;
+      }
+      const label = matchedGoalTitle
+        ? normalizeStatCategoryTitle(matchedGoalTitle)
+        : resolveCategory(ev.title);
       const sig = `${rawClean}|${ev.owner || "shared"}|${ev.startTime || ""}|${ev.endTime || ""}|${ev.type || ""}`;
       if (seen.has(sig)) return;
       seen.add(sig);
@@ -4792,7 +5154,7 @@ function computeStats({ user, range }) {
 
 function computeTargetStatuses(stats) {
   const results = [];
-  const weeks = (stats.totalDays || 1) / 7;
+  const weeks = Math.max(1 / 7, (stats.totalDays || 1) / 7);
   const userGoals = state.goals?.[state.currentUser] || {};
 
   Object.values(userGoals).forEach((g) => {
@@ -4813,15 +5175,20 @@ function computeTargetStatuses(stats) {
       actualHours = (stats.otherMap[normGoal] || 0) / 60;
     }
 
-    const target = g.weeklyHours * weeks;
+    const target = Number((g.weeklyHours * weeks).toFixed(1));
     const diff = actualHours - target;
+    const pct = target > 0 ? Math.min(100, Math.round((actualHours / target) * 100)) : 100;
 
     let status = "ok";
-    if (diff < -0.5) status = "low";
-    if (diff > 0.5) status = "high";
+    if (diff < -0.25) status = "low";
+    if (diff > 0.25) status = "high";
 
     results.push({
       title: g.title,
+      actualHours: Number(actualHours.toFixed(1)),
+      targetHours: target,
+      weeklyHours: g.weeklyHours,
+      pct,
       diff,
       status
     });
@@ -4832,9 +5199,28 @@ function computeTargetStatuses(stats) {
 
 function formatShortDateHe(dk) {
   if (!dk || dk === "undated") return "ללא תאריך";
-  const parts = dk.split("-");
-  if (parts.length !== 3) return dk;
+  const parts = String(dk).split("-");
+  if (parts.length !== 3) return String(dk);
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function formatDateHeShort(dk) {
+  return formatShortDateHe(dk);
+}
+
+function dateFromKey(dk) {
+  if (!dk || dk === "undated") return new Date();
+  return parseDateKey(dk);
+}
+
+function formatMinutesReadable(mins) {
+  const m = Math.round(Number(mins) || 0);
+  if (m <= 0) return "0 דק׳";
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  if (h === 0) return `${rem} דק׳`;
+  if (rem === 0) return `${h} ש׳`;
+  return `${h} ש׳ ו-${rem} דק׳`;
 }
 
 function formatHoursClean(hours) {
@@ -5207,34 +5593,53 @@ function updateStats() {
     });
   }
 
-  // ---- סיכום יעדים ----
+  // ---- סיכום יעדים ומטרות שבועיות בתוך הסטטיסטיקה ----
   const summaryEl = el("statsSummary");
   if (summaryEl) {
     const targetStatuses = computeTargetStatuses(stats);
-    summaryEl.innerHTML = targetStatuses
-      .map((t) => {
-        const diff = Math.abs(t.diff).toFixed(1);
-        const text =
-          t.status === "high"
-            ? `אקסטרה ${diff} ש׳`
-            : t.status === "low"
-              ? `חסר ${diff} ש׳`
-              : `מדויק ביעד`;
-        const textColor =
-          t.status === "high"
-            ? "#4ade80"
-            : t.status === "low"
-              ? "#f87171"
-              : "#60a5fa";
-        const dotColor = GOAL_COLORS[t.title] || "#9ca3af";
-        return `
-          <div class="stats-goal-chip" style="color:${textColor}">
-            <span class="stats-legend-dot" style="background:${dotColor};"></span>
-            <strong>${t.title}:</strong> <span>${text}</span>
-          </div>
-        `;
-      })
-      .join("");
+    if (!targetStatuses.length) {
+      summaryEl.innerHTML = `
+        <div class="stats-goals-inline-empty" onclick="document.getElementById('btnOpenGoals')?.click()">
+          🎯 עדיין לא הוגדרו מטרות שבועיות לסטטיסטיקה – <strong>לחץ כאן להגדרת מטרות</strong>
+        </div>
+      `;
+    } else {
+      summaryEl.innerHTML = `
+        <div class="stats-goals-inline-header" onclick="document.getElementById('btnOpenGoals')?.click()">
+          <span>🎯 עמידה במטרות בטווח הנבחר (לחץ לפירוט ושיפור)</span>
+          <span class="stats-goals-inline-link">ניהול מטרות ⬅️</span>
+        </div>
+        <div class="stats-goals-inline-grid">
+          ${targetStatuses
+            .map((t) => {
+              const diff = Math.abs(t.diff).toFixed(1);
+              const statusTxt =
+                t.status === "high"
+                  ? `🏆 מעל היעד (+${diff} ש׳)`
+                  : t.status === "low"
+                    ? `⏳ חסרות ${diff} ש׳`
+                    : `✅ היעד הושג!`;
+              const barColor =
+                t.status === "low"
+                  ? "linear-gradient(90deg,#f59e0b,#ef4444)"
+                  : "linear-gradient(90deg,#10b981,#22c55e)";
+              return `
+                <div class="stats-goal-card-inline" onclick="document.getElementById('btnOpenGoals')?.click()">
+                  <div class="stats-goal-card-top">
+                    <strong>🎯 ${t.title}</strong>
+                    <span class="stats-goal-card-hours">${t.actualHours} / ${t.targetHours} ש׳ (${t.pct}%)</span>
+                  </div>
+                  <div class="goal-progress-track" style="height:6px;margin:4px 0;">
+                    <div class="goal-progress-fill" style="width:${t.pct}%;background:${barColor};"></div>
+                  </div>
+                  <div class="stats-goal-card-status">${statusTxt}</div>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+      `;
+    }
   }
 
   const ctx = canvas.getContext("2d");
@@ -5583,11 +5988,22 @@ async function deleteTaskSmart(task) {
 // ===============================
 // Recurring materializer
 async function materializeRecurringTask(task) {
-  if (!task || !task.dateKey || !task._id) return;
+  if (!task || !task.dateKey || task.dateKey === "undated" || !task._id) return;
 
   const start = parseDateKey(task.dateKey);
   const end = new Date(start);
   end.setFullYear(end.getFullYear() + 1);
+
+  const customRule =
+    task.recurring === "custom"
+      ? parseCustomRecurrenceRule({
+          weekdays: task.recurringWeekdays || [],
+          monthDaysStr: Array.isArray(task.recurringMonthDays)
+            ? task.recurringMonthDays.join(",")
+            : task.recurringMonthDays || "",
+          freeText: task.recurringCustomText || ""
+        })
+      : null;
 
   const multi = {};
   for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
@@ -5600,6 +6016,9 @@ async function materializeRecurringTask(task) {
       task.recurring === "yearly_greg" &&
       (d.getDate() !== start.getDate() || d.getMonth() !== start.getMonth())
     ) continue;
+    if (task.recurring === "custom") {
+      if (!doesDateMatchCustomRecurrence(d, start, customRule)) continue;
+    }
 
     const id = `${task._id}_${dk}`;
     const inst = {
@@ -5615,7 +6034,9 @@ async function materializeRecurringTask(task) {
     state.cache.events[dk][id] = inst;
   }
   // כתיבה אחת מרוכזת – מהיר גם לחזרה יומית (365 מופעים)
-  await update(ref(db, "events"), multi);
+  if (Object.keys(multi).length > 0) {
+    await update(ref(db, "events"), multi);
+  }
 }
 // ===============================
 // =========================
@@ -5640,9 +6061,26 @@ const doughnutCenterTextPlugin = {
     ctx.restore();
   }
 };
-function openGoalsModal() {
+function getNextDayKey(dk) {
+  if (!dk || dk === "undated") return getTomorrowKey();
+  const d = parseDateKey(dk);
+  d.setDate(d.getDate() + 1);
+  return dateKeyFromDate(d);
+}
+
+function openGoalsModal(opts = {}) {
   const modal = el("goalsModal");
   if (!modal) return;
+
+  const showMotzashBanner = Boolean(opts && opts.showMotzashBanner);
+
+  // סגירה ב־X או רקע – מחברים תחילה כדי שתמיד יעבוד גם אם יש שגיאה בנתונים!
+  const closeGoals = () => modal.classList.add("hidden");
+  modal.querySelectorAll("[data-close-goals], .modal-header .icon-btn").forEach((b) => {
+    b.onclick = closeGoals;
+  });
+  const backdrop = modal.querySelector(".modal-backdrop");
+  if (backdrop) backdrop.onclick = closeGoals;
 
   modal.classList.remove("hidden");
 
@@ -5651,21 +6089,21 @@ function openGoalsModal() {
   if (ownerSelect) {
     ownerSelect.value = state.currentUser;
     ownerSelect.onchange = () => {
-      renderGoals();
-      renderGoalsProgress();
+      try { renderGoals(); } catch (e) { console.warn(e); }
+      try { renderGoalsProgress(showMotzashBanner); } catch (e) { console.warn(e); }
     };
   }
 
-  renderGoals();
-  renderGoalsProgress();
-
-  // סגירה ב־X או רקע
-  modal.querySelectorAll("[data-close-goals]").forEach(b => {
-    b.onclick = () => modal.classList.add("hidden");
-  });
-
-  const backdrop = modal.querySelector(".modal-backdrop");
-  if (backdrop) backdrop.onclick = () => modal.classList.add("hidden");
+  try {
+    renderGoals();
+  } catch (e) {
+    console.warn("renderGoals error:", e);
+  }
+  try {
+    renderGoalsProgress(showMotzashBanner);
+  } catch (e) {
+    console.warn("renderGoalsProgress error:", e);
+  }
 }
 
 function doesItemMatchGoal(ev, goalTitle) {
@@ -5709,7 +6147,7 @@ function findBestFreeSlotToday(user) {
   return "19:00";
 }
 
-function renderGoalsProgress() {
+function renderGoalsProgress(showMotzashBanner = false) {
   const container = el("goalsProgress");
   if (!container) return;
 
@@ -5717,6 +6155,15 @@ function renderGoalsProgress() {
   const userLabel = owner === "binyamin" ? "בנימין" : "נוי";
   const goalsObj = state.goals?.[owner] || {};
   const goalEntries = Object.entries(goalsObj);
+
+  const motzashHtml = showMotzashBanner
+    ? `
+      <div class="motzash-goals-banner">
+        <div class="motzash-goals-title">✨ שבוע טוב ומבורך!</div>
+        <div class="motzash-goals-sub">זה הזמן לקבוע ביומן משבצות קבועות לעמידה במטרות השבועיות שלכם:</div>
+      </div>
+    `
+    : "";
 
   // חישוב לפי טווח הסטטיסטיקות (או 7 ימים אחרונים אם נמצאים על יום בודד כדי להשוות ליעד שבועי)
   let dates = getStatsDates(state.statsRange || "week");
@@ -5739,6 +6186,7 @@ function renderGoalsProgress() {
 
   if (!goalEntries.length) {
     container.innerHTML = `
+      ${motzashHtml}
       <div class="goals-empty-box">
         <div class="goals-empty-title">🎯 עדיין לא הוגדרו מטרות שבועיות עבור ${userLabel}</div>
         <div class="goals-empty-sub">בחרו מטרה מהירה להוספה בלחיצה או פתחו את "ניהול והוספת מטרות" למטה:</div>
@@ -5937,6 +6385,7 @@ function renderGoalsProgress() {
     : `${formatDateHeShort(dateKeyFromDate(dates[0]))} – ${formatDateHeShort(dateKeyFromDate(dates[dates.length - 1]))}`;
 
   container.innerHTML = `
+    ${motzashHtml}
     <div class="goals-summary-banner">
       <div>
         <div class="goals-summary-title">📊 מעקב מטרות – ${userLabel}</div>
@@ -6097,6 +6546,12 @@ function scheduleDailySummaryAlarm() {
 }
 
 function checkDailySummaryDue() {
+  try {
+    checkMotzeiShabbatGoalsPrompt();
+  } catch (e) {
+    console.warn("checkMotzeiShabbatGoalsPrompt error:", e);
+  }
+
   const timeStr = getDailySummaryTime();
   const [hh, mm] = timeStr.split(":").map(Number);
   if (isNaN(hh) || isNaN(mm)) return;
@@ -6128,18 +6583,112 @@ function checkDailySummaryDue() {
   }
 }
 
+// =========================
+// התראת תחילת שבוע (שעתיים אחרי צאת שבת / מוצ"ש) לקביעת זמן לעמידה במטרות
+// =========================
+function getThisWeeksFridayAndSaturday() {
+  const now = new Date();
+  const day = now.getDay(); // 0=ראשון .. 6=שבת
+  // אם היום שבת (6) -> שישי היה אתמול (-1); אם היום ראשון (0) -> שישי היה לפני יומיים (-2)
+  const friday = new Date(now);
+  if (day === 6) {
+    friday.setDate(now.getDate() - 1);
+  } else {
+    friday.setDate(now.getDate() + (5 - day));
+  }
+  friday.setHours(12, 0, 0, 0);
+  const saturday = new Date(friday);
+  saturday.setDate(friday.getDate() + 1);
+  return { friday, saturday };
+}
+
+async function scheduleMotzeiShabbatGoalsAlarm() {
+  try {
+    const { friday, saturday } = getThisWeeksFridayAndSaturday();
+    const info = await ensureShabbatForWeek(friday);
+    let targetTs;
+    if (info && info.havdalah) {
+      targetTs = info.havdalah.getTime() + 2 * 60 * 60 * 1000; // שעתיים אחרי צאת שבת
+    } else {
+      const fallbackSat = new Date(saturday);
+      fallbackSat.setHours(20, 30, 0, 0);
+      targetTs = fallbackSat.getTime();
+    }
+
+    if (targetTs > Date.now() && hasNativeAndroidBridge()) {
+      window.AndroidBridge.scheduleAlarm(
+        "weekly_goals_motzash",
+        "🎯 שבוע טוב! זמן לתכנן את המטרות השבועיות",
+        "עברו שעתיים מצאת שבת – לחצו לקביעת זמן ביומן לעמידה במטרות השבוע!",
+        Math.round(targetTs)
+      );
+    }
+  } catch (e) {
+    console.warn("scheduleMotzeiShabbatGoalsAlarm error:", e);
+  }
+}
+
+function checkMotzeiShabbatGoalsPrompt() {
+  const now = new Date();
+  const day = now.getDay();
+  // פועל במוצ"ש (שבת בערב, שעתיים אחרי צאת שבת)
+  if (day !== 6) return;
+
+  const friday = new Date(now);
+  friday.setDate(now.getDate() - 1);
+  friday.setHours(12, 0, 0, 0);
+  const fridayKey = dateKeyFromDate(friday);
+  const satKey = dateKeyFromDate(now);
+  const firedKey = `bnapp_motzash_goals_fired_${satKey}`;
+  if (localStorage.getItem(firedKey) === "1") return;
+
+  const shabbatInfo = state.cache.shabbat?.[fridayKey];
+  if (!shabbatInfo) {
+    ensureShabbatForWeek(friday).then(() => scheduleMotzeiShabbatGoalsAlarm()).catch(() => {});
+  }
+
+  let targetTs;
+  if (shabbatInfo && shabbatInfo.havdalah) {
+    targetTs = shabbatInfo.havdalah.getTime() + 2 * 60 * 60 * 1000; // שעתיים אחרי צאת שבת
+  } else {
+    const fallback = new Date(now);
+    fallback.setHours(20, 30, 0, 0);
+    targetTs = fallback.getTime();
+  }
+
+  const diffMs = now.getTime() - targetTs;
+  if (diffMs >= 0 && diffMs <= 3.5 * 60 * 60 * 1000) {
+    try {
+      localStorage.setItem(firedKey, "1");
+    } catch {}
+
+    playReminderSound();
+    showSystemNotification(
+      "🎯 שבוע טוב! זמן לקבוע מטרות לשבוע החדש",
+      "עברו שעתיים מצאת שבת – בואו נשבץ עכשיו זמן ביומן לעמידה במטרות השבועיות!",
+      `motzash-goals-${satKey}`
+    );
+    openGoalsModal({ showMotzashBanner: true });
+  }
+}
+
 function openDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
   const modal = el("dailySummaryModal");
   if (!modal) return;
 
-  modal.classList.remove("hidden");
-  renderDailySummaryModal(dateKey);
-
-  qsa("[data-close-daily-summary]", modal).forEach((b) => {
-    b.onclick = () => modal.classList.add("hidden");
+  const closeSummary = () => modal.classList.add("hidden");
+  qsa("[data-close-daily-summary], [data-close-summary], .modal-header .icon-btn", modal).forEach((b) => {
+    b.onclick = closeSummary;
   });
   const backdrop = modal.querySelector(".modal-backdrop");
-  if (backdrop) backdrop.onclick = () => modal.classList.add("hidden");
+  if (backdrop) backdrop.onclick = closeSummary;
+
+  modal.classList.remove("hidden");
+  try {
+    renderDailySummaryModal(dateKey);
+  } catch (e) {
+    console.warn("renderDailySummaryModal error:", e);
+  }
 }
 
 function renderDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
@@ -6616,6 +7165,20 @@ if (userSel) {
     el("btnShowSummaryNow").onclick = () => openDailySummaryModal();
   }
   scheduleDailySummaryAlarm();
+  scheduleMotzeiShabbatGoalsAlarm();
+
+  // מאזין גלובלי לסגירת כל מודאל בלחיצה על כפתור ה-X או על הרקע הכהה
+  document.addEventListener("click", (e) => {
+    const closeTrigger = e.target.closest(
+      ".modal-backdrop, .modal-header .icon-btn, [data-close-modal], [data-close-day], [data-close-edit], [data-close-postpone], [data-close-picker], [data-close-conflict], [data-close-goals], [data-close-summary], [data-close-daily-summary], [data-close-reminder], [data-close-special], [data-close-cat-breakdown], [data-close-rollover]"
+    );
+    if (closeTrigger) {
+      const parentModal = closeTrigger.closest(".modal");
+      if (parentModal && parentModal.id !== "reminderAlertModal") {
+        parentModal.classList.add("hidden");
+      }
+    }
+  });
 
   el("btnThemeToggle").onclick = toggleTheme;
   el("btnRequestNotifications").onclick = requestNotifications;
