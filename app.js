@@ -9,7 +9,7 @@ function hasNativeAndroidBridge() {
 }
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue18").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue19").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
@@ -171,6 +171,13 @@ function matchesQuickOwnerFilter(ev, filterMode = "all", dateKey = "") {
   if (filterMode === "mine") return owner === state.currentUser;
   if (filterMode === "shared") return owner === "shared";
   return true;
+}
+
+function parseMinutes(t) {
+  if (!t || typeof t !== "string" || !t.includes(":")) return null;
+  const [h, m] = t.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
 }
 
 function getEventTimeBoundsForSort(ev) {
