@@ -11,7 +11,7 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-const CACHE_NAME = 'bnapp-v4-2-0-live';
+const CACHE_NAME = 'bnapp-v4-3-0-live';
 const swTimers = new Map();
 const firedKeys = new Set();
 
@@ -32,18 +32,8 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => caches.delete(k)));
+    await Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)));
     await self.clients.claim();
-
-    const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const client of windowClients) {
-      try {
-        client.postMessage({ type: 'SW_FORCE_RELOAD', version: CACHE_NAME });
-        if (typeof client.navigate === 'function') {
-          await client.navigate(client.url);
-        }
-      } catch (e) {}
-    }
   })());
 });
 
@@ -56,6 +46,7 @@ self.addEventListener('fetch', (event) => {
     url.includes('index.html') ||
     url.includes('app.js') ||
     url.includes('styles.css') ||
+    url.includes('theme.css') ||
     url.endsWith('/ABCZ/') ||
     url.endsWith('/ABCZ');
 

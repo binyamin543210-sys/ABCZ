@@ -9,16 +9,14 @@ function hasNativeAndroidBridge() {
 }
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue10").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue18").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
   navigator.serviceWorker.addEventListener("message", (event) => {
     const msg = event.data;
     if (!msg || !msg.type) return;
-    if (msg.type === "SW_FORCE_RELOAD") {
-      window.location.reload();
-    } else if (msg.type === "SW_REMINDER_FIRED" && msg.key) {
+    if (msg.type === "SW_REMINDER_FIRED" && msg.key) {
       if (typeof window._onSwReminderFired === "function") {
         window._onSwReminderFired(msg);
       }
@@ -144,13 +142,67 @@ const el = (id) => document.getElementById(id);
 const qs = (sel, root = document) => root.querySelector(sel);
 const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-function matchesQuickOwnerFilter(ev, filterMode = "all") {
+function matchesQuickOwnerFilter(ev, filterMode = "all", dateKey = "") {
   if (!ev) return false;
+  const titleTrim = (ev.title || "").trim();
+
+  // הסתרת אירועי "יום חופש לננה" דיפולטיביים אם נשארו בזיכרון
+  if (isDefaultEvent(ev) && (titleTrim === "🌴 יום חופש לננה" || titleTrim === "יום חופש לננה" || titleTrim === "חופש לננה")) {
+    return false;
+  }
+
+  // בדיקת אירועי ברירת מחדל (שינה, עבודה, אוכל ומקלחת)
+  if (isDefaultEvent(ev)) {
+    const dk = dateKey || ev.dateKey || "";
+    const isTue = dk && dk !== "undated" && /^\d{4}-\d{2}-\d{2}$/.test(dk) && parseDateKey(dk).getDay() === 2;
+    if (titleTrim === "עבודה" && (isTue || ev.owner === "binyamin")) {
+      // ביום שלישי: עבודה היא של בנימין בלבד! ננה לא רואה עבודה ביום שלישי
+      if (state.currentUser === "nana") return false;
+      if (filterMode === "shared") return false;
+      return true;
+    }
+    if (ev.owner === "binyamin" && state.currentUser !== "binyamin" && filterMode === "mine") return false;
+    if (ev.owner === "nana" && state.currentUser !== "nana" && filterMode === "mine") return false;
+    return true;
+  }
+
   if (!filterMode || filterMode === "all") return true;
   const owner = ev.owner || "shared";
   if (filterMode === "mine") return owner === state.currentUser;
   if (filterMode === "shared") return owner === "shared";
   return true;
+}
+
+function getEventTimeBoundsForSort(ev) {
+  const s = parseMinutes(ev?.startTime);
+  if (s === null) return null;
+  let e = parseMinutes(ev?.endTime);
+  if (e === null) {
+    const dur = Number(ev?.duration) > 0 ? Number(ev.duration) : 60;
+    e = s + dur;
+  } else if (e <= s) {
+    e += 1440;
+  }
+  return { start: s, end: e, duration: e - s };
+}
+
+function compareEventsByTimeAndContainment(a, b) {
+  const ta = getEventTimeBoundsForSort(a);
+  const tb = getEventTimeBoundsForSort(b);
+
+  if (ta && !tb) return -1;
+  if (!ta && tb) return 1;
+  if (!ta && !tb) return 0;
+
+  // משימה שמסתיימת מוקדם יותר (למשל 08:15-08:45 בתוך 08:00-09:00) מוצגת קודם ברשימה!
+  if (ta.end !== tb.end) {
+    return ta.end - tb.end;
+  }
+  // אם שתיהן מסתיימות באותה שעה – זו שהתחילה מאוחר יותר (הממוקדת/קצרה יותר) מוצגת קודם
+  if (ta.start !== tb.start) {
+    return tb.start - ta.start;
+  }
+  return 0;
 }
 
 function addMinutesToTimeStr(timeStr, minsToAdd) {
@@ -499,7 +551,7 @@ async function ensureDefaultDayEvents(date) {
   }
 
   // ימי חול: עבודה (07:00 עד 17:00 – 10 שעות) ואוכל ומקלחת (17:00 עד 18:00 – שעה)
-  // יום שלישי (day === 2) הוא יום חופש לננה! לכן בשלישי העבודה היא של בנימין בלבד
+  // ביום שלישי (day === 2) העבודה היא של בנימין בלבד, ולננה אין עבודה (נכנס לזמן פנוי אם אין לה דברים)
   if (day >= 0 && day <= 4) {
     const isTuesday = day === 2;
     if (!titles.includes("עבודה")) {
@@ -507,18 +559,6 @@ async function ensureDefaultDayEvents(date) {
         type: "event",
         owner: isTuesday ? "binyamin" : "shared",
         title: "עבודה",
-        startTime: "07:00",
-        endTime: "17:00",
-        dateKey,
-        isDefault: true
-      });
-    }
-
-    if (isTuesday && !titles.includes("🌴 יום חופש לננה") && !titles.includes("יום חופש לננה")) {
-      toCreate.push({
-        type: "event",
-        owner: "nana",
-        title: "🌴 יום חופש לננה",
         startTime: "07:00",
         endTime: "17:00",
         dateKey,
@@ -546,19 +586,25 @@ async function ensureDefaultDayEvents(date) {
 }
 // --- יצירת אירועי ברירת מחדל לכל ימי החודש המוצג ---
 async function preloadDefaultEventsForVisibleMonth() {
-  const year = state.currentDate.getFullYear();
-  const month = state.currentDate.getMonth();
+  if (!state.eventsLoaded || state._preloadingDefaults) return;
+  state._preloadingDefaults = true;
+  try {
+    const year = state.currentDate.getFullYear();
+    const month = state.currentDate.getMonth();
 
-  const firstDay = new Date(year, month, 1);
-  const lastDay  = new Date(year, month + 1, 0);
+    const firstDay = new Date(year, month, 1);
+    const lastDay  = new Date(year, month + 1, 0);
 
-  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-    const dateKey = dateKeyFromDate(d);
+    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+      const dateKey = dateKeyFromDate(d);
 
-    // אם כבר יש אירועים – לא לגעת
-    if (state.cache.events[dateKey]) continue;
+      // אם כבר יש אירועים – לא לגעת
+      if (state.cache.events[dateKey]) continue;
 
-    await ensureDefaultDayEvents(new Date(d));
+      await ensureDefaultDayEvents(new Date(d));
+    }
+  } finally {
+    state._preloadingDefaults = false;
   }
 }
 // ===============================
@@ -940,9 +986,10 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
           ev &&
           !isDefaultEvent(ev) &&
           !(ev.isRecurringParent && events[`${eid}_${dateKey}`]) &&
-          matchesQuickOwnerFilter(ev, state.ui.calendarOwnerFilter || "all")
+          matchesQuickOwnerFilter(ev, state.ui.calendarOwnerFilter || "all", dateKey)
       )
-      .map(([, ev]) => ev);
+      .map(([, ev]) => ev)
+      .sort(compareEventsByTimeAndContainment);
     
     const header = document.createElement("div");
     header.className = "day-header";
@@ -968,17 +1015,6 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
       holidayEl.className = "day-holiday";
       holidayEl.textContent = holiday.name;
       cell.appendChild(holidayEl);
-    }
-
-    // יום שלישי – חופש לננה
-    if (
-      cellDate.getDay() === 2 &&
-      (state.ui.calendarOwnerFilter !== "mine" || state.currentUser === "nana")
-    ) {
-      const nanaOffEl = document.createElement("div");
-      nanaOffEl.className = "day-nana-off";
-      nanaOffEl.textContent = "🌴 חופש לננה";
-      cell.appendChild(nanaOffEl);
     }
 
     // ערב שבת ושבת – עם זמני הדלקה/צאת שבת
@@ -1624,7 +1660,8 @@ allTasks.sort((a, b) => {
 
   // קודם מתוארכות
   if (aHasDate && bHasDate) {
-    return a.dateKey.localeCompare(b.dateKey);
+    if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
+    return compareEventsByTimeAndContainment(a, b);
   }
 
   // מתוארכת לפני לא מתוארכת
@@ -1866,25 +1903,15 @@ function renderDayEvents(dateKey) {
 
   const events = state.cache.events[dateKey] || {};
 
-const list = Object.entries(events)
-  .filter(([id, ev]) => ev && !(ev.isRecurringParent && events[`${id}_${dateKey}`]))
-  .map(([id, ev]) => ({ id, ...ev }))
-  .sort((a, b) => {
-    const aHasTime = !!a.startTime;
-    const bHasTime = !!b.startTime;
-
-    // מי שיש לו שעה – תמיד קודם
-    if (aHasTime && !bHasTime) return -1;
-    if (!aHasTime && bHasTime) return 1;
-
-    // לשניהם יש שעה → מיין לפי שעה
-    if (aHasTime && bHasTime) {
-      return a.startTime.localeCompare(b.startTime);
-    }
-
-    // לשניהם אין שעה → השאר בסוף, בלי להזיז
-    return 0;
-  });
+  const list = Object.entries(events)
+    .filter(
+      ([id, ev]) =>
+        ev &&
+        !(ev.isRecurringParent && events[`${id}_${dateKey}`]) &&
+        matchesQuickOwnerFilter(ev, state.ui.calendarOwnerFilter || "all", dateKey)
+    )
+    .map(([id, ev]) => ({ id, ...ev }))
+    .sort(compareEventsByTimeAndContainment);
 
   list.forEach((ev) => {
     const card = document.createElement("div");
@@ -2676,12 +2703,24 @@ function setActiveScreenMeta(targetId) {
 
 function initBottomNav() {
   const btns = qsa(".bottom-nav .nav-btn");
-  setActiveScreenMeta("calendarSection");
+  let initialScreen = "calendarSection";
+  try {
+    const savedScreen = sessionStorage.getItem("bnapp_active_screen");
+    if (savedScreen && el(savedScreen)) {
+      initialScreen = savedScreen;
+    }
+  } catch {}
+
+  btns.forEach((b) => b.classList.toggle("active", b.dataset.target === initialScreen));
+  qsa(".screen").forEach((s) => s.classList.toggle("active", s.id === initialScreen));
+  setActiveScreenMeta(initialScreen);
+
   btns.forEach((btn) => {
     btn.addEventListener("click", () => {
       btns.forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       const targetId = btn.dataset.target;
+      try { sessionStorage.setItem("bnapp_active_screen", targetId); } catch {}
       qsa(".screen").forEach((s) => s.classList.remove("active"));
       el(targetId)?.classList.add("active");
       setActiveScreenMeta(targetId);
@@ -2720,6 +2759,9 @@ function initTasksFilters() {
       state.ui.calendarOwnerFilter = btn.dataset.ownerFilter || "all";
       try { localStorage.setItem("bnapp_cal_owner_filter", state.ui.calendarOwnerFilter); } catch {}
       renderCalendar();
+      if (!el("dayModal")?.classList.contains("hidden") && state.ui.openDayKey) {
+        renderDayEvents(state.ui.openDayKey);
+      }
     };
   });
 
@@ -3254,6 +3296,8 @@ function renderShoppingList() {
 // =========================
 async function migrateDefaultsOnce() {
   const all = state.cache.events || {};
+  const shouldWriteDb = !state._migratedDefaultsDbOnce;
+  state._migratedDefaultsDbOnce = true;
 
   for (const [dk, items] of Object.entries(all)) {
     const isTue = dk && dk !== "undated" && /^\d{4}-\d{2}-\d{2}$/.test(dk) && parseDateKey(dk).getDay() === 2;
@@ -3261,14 +3305,28 @@ async function migrateDefaultsOnce() {
       if (!ev || ev.type !== "event") continue;
 
       if (isDefaultEvent(ev)) {
+        const titleTrim = (ev.title || "").trim();
+        // מחיקת אירוע "יום חופש לננה" דיפולטיבי אם נוצר בעבר – ננה פשוט לא רואה עבודה ביום שלישי
+        if (titleTrim === "🌴 יום חופש לננה" || titleTrim === "יום חופש לננה" || titleTrim === "חופש לננה") {
+          delete items[id];
+          if (shouldWriteDb) {
+            remove(ref(db, `events/${dk}/${id}`)).catch(() => {});
+          }
+          continue;
+        }
+
         if (ev.isDefault !== true) {
           ev.isDefault = true;
-          update(ref(db, `events/${dk}/${id}`), { isDefault: true }).catch(() => {});
+          if (shouldWriteDb) {
+            update(ref(db, `events/${dk}/${id}`), { isDefault: true }).catch(() => {});
+          }
         }
-        // ביום שלישי: חופש לננה! אירוע עבודה דיפולטיבי שייך לבנימין בלבד
-        if (isTue && (ev.title || "").trim() === "עבודה" && ev.owner === "shared") {
+        // ביום שלישי: אירוע עבודה דיפולטיבי שייך לבנימין בלבד (לננה אין עבודה ביום שלישי)
+        if (isTue && titleTrim === "עבודה" && ev.owner === "shared") {
           ev.owner = "binyamin";
-          update(ref(db, `events/${dk}/${id}`), { owner: "binyamin", isDefault: true }).catch(() => {});
+          if (shouldWriteDb) {
+            update(ref(db, `events/${dk}/${id}`), { owner: "binyamin", isDefault: true }).catch(() => {});
+          }
         }
       }
     }
@@ -3278,8 +3336,12 @@ async function migrateDefaultsOnce() {
 function initFirebaseListeners() {
   onValue(ref(db, "events"), (snap) => {
     state.cache.events = snap.val() || {};
+    state.eventsLoaded = true;
     migrateDefaultsOnce();
     renderCalendar();
+    if (!el("dayModal")?.classList.contains("hidden") && state.ui.openDayKey) {
+      renderDayEvents(state.ui.openDayKey);
+    }
     renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
     try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
     checkDueReminders();
@@ -5336,7 +5398,7 @@ function getCategorizedStatsItems(dates, user) {
     const da = a.dateKey || "";
     const db = b.dateKey || "";
     if (da !== db) return db.localeCompare(da);
-    return (a.startTime || "23:59").localeCompare(b.startTime || "23:59");
+    return compareEventsByTimeAndContainment(a, b);
   };
 
   completedEvents.sort(sortByDateAndTime);
@@ -7138,6 +7200,9 @@ if (userSel) {
 
     syncRemindersForCurrentUser();
     renderCalendar();
+    if (!el("dayModal")?.classList.contains("hidden") && state.ui.openDayKey) {
+      renderDayEvents(state.ui.openDayKey);
+    }
     renderTasks(
       qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated"
     );
