@@ -9,7 +9,7 @@ function hasNativeAndroidBridge() {
 }
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue20").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue21").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
@@ -168,7 +168,7 @@ function matchesQuickOwnerFilter(ev, filterMode = "all", dateKey = "") {
 
   if (!filterMode || filterMode === "all") return true;
   const owner = ev.owner || "shared";
-  if (filterMode === "mine") return owner === state.currentUser;
+  if (filterMode === "mine") return owner === state.currentUser || owner === "shared";
   if (filterMode === "shared") return owner === "shared";
   return true;
 }
@@ -178,6 +178,13 @@ function parseMinutes(t) {
   const [h, m] = t.split(":").map(Number);
   if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
   return h * 60 + m;
+}
+
+function minutesToTime(totalMins) {
+  const clamped = Math.max(0, Math.min(23 * 60 + 59, Math.round(Number(totalMins) || 0)));
+  const h = String(Math.floor(clamped / 60)).padStart(2, "0");
+  const m = String(clamped % 60).padStart(2, "0");
+  return `${h}:${m}`;
 }
 
 function getEventTimeBoundsForSort(ev) {
@@ -934,132 +941,6 @@ function findConflicts(dateKey, newEvent, excludeId = null) {
 // =========================
 // Calendar render
 // =========================
-function renderCalendar() {
-  const grid = el("calendarGrid");
-  if (!grid) return;
-  grid.innerHTML = "";
-
-  const currentMonthDate = state.currentDate;
-  const year = currentMonthDate.getFullYear();
-  const month = currentMonthDate.getMonth();
-
-  ensureYearHolidays(year);
-
-  preloadShabbatForVisibleMonth();
-
-  preloadDefaultEventsForVisibleMonth();
-
-  const firstDayOfMonth = new Date(year, month, 1);
-  const startDay = firstDayOfMonth.getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const prevMonthDays = new Date(year, month, 0).getDate();
-  const today = new Date();
-
-  el("gregMonthLabel").textContent = firstDayOfMonth.toLocaleDateString("he-IL", { month: "long", year: "numeric" });
-  el("hebrewMonthLabel").textContent = getHebrewMonthYearLabel(firstDayOfMonth) || "";
-
-// חישוב כמה תאים באמת צריך (4–6 שבועות)
-const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
-  for (let cellIndex = 0; cellIndex < totalCells; cellIndex++) {
-    const cell = document.createElement("button");
-    cell.type = "button";
-    cell.className = "day-cell";
-
-    let dayNum;
-    let cellDate;
-    let outside = false;
-
-    if (cellIndex < startDay) {
-      dayNum = prevMonthDays - startDay + cellIndex + 1;
-      cellDate = new Date(year, month - 1, dayNum);
-      outside = true;
-    } else if (cellIndex >= startDay + daysInMonth) {
-      dayNum = cellIndex - startDay - daysInMonth + 1;
-      cellDate = new Date(year, month + 1, dayNum);
-      outside = true;
-    } else {
-      dayNum = cellIndex - startDay + 1;
-      cellDate = new Date(year, month, dayNum);
-    }
-
-    const dateKey = dateKeyFromDate(cellDate);
-    const heb = formatHebrewDate(cellDate);
-    const holiday = state.cache.holidays[dateKey];
-    const events = state.cache.events[dateKey] || {};
-
-    const realEvents = Object.entries(events)
-      .filter(
-        ([eid, ev]) =>
-          ev &&
-          !isDefaultEvent(ev) &&
-          !(ev.isRecurringParent && events[`${eid}_${dateKey}`]) &&
-          matchesQuickOwnerFilter(ev, state.ui.calendarOwnerFilter || "all", dateKey)
-      )
-      .map(([, ev]) => ev)
-      .sort(compareEventsByTimeAndContainment);
-    
-    const header = document.createElement("div");
-    header.className = "day-header";
-
-    const dayNumEl = document.createElement("div");
-    dayNumEl.className = "day-num";
-    dayNumEl.textContent = dayNum;
-
-    const hebEl = document.createElement("div");
-    hebEl.className = "day-hebrew";
-    const hebDay = hasHebcal()
-      ? new window.Hebcal.HDate(cellDate).getDate()
-      : null;
-
-    hebEl.textContent = hebDay ? toHebrewNumeral(hebDay) : "";
-
-    header.appendChild(dayNumEl);
-    header.appendChild(hebEl);
-    cell.appendChild(header);
-
-    if (holiday) {
-      const holidayEl = document.createElement("div");
-      holidayEl.className = "day-holiday";
-      holidayEl.textContent = holiday.name;
-      cell.appendChild(holidayEl);
-    }
-
-    // ערב שבת ושבת – עם זמני הדלקה/צאת שבת
-    let shabbatLabel = null;
-    let fridayForTimes = null;
-    if (isFriday(cellDate)) {
-      shabbatLabel = "ערב שבת";
-      fridayForTimes = new Date(cellDate);
-    } else if (isShabbat(cellDate)) {
-      shabbatLabel = "שבת";
-      fridayForTimes = new Date(cellDate);
-      fridayForTimes.setDate(fridayForTimes.getDate() - 1);
-    }
-
-    if (shabbatLabel && fridayForTimes) {
-      const shabbatWrap = document.createElement("div");
-      shabbatWrap.className = "day-shabbat-block";
-
-      const line1 = document.createElement("div");
-      line1.className = "day-shabbat-title";
-      line1.textContent = shabbatLabel;
-      shabbatWrap.appendChild(line1);
-
-      const line2 = document.createElement("div");
-      line2.className = "day-shabbat-time";
-      line2.textContent = "טוען זמני שבת...";
-      shabbatWrap.appendChild(line2);
-
-      cell.appendChild(shabbatWrap);
-
-      ensureShabbatForWeek(fridayForTimes).then((info) => {
-        if (!info) { line2.textContent = ""; return; }
-        if (isFriday(cellDate) && info.candle) line2.textContent = `כניסת שבת: ${formatTimeHM(info.candle)}`;
-        else if (isShabbat(cellDate) && info.havdalah) line2.textContent = `צאת שבת: ${formatTimeHM(info.havdalah)}`;
-        else line2.textContent = "";
-      });
-    }
-
 // מנוע זיהוי אייקונים חכמים ומשעשעים למשימות ואירועים בלוח השנה
 function getSmartFunnyEventIcon(ev) {
   if (!ev) return "📌";
@@ -1191,6 +1072,132 @@ function getSmartFunnyEventIcon(ev) {
 
   return ev.type === "task" ? "📌" : "🗓️";
 }
+
+function renderCalendar() {
+  const grid = el("calendarGrid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const currentMonthDate = state.currentDate;
+  const year = currentMonthDate.getFullYear();
+  const month = currentMonthDate.getMonth();
+
+  ensureYearHolidays(year);
+
+  preloadShabbatForVisibleMonth();
+
+  preloadDefaultEventsForVisibleMonth();
+
+  const firstDayOfMonth = new Date(year, month, 1);
+  const startDay = firstDayOfMonth.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const prevMonthDays = new Date(year, month, 0).getDate();
+  const today = new Date();
+
+  el("gregMonthLabel").textContent = firstDayOfMonth.toLocaleDateString("he-IL", { month: "long", year: "numeric" });
+  el("hebrewMonthLabel").textContent = getHebrewMonthYearLabel(firstDayOfMonth) || "";
+
+// חישוב כמה תאים באמת צריך (4–6 שבועות)
+const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
+  for (let cellIndex = 0; cellIndex < totalCells; cellIndex++) {
+    const cell = document.createElement("button");
+    cell.type = "button";
+    cell.className = "day-cell";
+
+    let dayNum;
+    let cellDate;
+    let outside = false;
+
+    if (cellIndex < startDay) {
+      dayNum = prevMonthDays - startDay + cellIndex + 1;
+      cellDate = new Date(year, month - 1, dayNum);
+      outside = true;
+    } else if (cellIndex >= startDay + daysInMonth) {
+      dayNum = cellIndex - startDay - daysInMonth + 1;
+      cellDate = new Date(year, month + 1, dayNum);
+      outside = true;
+    } else {
+      dayNum = cellIndex - startDay + 1;
+      cellDate = new Date(year, month, dayNum);
+    }
+
+    const dateKey = dateKeyFromDate(cellDate);
+    const heb = formatHebrewDate(cellDate);
+    const holiday = state.cache.holidays[dateKey];
+    const events = state.cache.events[dateKey] || {};
+
+    const realEvents = Object.entries(events)
+      .filter(
+        ([eid, ev]) =>
+          ev &&
+          !isDefaultEvent(ev) &&
+          !(ev.isRecurringParent && events[`${eid}_${dateKey}`]) &&
+          matchesQuickOwnerFilter(ev, state.ui.calendarOwnerFilter || "all", dateKey)
+      )
+      .map(([, ev]) => ev)
+      .sort(compareEventsByTimeAndContainment);
+    
+    const header = document.createElement("div");
+    header.className = "day-header";
+
+    const dayNumEl = document.createElement("div");
+    dayNumEl.className = "day-num";
+    dayNumEl.textContent = dayNum;
+
+    const hebEl = document.createElement("div");
+    hebEl.className = "day-hebrew";
+    const hebDay = hasHebcal()
+      ? new window.Hebcal.HDate(cellDate).getDate()
+      : null;
+
+    hebEl.textContent = hebDay ? toHebrewNumeral(hebDay) : "";
+
+    header.appendChild(dayNumEl);
+    header.appendChild(hebEl);
+    cell.appendChild(header);
+
+    if (holiday) {
+      const holidayEl = document.createElement("div");
+      holidayEl.className = "day-holiday";
+      holidayEl.textContent = holiday.name;
+      cell.appendChild(holidayEl);
+    }
+
+    // ערב שבת ושבת – עם זמני הדלקה/צאת שבת
+    let shabbatLabel = null;
+    let fridayForTimes = null;
+    if (isFriday(cellDate)) {
+      shabbatLabel = "ערב שבת";
+      fridayForTimes = new Date(cellDate);
+    } else if (isShabbat(cellDate)) {
+      shabbatLabel = "שבת";
+      fridayForTimes = new Date(cellDate);
+      fridayForTimes.setDate(fridayForTimes.getDate() - 1);
+    }
+
+    if (shabbatLabel && fridayForTimes) {
+      const shabbatWrap = document.createElement("div");
+      shabbatWrap.className = "day-shabbat-block";
+
+      const line1 = document.createElement("div");
+      line1.className = "day-shabbat-title";
+      line1.textContent = shabbatLabel;
+      shabbatWrap.appendChild(line1);
+
+      const line2 = document.createElement("div");
+      line2.className = "day-shabbat-time";
+      line2.textContent = "טוען זמני שבת...";
+      shabbatWrap.appendChild(line2);
+
+      cell.appendChild(shabbatWrap);
+
+      ensureShabbatForWeek(fridayForTimes).then((info) => {
+        if (!info) { line2.textContent = ""; return; }
+        if (isFriday(cellDate) && info.candle) line2.textContent = `כניסת שבת: ${formatTimeHM(info.candle)}`;
+        else if (isShabbat(cellDate) && info.havdalah) line2.textContent = `צאת שבת: ${formatTimeHM(info.havdalah)}`;
+        else line2.textContent = "";
+      });
+    }
 
     const pointsRow = document.createElement("div");
     pointsRow.className = "day-points";
@@ -1524,7 +1531,7 @@ async function moveItemsToDate(items, toDk, newStartTime) {
   }
   try { updateStats(); } catch {}
   if (!el("dailySummaryModal")?.classList.contains("hidden")) {
-    try { renderDailySummary(state.ui.summaryDayKey); } catch {}
+    try { renderDailySummaryModal(state.ui.summaryDayKey); } catch {}
   }
 
   try {
@@ -1977,7 +1984,7 @@ function toggleTaskDone(task) {
   }
   try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
   if (!el("dailySummaryModal")?.classList.contains("hidden")) {
-    try { renderDailySummary(state.ui.summaryDayKey); } catch {}
+    try { renderDailySummaryModal(state.ui.summaryDayKey); } catch {}
   }
   if (!el("goalsModal")?.classList.contains("hidden")) {
     try { renderGoalsProgress(); } catch {}
