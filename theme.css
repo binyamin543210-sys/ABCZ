@@ -1786,82 +1786,122 @@ body.dark .modal-header .icon-btn {
   color: #fca5a5 !important;
 }
 
-/* ---------- 10. תגיות אירועים קריאות בלוח השנה במקום נקודות קטנות + חופש לננה בשלישי ---------- */
-.day-nana-off {
-  font-size: .52rem !important;
-  font-weight: 800;
-  line-height: 1.15;
-  padding: 1px 4px;
-  border-radius: 5px;
-  background: rgba(236, 72, 153, 0.18);
-  color: #db2777;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-body.dark .day-nana-off {
-  background: rgba(236, 72, 153, 0.26);
-  color: #f9a8d4;
+/* ---------- 10. שילוב אייקונים חכמים ומשעשעים (אפשרות 2) + פס מד-עומס זוהר בתחתית הקובייה (אפשרות 4) ---------- */
+.day-cell {
+  position: relative !important;
+  overflow: hidden !important;
+  padding-bottom: 9px !important;
 }
 .day-points {
   display: flex !important;
-  flex-direction: column !important;
-  align-items: stretch !important;
-  justify-content: flex-end !important;
-  gap: 2px !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
   width: 100% !important;
   margin-top: auto !important;
+  padding-top: 2px !important;
 }
-.cal-event-pill {
-  font-size: .55rem !important;
-  font-weight: 800 !important;
-  line-height: 1.2 !important;
-  padding: 1.5px 4px !important;
-  border-radius: 5px !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  text-align: right !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
-  background: rgba(59, 130, 246, 0.2);
-  color: #1d4ed8;
-  border-right: 2.5px solid #3b82f6;
-}
-body.dark .cal-event-pill {
-  background: rgba(59, 130, 246, 0.28);
-  color: #bfdbfe;
-}
-.cal-event-pill.owner-nana {
-  background: rgba(236, 72, 153, 0.2);
-  color: #be185d;
-  border-right-color: #ec4899;
-}
-body.dark .cal-event-pill.owner-nana {
-  background: rgba(236, 72, 153, 0.28);
-  color: #fbcfe8;
-}
-.cal-event-pill.owner-shared {
-  background: rgba(16, 185, 129, 0.2);
-  color: #047857;
-  border-right-color: #10b981;
-}
-body.dark .cal-event-pill.owner-shared {
-  background: rgba(16, 185, 129, 0.28);
-  color: #a7f3d0;
-}
-.cal-event-pill.done {
-  opacity: .68;
-  text-decoration: line-through;
-}
-.cal-event-more {
-  font-size: .5rem !important;
-  font-weight: 800;
-  text-align: center;
-  color: var(--accent);
+.cal-smart-icon-badge {
+  position: relative;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 3px;
+  border-radius: 999px;
+  font-size: .72rem;
   line-height: 1;
+  background: rgba(56, 189, 248, 0.2);
+  border: 1.5px solid rgba(56, 189, 248, 0.75);
+  box-shadow: 0 2px 6px rgba(56, 189, 248, 0.25);
+  transition: transform .15s ease;
+}
+body.dark .cal-smart-icon-badge {
+  background: rgba(56, 189, 248, 0.26);
+  border-color: #38bdf8;
+}
+.cal-smart-icon-badge.owner-nana {
+  background: rgba(244, 114, 182, 0.22);
+  border-color: rgba(244, 114, 182, 0.85);
+  box-shadow: 0 2px 6px rgba(236, 72, 153, 0.28);
+}
+body.dark .cal-smart-icon-badge.owner-nana {
+  background: rgba(236, 72, 153, 0.28);
+  border-color: #f472b6;
+}
+.cal-smart-icon-badge.owner-shared {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.82);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+}
+body.dark .cal-smart-icon-badge.owner-shared {
+  background: rgba(16, 185, 129, 0.26);
+  border-color: #34d399;
+}
+.cal-smart-icon-badge.done {
+  opacity: .72;
+  box-shadow: 0 0 0 1.5px #22c55e;
+}
+.cal-smart-icon-badge.done::after {
+  content: "✓";
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22c55e;
+  color: #ffffff;
+  font-size: 7px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cal-icon-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: .56rem !important;
+  font-weight: 800;
+  background: rgba(99, 102, 241, 0.18);
+  color: var(--accent);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  line-height: 1;
+}
+.day-glow-strip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4.5px;
+  display: flex;
+  gap: 1.5px;
+  padding: 0;
+  pointer-events: none;
+}
+.day-glow-seg {
+  flex: 1;
+  height: 100%;
+  background: linear-gradient(90deg, #0284c7, #38bdf8);
+  box-shadow: 0 -1px 6px rgba(56, 189, 248, 0.65);
+}
+.day-glow-seg.owner-nana {
+  background: linear-gradient(90deg, #db2777, #f472b6);
+  box-shadow: 0 -1px 6px rgba(244, 114, 182, 0.7);
+}
+.day-glow-seg.owner-shared {
+  background: linear-gradient(90deg, #059669, #34d399);
+  box-shadow: 0 -1px 6px rgba(52, 211, 153, 0.65);
+}
+.day-glow-seg.done {
+  opacity: .55;
 }
 body.dark .cal-event-more {
   color: #93c5fd;

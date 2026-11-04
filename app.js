@@ -9,7 +9,7 @@ function hasNativeAndroidBridge() {
 }
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue19").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue20").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
@@ -1060,29 +1060,173 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
       });
     }
 
+// מנוע זיהוי אייקונים חכמים ומשעשעים למשימות ואירועים בלוח השנה
+function getSmartFunnyEventIcon(ev) {
+  if (!ev) return "📌";
+  const text = `${ev.title || ""} ${ev.description || ""} ${ev.goalTitle || ""}`.toLowerCase();
+
+  // 1. ניקיון, שטיפה, ספונג'ה, אבק, סדר -> מנקה אתיופית עם מטאטא 😂
+  if (/(ניקיון|לנקות|נקיון|שטיפה|לשטוף|ספונג|אבק|לטאטא|שואב|לשאוב|אקונומיקה|חלונות|שירותים|מנקה|קרצוף|פאנלים|לסדר את הבית|סידור הבית)/i.test(text)) {
+    return "👩🏿‍🦱🧹";
+  }
+  // 2. כביסה, קיפול, גיהוץ
+  if (/(כביסה|מכונת כביסה|לקפל|קיפול|מייבש|לגהץ|גיהוץ|אטבים)/i.test(text)) {
+    return "👩🏿‍🦱🧺";
+  }
+  // 3. כלים ומדיח
+  if (/(כלים|מדיח|כיור)/i.test(text)) {
+    return "🧽";
+  }
+  // 4. זבל ואשפה
+  if (/(זבל|אשפה|להוריד את הפח|פח זבל|מיחזור|בקבוקים)/i.test(text)) {
+    return "🗑️";
+  }
+  // 5. שיפוצניק / משימות הנדימן לגברים (לתלות, להדביק, לקדוח, לתקן, להרכיב וכו')
+  if (/(לתלות|להדביק|לקדוח|להרכיב|לפרק|לתקן|תיקון|שיפוץ|מדף|תמונה|ברגים|בורג|דיבל|מקדחה|פטיש|מברגה|אינסטלצ|סתימה|נזילה|ברז|חשמל|נורה|מנורה|מזגן|פילטר|לצבוע|צביעה|שפכטל|סיליקון|ארון|שידה|איקאה|הנדימן)/i.test(text)) {
+    return "👷🏾‍♂️🛠️";
+  }
+  // 6. שיחות וטלפונים (שיחה עם X, להתקשר, טלפון, לצלצל)
+  if (/(שיחה|להתקשר|טלפון|לצלצל|לחזור ל|לדבר עם|פלאפון|חיוג)/i.test(text)) {
+    return "📞";
+  }
+  // 7. הודעות, וואטסאפ, מיילים
+  if (/(וואטסאפ|ווצאפ|whatsapp|הודעה|לשלוח|סמס|מייל|אימייל)/i.test(text)) {
+    return "💬";
+  }
+  // 8. קניות וסופר
+  if (/(סופר|קניות|לקנות|רמי לוי|שופרסל|יוחננוף|אושר עד|ויקטורי|קרפור|מכולת|ירקן|קצב|מאפייה|חלב|לחם)/i.test(text)) {
+    return "🛒";
+  }
+  // 9. שופינג, קניון, חבילות ודואר
+  if (/(חבילה|דואר|משלוח|איסוף)/i.test(text)) {
+    return "📦";
+  }
+  if (/(שופינג|קניון|בגדים|זארה|שיין|shein|עליאקספרס|אמזון|נעליים)/i.test(text)) {
+    return "🛍️";
+  }
+  // 10. כסף, תשלומים, בנק, חשבונות ובירוקרטיה -> כסף עף 💸
+  if (/(לשלם|תשלום|בנק|העברה|ביט|פייבוקס|ארנונה|חשבונית|מס הכנסה|ביטוח|משכנתא|שכירות|כסף|משכורת|רואה חשבון|דוח|קנס|טופס|חוזה|אגרה)/i.test(text)) {
+    return "💸";
+  }
+  // 11. כושר, אימון וספורט
+  if (/(אימון|כושר|חדר כושר|מכון|ריצה|לרוץ|הליכה|פילאטיס|יוגה|שחייה|כדורגל|כדורסל|משקולות|ספורט|חיטוב)/i.test(text)) {
+    return ev.owner === "nana" ? "🧘🏻‍♀️" : "🏋️‍♂️";
+  }
+  // 12. טיפוח, לק, תספורת, מספרה
+  if (/(לק|ציפורניים|מניקור|פדיקור|גבות|שעווה|לייזר|קוסמטיקאית|פן|החלקה|איפור)/i.test(text)) {
+    return "💅";
+  }
+  if (/(תספורת|ספר|מספרה|זקן|דירוג)/i.test(text)) {
+    return ev.owner === "nana" ? "💇‍♀️" : "💈";
+  }
+  // 13. רופא, שיניים, בדיקות, תרופות
+  if (/(שיניים|שיננית|אורתודנט|סתימה בשן)/i.test(text)) {
+    return "🦷";
+  }
+  if (/(רופא|תור ל|מרפאה|בדיקה|בדיקת דם|קופת חולים|בית חולים|אולטרסאונד|פיזיותרפיה|בית מרקחת|תרופה|כדור|מרשם)/i.test(text)) {
+    return "🩺";
+  }
+  // 14. רכב, מוסך, טסט, דלק
+  if (/(דלק|לתדלק|תחנת דלק)/i.test(text)) {
+    return "⛽";
+  }
+  if (/(רכב|אוטו|מוסך|טסט|טיפול לרכב|שטיפת רכב|פנצ'ר|צמיגים|חניה)/i.test(text)) {
+    return "🚗";
+  }
+  // 15. טיסות, חופשות, מלון
+  if (/(טיסה|נתב"ג|דרכון|חו"ל)/i.test(text)) {
+    return "✈️";
+  }
+  if (/(חופשה|מלון|צימר|נופש|אילת|ים המלח|בריכה|ים)/i.test(text)) {
+    return "🏖️";
+  }
+  // 16. בישולים, אוכל, מסעדות ודייטים
+  if (/(לבשל|בישול|להכין אוכל|אפייה|לאפות|עוגה|חלות|סירים|מטבח)/i.test(text)) {
+    return "👩🏽‍🍳";
+  }
+  if (/(דייט|מסעדה|בית קפה|סושי|פיצה|המבורגר|על האש|מנגל|בראנץ|ארוחת ערב|קפה)/i.test(text)) {
+    return "🥂";
+  }
+  // 17. אירועים, חתונות, ימי הולדת, מתנות
+  if (/(יום הולדת|יומולדת|מזל טוב)/i.test(text)) {
+    return "🎂";
+  }
+  if (/(חתונה|חינה|אירוסין|בר מצווה|בת מצווה|ברית|אירוע|מסיבה)/i.test(text)) {
+    return "💃";
+  }
+  if (/(מתנה|פרחים|זר)/i.test(text)) {
+    return "🎁";
+  }
+  // 18. תפילה, תורה, לימודים, מקווה
+  if (/(תפילה|בית כנסת|מניין|שחרית|מנחה|ערבית|תהילים|שיעור תורה|כולל|רב)/i.test(text)) {
+    return "🕍";
+  }
+  if (/(מקווה|הפרשת חלה|נרות שבת)/i.test(text)) {
+    return "🕯️";
+  }
+  if (/(לימוד|ללמוד|שיעור|מבחן|קורס|הרצאה|עבודה סמינריונית)/i.test(text)) {
+    return "📚";
+  }
+  // 19. עבודה, פגישות, זום
+  if (/(פגישה|ישיבה|זום|zoom|משרד|לקוח|פרויקט|מצגת|ראיון|משמרת)/i.test(text)) {
+    return "💼";
+  }
+  // 20. משפחה, הורים
+  if (/(אמא|אבא|הורים|סבתא|סבא|משפחה|אחים|ארוחת שישי|שבת אצל)/i.test(text)) {
+    return "👨‍👩‍👧";
+  }
+  // 21. זוגיות, אהבה, סרט, ספא
+  if (/(סרט|קולנוע|נטפליקס)/i.test(text)) {
+    return "🍿";
+  }
+  if (/(מסאז|עיסוי|ספא)/i.test(text)) {
+    return "💆‍♂️";
+  }
+  if (/(זוגי|אהבה|רומנטי)/i.test(text)) {
+    return "❤️";
+  }
+  if (/(שנ"צ|שנצ|לישון|מנוחה|תנומה)/i.test(text)) {
+    return "😴";
+  }
+
+  return ev.type === "task" ? "📌" : "🗓️";
+}
+
     const pointsRow = document.createElement("div");
     pointsRow.className = "day-points";
 
-    const maxVisiblePills = shabbatLabel ? 1 : 2;
-    realEvents.slice(0, maxVisiblePills).forEach((ev) => {
-      const pill = document.createElement("div");
-      pill.className = "cal-event-pill";
-      if (ev.type === "task") pill.classList.add("task");
-      if (ev.completed || ev.completedAt) pill.classList.add("done");
-      if (ev.owner) pill.classList.add(`owner-${ev.owner}`);
-      const prefix = ev.completed || ev.completedAt ? "✓ " : ev.type === "task" ? "• " : "";
-      pill.textContent = `${prefix}${ev.title || "אירוע"}`;
-      pointsRow.appendChild(pill);
+    const maxVisibleIcons = shabbatLabel ? 2 : 3;
+    realEvents.slice(0, maxVisibleIcons).forEach((ev) => {
+      const badge = document.createElement("div");
+      badge.className = "cal-smart-icon-badge";
+      if (ev.type === "task") badge.classList.add("task");
+      if (ev.completed || ev.completedAt) badge.classList.add("done");
+      badge.classList.add(`owner-${ev.owner || "shared"}`);
+      badge.title = `${ev.title || "אירוע"}${ev.startTime ? " (" + ev.startTime + ")" : ""}`;
+      badge.textContent = getSmartFunnyEventIcon(ev);
+      pointsRow.appendChild(badge);
     });
 
-    if (realEvents.length > maxVisiblePills) {
+    if (realEvents.length > maxVisibleIcons) {
       const moreBadge = document.createElement("div");
-      moreBadge.className = "cal-event-more";
-      moreBadge.textContent = `+${realEvents.length - maxVisiblePills}`;
+      moreBadge.className = "cal-icon-more";
+      moreBadge.textContent = `+${realEvents.length - maxVisibleIcons}`;
       pointsRow.appendChild(moreBadge);
     }
 
-    if (realEvents.length > 0) cell.appendChild(pointsRow);
+    if (realEvents.length > 0) {
+      cell.appendChild(pointsRow);
+
+      // אפשרות 4: פס מד-עומס צבעוני וזוהר בתחתית הקובייה לפי צבעי המשתמשים
+      const glowStrip = document.createElement("div");
+      glowStrip.className = "day-glow-strip";
+      realEvents.forEach((ev) => {
+        const seg = document.createElement("span");
+        seg.className = `day-glow-seg owner-${ev.owner || "shared"}${ev.completed || ev.completedAt ? " done" : ""}`;
+        glowStrip.appendChild(seg);
+      });
+      cell.appendChild(glowStrip);
+    }
     if (realEvents.length >= 2) cell.classList.add("day-border-glow");
     if (outside) cell.classList.add("outside");
     if (isSameDay(cellDate, today)) cell.classList.add("day-cell-today");
@@ -1930,7 +2074,9 @@ function renderDayEvents(dateKey) {
 
     const title = document.createElement("div");
     title.className = "task-title";
-    title.textContent = ev.title || "(ללא כותרת)";
+    const rawTitle = ev.title || "(ללא כותרת)";
+    const smartIcon = !isDefaultEvent(ev) ? getSmartFunnyEventIcon(ev) : "";
+    title.textContent = smartIcon && !rawTitle.startsWith(smartIcon) ? `${smartIcon} ${rawTitle}` : rawTitle;
 
     const ownerBadge = document.createElement("span");
     ownerBadge.className = "badge";
