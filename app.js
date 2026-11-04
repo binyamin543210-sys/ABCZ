@@ -9,7 +9,7 @@ function hasNativeAndroidBridge() {
 }
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue22").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue23").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
@@ -1934,16 +1934,9 @@ function renderTasks(filter = "undated") {
   }
 
   const allTasks = [];
-  const registeredSeriesKeys = new Set();
-  const orphanCandidatesBySeries = new Map();
+  const recurringSeriesMap = new Map(); // מפתח ייחודי לכל סדרה חוזרת -> רק אב אחד בדיוק לכל סדרה!
   const todayKey = dateKeyFromDate(new Date());
 
-  const getSeriesIdentity = (id, ev) => {
-    const baseParentId = ev.parentId || (ev.isRecurringParent ? (ev._id || id) : String(id).replace(/_\d{4}-\d{2}-\d{2}$/, ""));
-    return `${ev.type || "event"}|${baseParentId}|${(ev.title || "").trim()}`;
-  };
-
-  // סריקה ראשונה: איסוף משימות רגילות, אירועים רגילים, ואבות של סדרות חוזרות (גם אם סומנו כבוצעו ביום הראשון!)
   Object.entries(state.cache.events).forEach(([dateKey, items]) => {
     Object.entries(items || {}).forEach(([id, ev]) => {
       if (!ev || isDefaultEvent(ev)) return;
@@ -1951,109 +1944,75 @@ function renderTasks(filter = "undated") {
       // סינון מהיר לפי משתמש (הכל / רק שלי / משותף)
       if (!matchesQuickOwnerFilter(ev, state.ui.tasksOwnerFilter || "all", dateKey)) return;
 
+      // פריט נחשב חוזר אך ורק אם הוגדר כחוזר (recurring !== "none" או סומן כחלק מסדרה חוזרת)
       const hasRecurringRule = Boolean(ev.recurring && ev.recurring !== "none");
-      const isParentRecord = ev.isRecurringParent === true || (!ev.isRecurringInstance && hasRecurringRule);
+      const isRecurringItem = Boolean(
+        hasRecurringRule ||
+        ev.isRecurringParent === true ||
+        ev.isRecurringInstance === true ||
+        ev.parentId
+      );
 
-      if (isParentRecord) {
-        const sKey = getSeriesIdentity(id, ev);
-        registeredSeriesKeys.add(sKey);
-        registeredSeriesKeys.add(`title|${ev.type || "event"}|${(ev.title || "").trim()}`);
-        allTasks.push({
+      if (isRecurringItem) {
+        const normTitle = (ev.title || "").trim();
+        const itemType = ev.type || "event";
+        const baseParentId = ev.parentId || (ev.isRecurringParent ? (ev._id || id) : String(ev._id || id).replace(/_\d{4}-\d{2}-\d{2}$/, ""));
+        // קיבוץ לפי כותרת+סוג (או מזהה אב אם אין כותרת) כדי שלעולם לא יופיעו כפילויות של אותה משימה/אירוע חוזר!
+        const seriesKey = normTitle ? `${itemType}|title:${normTitle}` : `${itemType}|id:${baseParentId}`;
+
+        const candidate = {
           id,
           dateKey,
           ...ev,
           isRecurringParent: true,
-          __recurringEvent: ev.type === "event",
-          __seriesParentId: ev._id || id
-        });
-        return;
-      }
+          isRecurringInstance: false,
+          __recurringEvent: itemType === "event",
+          __seriesParentId: baseParentId
+        };
 
-      // אם זה מופע חוזר (isRecurringInstance / parentId / recurring) – נשמור כמועמד למקרה שהאב נמחק או אבד!
-      if (ev.isRecurringInstance === true || ev.parentId || hasRecurringRule) {
-        const sKey = getSeriesIdentity(id, ev);
-        const existingCand = orphanCandidatesBySeries.get(sKey);
-        if (!existingCand) {
-          orphanCandidatesBySeries.set(sKey, { id, dateKey, ev, count: 1 });
+        const existing = recurringSeriesMap.get(seriesKey);
+        if (!existing) {
+          recurringSeriesMap.set(seriesKey, candidate);
         } else {
-          existingCand.count++;
-          // נעדיף מופע שלא בוצע מהיום והלאה כדי להציג תאריך עדכני
-          const curIsFutureUncompleted = !ev.completed && dateKey >= todayKey;
-          const oldIsFutureUncompleted = !existingCand.ev.completed && existingCand.dateKey >= todayKey;
-          if (curIsFutureUncompleted && (!oldIsFutureUncompleted || dateKey < existingCand.dateKey)) {
-            orphanCandidatesBySeries.set(sKey, { id, dateKey, ev, count: existingCand.count });
+          // נעדיף תמיד את רשומת האב המקורית (isRecurringParent === true && !isRecurringInstance)
+          const candIsTrueParent = ev.isRecurringParent === true && !ev.isRecurringInstance;
+          const existIsTrueParent = existing._rawIsTrueParent === true;
+          if (candIsTrueParent && !existIsTrueParent) {
+            candidate._rawIsTrueParent = true;
+            recurringSeriesMap.set(seriesKey, candidate);
+          } else if (!existIsTrueParent && !candIsTrueParent) {
+            // אם שניהם מופעים (כי האב המקורי נמחק בעבר) – נשמור רק אחד (הקרוב ביותר מהיום והלאה)
+            const candFuture = !ev.completed && dateKey >= todayKey;
+            const existFuture = !existing.completed && existing.dateKey >= todayKey;
+            if (candFuture && (!existFuture || dateKey < existing.dateKey)) {
+              recurringSeriesMap.set(seriesKey, candidate);
+            }
           }
+        }
+        if (ev.isRecurringParent === true && !ev.isRecurringInstance) {
+          recurringSeriesMap.get(seriesKey)._rawIsTrueParent = true;
         }
         return;
       }
 
-      // ⛔ למשימות/אירועים חד-פעמיים: לא מציגים פריטים שכבר בוצעו
+      // ⛔ למשימות/אירועים רגילים (שאינם חוזרים): לא מציגים פריטים שכבר בוצעו
       if (ev.completed === true) return;
 
       if (ev.type === "task") {
-        allTasks.push({ id, dateKey, ...ev });
+        allTasks.push({ id, dateKey, ...ev, isRecurringParent: false });
         return;
       }
 
       if (ev.type === "event") {
-        allTasks.push({ id, dateKey, ...ev });
+        allTasks.push({ id, dateKey, ...ev, isRecurringParent: false });
       }
     });
   });
 
-  // השלמת סדרות חוזרות "יתומות" (כמו "בדיקה" או "לצאת לאוטו" שהאב המקורי שלהן נמחק/הועבר או סומן כבוצע, ונשארו מופעים בלוח)
-  orphanCandidatesBySeries.forEach(({ id, dateKey, ev, count }, sKey) => {
-    const titleKey = `title|${ev.type || "event"}|${(ev.title || "").trim()}`;
-    if (registeredSeriesKeys.has(sKey) || registeredSeriesKeys.has(titleKey)) return;
-    registeredSeriesKeys.add(sKey);
-    registeredSeriesKeys.add(titleKey);
-
-    const rawParentId = ev.parentId || String(ev._id || id).replace(/_\d{4}-\d{2}-\d{2}$/, "");
-    allTasks.push({
-      id,
-      dateKey,
-      ...ev,
-      isRecurringParent: true,
-      isRecurringInstance: false,
-      __isOrphanSeries: true,
-      __instancesCount: count,
-      __seriesParentId: rawParentId,
-      __recurringEvent: ev.type === "event"
-    });
-  });
-
-  // זיהוי פריטים שנוצרו בכפילות על פני 2+ תאריכים שונים ללא דגל recurring (כדי שניתן יהיה לראות, לערוך ולמחוק אותם במרוכז גם מחוזרים)
-  const byTitleAndType = new Map();
-  Object.entries(state.cache.events).forEach(([dateKey, items]) => {
-    if (!dateKey || dateKey === "undated") return;
-    Object.entries(items || {}).forEach(([id, ev]) => {
-      if (!ev || isDefaultEvent(ev)) return;
-      if (!matchesQuickOwnerFilter(ev, state.ui.tasksOwnerFilter || "all", dateKey)) return;
-      const t = (ev.title || "").trim();
-      if (!t) return;
-      const key = `${ev.type || "event"}|${t}`;
-      if (!byTitleAndType.has(key)) byTitleAndType.set(key, []);
-      byTitleAndType.get(key).push({ id, dateKey, ev });
-    });
-  });
-
-  byTitleAndType.forEach((arr, key) => {
-    if (arr.length < 2) return;
-    const sample = arr[0];
-    const titleKey = `title|${sample.ev.type || "event"}|${(sample.ev.title || "").trim()}`;
-    if (registeredSeriesKeys.has(titleKey)) return;
-    // אם יש לפחות 2 מופעים באותה כותרת והם לא רשומים עדיין כחוזרים – נוסיף ייצוג שלהם גם בלשונית החוזרים כדי שהמשתמש יוכל למחוק/לערוך הכל!
-    const upcoming = arr.find((x) => !x.ev.completed && x.dateKey >= todayKey) || arr[0];
-    allTasks.push({
-      id: upcoming.id,
-      dateKey: upcoming.dateKey,
-      ...upcoming.ev,
-      recurring: upcoming.ev.recurring && upcoming.ev.recurring !== "none" ? upcoming.ev.recurring : "custom",
-      isRecurringParent: true,
-      __isMultiDateSeries: true,
-      __instancesCount: arr.length,
-      __recurringEvent: (upcoming.ev.type || "event") === "event"
-    });
+  // הוספת האב היחיד של כל סדרה חוזרת לרשימה
+  recurringSeriesMap.forEach((parentItem) => {
+    delete parentItem._rawIsTrueParent;
+    allTasks.push(parentItem);
   });
 
   const urgencyRank = {

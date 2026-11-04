@@ -11,7 +11,7 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-const CACHE_NAME = 'bnapp-v4-4-0-live';
+const CACHE_NAME = 'bnapp-v4-4-1-live';
 const swTimers = new Map();
 const firedKeys = new Set();
 
