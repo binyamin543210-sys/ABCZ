@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=blue23" />
-  <link rel="stylesheet" href="theme.css?v=blue23" />
+  <link rel="stylesheet" href="styles.css?v=blue24" />
+  <link rel="stylesheet" href="theme.css?v=blue24" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -31,7 +31,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue23"></script>
+  <script defer src="app.js?v=blue24"></script>
 </head>
 
 <body>
@@ -235,7 +235,12 @@
           </div>
 
           <div class="setting-row notif-card">
-            <div class="notif-title"><span class="setting-icon">🔔</span><span class="setting-label">התראות</span></div>
+            <div class="notif-title"><span class="setting-icon">🔔</span><span class="setting-label">התראות ומצב צליל</span></div>
+            <div class="notif-grid" id="soundModeSelector" style="margin-bottom:6px;">
+              <button id="btnSoundModeRing" type="button" class="ghost-pill active" data-sound-mode="ring">🔊 צלצול + ג'יחרי</button>
+              <button id="btnSoundModeVibrate" type="button" class="ghost-pill" data-sound-mode="vibrate">📳 רטט בלבד</button>
+              <button id="btnSoundModeSilent" type="button" class="ghost-pill" data-sound-mode="silent">🔕 שקט (ללא התראה)</button>
+            </div>
             <div class="notif-grid">
               <button id="btnRequestNotifications" class="primary-pill">🔔 הפעל</button>
               <button id="btnTestNotificationNow" type="button" class="ghost-pill">🔊 בדיקה</button>
@@ -769,15 +774,17 @@
 
 <!-- REMINDER ALERT POPUP MODAL -->
 <div id="reminderAlertModal" class="modal reminder-alert-modal hidden">
-  <div class="modal-backdrop"></div>
+  <div class="modal-backdrop" id="reminderAlertBackdrop" title="לחץ להשתקה וסגירה"></div>
   <div class="modal-content confirm-modal reminder-alert-box">
     <div class="confirm-title" style="font-size:1.3rem;">🔔 הגיע זמן התזכורת!</div>
     <div id="reminderAlertTitle" class="task-title" style="font-size:1.15rem; margin:10px 0 4px;"></div>
     <div id="reminderAlertMeta" class="confirm-text"></div>
+    <div id="reminderAlertStageBadge" class="reminder-stage-badge">🎶 צלצול רגוע (8 שניות לפני שג'יחרי מדבר)</div>
     <div class="confirm-actions" style="flex-direction:column; gap:8px;">
+      <button id="btnReminderMuteNow" type="button" class="reminder-mute-hero-btn full-width">🔇 השתק התראה עכשיו</button>
       <button id="btnReminderDone" class="primary-pill full-width">✔ סמן כבוצע</button>
       <button id="btnReminderSnooze" class="ghost-pill full-width">⏰ הזכר לי שוב בעוד 10 דקות</button>
-      <button id="btnReminderDismiss" class="ghost-pill full-width">סגור</button>
+      <button id="btnReminderDismiss" class="ghost-pill full-width">🔇 השתק וסגור</button>
     </div>
   </div>
 </div>

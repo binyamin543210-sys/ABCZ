@@ -11,7 +11,7 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-const CACHE_NAME = 'bnapp-v4-4-1-live';
+const CACHE_NAME = 'bnapp-v4-4-2-live';
 const swTimers = new Map();
 const firedKeys = new Set();
 
@@ -75,7 +75,8 @@ self.addEventListener('fetch', (event) => {
 // ===============================
 // LOCAL & SCHEDULED SW REMINDERS
 // ===============================
-async function showSwReminderNotification(key, title, body) {
+async function showSwReminderNotification(key, title, body, soundMode = 'ring') {
+  if (soundMode === 'silent') return;
   const notifTitle = title || "🔔 תזכורת BNAPP";
   const notifBody = body || "הגיע זמן התזכורת שהגדרת";
   const tag = key ? `bnapp-rem-${key}` : `bnapp-rem-${Date.now()}`;
@@ -85,10 +86,15 @@ async function showSwReminderNotification(key, title, body) {
       body: notifBody,
       icon: "./icon-192.png",
       badge: "./icon-192.png",
-      vibrate: [400, 150, 400, 150, 600],
+      vibrate: soundMode === 'vibrate' ? [350, 180, 350, 180, 500] : [250, 150, 250],
+      silent: false,
       requireInteraction: true,
       renotify: true,
       tag,
+      actions: [
+        { action: 'mute', title: '🔇 השתק התראה' },
+        { action: 'open', title: 'פתח' }
+      ],
       data: "./"
     });
   } catch (e) {}
@@ -111,9 +117,9 @@ self.addEventListener('message', (event) => {
   if (!msg || !msg.type) return;
 
   if (msg.type === 'TRIGGER_SW_NOTIFICATION_NOW') {
-    const { key, title, body } = msg;
+    const { key, title, body, soundMode } = msg;
     if (key) firedKeys.add(`${key}_${ Math.floor(Date.now() / 30000) }`);
-    event.waitUntil(showSwReminderNotification(key, title, body));
+    event.waitUntil(showSwReminderNotification(key, title, body, soundMode || 'ring'));
     return;
   }
 
@@ -129,7 +135,7 @@ self.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'SCHEDULE_SW_NOTIFICATION') {
-    const { key, title, body, targetTs } = msg;
+    const { key, title, body, targetTs, soundMode } = msg;
     if (!key || !targetTs) return;
 
     if (swTimers.has(key)) {
@@ -148,7 +154,7 @@ self.addEventListener('message', (event) => {
           const dedupKey = `${key}_${Math.floor(Date.now() / 30000)}`;
           if (!firedKeys.has(dedupKey)) {
             firedKeys.add(dedupKey);
-            await showSwReminderNotification(key, title, body);
+            await showSwReminderNotification(key, title, body, soundMode || 'ring');
           }
           resolve();
         }, delay);
@@ -190,6 +196,14 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   event.waitUntil((async () => {
     const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windowClients) {
+      try {
+        client.postMessage({ type: 'MUTE_ALARM_NOW' });
+      } catch (e) {}
+    }
+    if (event.action === 'mute') {
+      return;
+    }
     if (windowClients.length > 0) {
       const client = windowClients[0];
       if ('focus' in client) await client.focus();

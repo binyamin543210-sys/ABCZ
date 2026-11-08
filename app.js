@@ -9,13 +9,17 @@ function hasNativeAndroidBridge() {
 }
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue23").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue24").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
   navigator.serviceWorker.addEventListener("message", (event) => {
     const msg = event.data;
     if (!msg || !msg.type) return;
+    if (msg.type === "MUTE_ALARM_NOW") {
+      if (typeof stopAlarmLoop === "function") stopAlarmLoop();
+      return;
+    }
     if (msg.type === "SW_REMINDER_FIRED" && msg.key) {
       if (typeof window._onSwReminderFired === "function") {
         window._onSwReminderFired(msg);
@@ -122,6 +126,8 @@ const state = {
 };
 
 const GOAL_COLORS = {
+  "SELS": "#0ea5e9",          // כחול מעלית SELS 🛗
+  "🛗 SELS": "#0ea5e9",
   "שינה": "#60a5fa",          // תכלת
   "התארגנות": "#38bdf8",      // תכלת-טורקיז
   "נסיעות": "#6366f1",        // אינדיגו
@@ -749,27 +755,44 @@ function ensureYearHolidays(year) {
     if (name) state.cache.holidays[key] = { name };
   }
 }
-// ---------- דיבור + הומור של ג'יחרי ----------
+// ---------- דיבור + הומור של ג'יחרי (קול עמוק, כריזמטי ומגניב) ----------
 let gihariVoice = null;
 function loadVoices() {
   if (!("speechSynthesis" in window)) return;
   const voices = speechSynthesis.getVoices();
+  const heVoices = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith("he"));
   gihariVoice =
-    voices.find((v) => v.lang === "he-IL" && (v.name.includes("Google") || v.name.toLowerCase().includes("wavenet") || v.name.toLowerCase().includes("enhanced"))) ||
-    voices.find((v) => v.lang === "he-IL") ||
+    heVoices.find((v) => /avri|male|natural|wavenet|neural|carmit|asaf/i.test(v.name)) ||
+    heVoices.find((v) => /google|microsoft|enhanced/i.test(v.name)) ||
+    heVoices[0] ||
     voices[0] ||
     null;
 }
 if ("speechSynthesis" in window) window.speechSynthesis.onvoiceschanged = loadVoices;
 
+function getCoolGihariAlertLine(titleText) {
+  const clean = (titleText || "אירוע ביומן").trim();
+  const lines = [
+    `יאללה אחי, ג'יחרי על הקו – הגיע הזמן ל${clean}`,
+    `היי אחי, כאן ג'יחרי. תזכורת אש בשבילך: ${clean}`,
+    `ג'יחרי מדווח מהשטח: הגיע הזמן ל${clean}`
+  ];
+  return lines[Math.floor(Math.random() * lines.length)];
+}
+
 function gihariSpeak(text) {
   if (!("speechSynthesis" in window) || !text) return;
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = "he-IL";
-  utter.rate = 1.03;
-  utter.pitch = 1.0;
-  if (gihariVoice) utter.voice = gihariVoice;
-  speechSynthesis.speak(utter);
+  if (typeof getEffectiveSoundMode === "function" && getEffectiveSoundMode() !== "ring") return;
+  try {
+    speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "he-IL";
+    utter.rate = 1.08;
+    utter.pitch = 0.82;
+    utter.volume = 1.0;
+    if (gihariVoice) utter.voice = gihariVoice;
+    speechSynthesis.speak(utter);
+  } catch {}
 }
 
 function wrapGihariHumor(html) {
@@ -986,10 +1009,32 @@ function findConflicts(dateKey, newEvent, excludeId = null) {
 // =========================
 // Calendar render
 // =========================
+function isSelsText(str) {
+  return /sels/i.test(String(str || ""));
+}
+
+function isSelsEvent(ev) {
+  if (!ev) return false;
+  return /sels/i.test(`${ev.title || ""} ${ev.description || ""} ${ev.goalTitle || ""}`);
+}
+
+function shouldHideRecurringParentOnDate(ev, id, dateKey, dayEventsObj) {
+  if (!ev || !ev.isRecurringParent) return false;
+  const eventsOnDay = dayEventsObj || state.cache.events?.[dateKey] || {};
+  if (eventsOnDay[`${id}_${dateKey}`]) return true;
+  if (Array.isArray(ev.excludedDates) && ev.excludedDates.includes(dateKey)) return true;
+  return false;
+}
+
 // מנוע זיהוי אייקונים חכמים ומשעשעים למשימות ואירועים בלוח השנה
 function getSmartFunnyEventIcon(ev) {
   if (!ev) return "📌";
   const text = `${ev.title || ""} ${ev.description || ""} ${ev.goalTitle || ""}`.toLowerCase();
+
+  // 0. קטגוריית SELS -> אייקון של מעלית 🛗
+  if (/sels/i.test(text)) {
+    return "🛗";
+  }
 
   // 1. ניקיון, שטיפה, ספונג'ה, אבק, סדר -> מנקה אתיופית עם מטאטא 😂
   if (/(ניקיון|לנקות|נקיון|שטיפה|לשטוף|ספונג|אבק|לטאטא|שואב|לשאוב|אקונומיקה|חלונות|שירותים|מנקה|קרצוף|פאנלים|לסדר את הבית|סידור הבית)/i.test(text)) {
@@ -1176,7 +1221,7 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
         ([eid, ev]) =>
           ev &&
           !isDefaultEvent(ev) &&
-          !(ev.isRecurringParent && events[`${eid}_${dateKey}`]) &&
+          !shouldHideRecurringParentOnDate(ev, eid, dateKey, events) &&
           matchesQuickOwnerFilter(ev, state.ui.calendarOwnerFilter || "all", dateKey)
       )
       .map(([, ev]) => ev)
@@ -1529,6 +1574,24 @@ function getTomorrowKey() {
   return dateKeyFromDate(d);
 }
 
+function markRecurringParentExcludedDate(seriesIdOrInstanceId, excludedDk, multiMap) {
+  if (!seriesIdOrInstanceId || !excludedDk) return;
+  const baseId = String(seriesIdOrInstanceId).replace(/_\d{4}-\d{2}-\d{2}$/, "");
+  if (!baseId) return;
+  Object.entries(state.cache.events || {}).forEach(([pDk, dayItems]) => {
+    const parentObj = dayItems?.[baseId];
+    if (parentObj && (parentObj.isRecurringParent || (parentObj.recurring && parentObj.recurring !== "none"))) {
+      const prevEx = Array.isArray(parentObj.excludedDates) ? parentObj.excludedDates : [];
+      if (!prevEx.includes(excludedDk)) {
+        parentObj.excludedDates = [...prevEx, excludedDk];
+        if (multiMap) {
+          multiMap[`${pDk}/${baseId}/excludedDates`] = parentObj.excludedDates;
+        }
+      }
+    }
+  });
+}
+
 // העברת רשימת פריטים לתאריך חדש (אופציונלית גם שעה חדשה) – שומר משך ומעדכן הכל מיד
 async function moveItemsToDate(items, toDk, newStartTime) {
   let moved = 0;
@@ -1558,10 +1621,22 @@ async function moveItemsToDate(items, toDk, newStartTime) {
     updatedObj.remindedAt_binyamin = null;
     updatedObj.remindedAt_nana = null;
     updatedObj.remindedAt_shared = null;
-    updatedObj.isRecurringInstance = source.isRecurringInstance || null;
+
+    if (oldDk !== toDk && (source.isRecurringInstance || source.parentId || /_\d{4}-\d{2}-\d{2}$/.test(String(id)))) {
+      markRecurringParentExcludedDate(source.parentId || id, oldDk, multi);
+      updatedObj.isRecurringInstance = null;
+      updatedObj.isRecurringParent = null;
+      updatedObj.parentId = null;
+      updatedObj.recurring = "none";
+    } else {
+      updatedObj.isRecurringInstance = source.isRecurringInstance || null;
+    }
 
     state.cache.events[toDk][id] = updatedObj;
-    if (oldDk !== toDk && state.cache.events[oldDk]) delete state.cache.events[oldDk][id];
+    if (oldDk !== toDk && state.cache.events[oldDk]) {
+      delete state.cache.events[oldDk][id];
+      cancelDirectReminder(`${oldDk}/${id}`);
+    }
 
     multi[`${toDk}/${id}`] = updatedObj;
     if (oldDk !== toDk) multi[`${oldDk}/${id}`] = null;
@@ -2282,7 +2357,7 @@ function renderDayEvents(dateKey) {
     .filter(
       ([id, ev]) =>
         ev &&
-        !(ev.isRecurringParent && events[`${id}_${dateKey}`]) &&
+        !shouldHideRecurringParentOnDate(ev, id, dateKey, events) &&
         matchesQuickOwnerFilter(ev, state.ui.calendarOwnerFilter || "all", dateKey)
     )
     .map(([id, ev]) => ({ id, ...ev }));
@@ -2529,7 +2604,12 @@ function openEditModal({ dateKey, id, title, startTime, endTime, type, owner, go
   modal.classList.remove("hidden");
   form.reset();
 
-  const dk = dateKey || dateKeyFromDate(state.currentDate);
+  let dk = dateKey || dateKeyFromDate(state.currentDate);
+  if (id && (!state.cache.events?.[dk] || !state.cache.events[dk][id])) {
+    const foundBucket = Object.keys(state.cache.events || {}).find((k) => state.cache.events[k]?.[id]);
+    if (foundBucket) dk = foundBucket;
+  }
+
   form.elements["date"].value = dk;
   form.elements["owner"].value = owner || (state.currentUser === "shared" ? "shared" : state.currentUser);
 
@@ -2781,6 +2861,115 @@ function openEditModal({ dateKey, id, title, startTime, endTime, type, owner, go
   };
 }
 
+async function saveEditedEventCleanly({ existingId, prevDk, dateKey, eventObj, toastMsg }) {
+  let prevObj = (prevDk && state.cache.events?.[prevDk]?.[existingId]) || state.cache.events?.[dateKey]?.[existingId] || null;
+  let actualOldDk = prevDk;
+  if (!prevObj) {
+    for (const [k, dayBucket] of Object.entries(state.cache.events || {})) {
+      if (dayBucket && dayBucket[existingId]) {
+        prevObj = dayBucket[existingId];
+        if (!actualOldDk) actualOldDk = k;
+        break;
+      }
+    }
+  }
+  prevObj = prevObj || {};
+
+  const otherBucketsWithId = Object.keys(state.cache.events || {}).filter(
+    (k) => k !== dateKey && state.cache.events[k]?.[existingId]
+  );
+  const dateChanged = Boolean((actualOldDk && actualOldDk !== dateKey) || otherBucketsWithId.length > 0);
+  const wasRecurringInstance = Boolean(
+    prevObj.isRecurringInstance ||
+    prevObj.parentId ||
+    /_\d{4}-\d{2}-\d{2}$/.test(String(existingId))
+  );
+
+  // אם עורכים מופע בודד של משימה/אירוע חוזר ומעבירים אותו ליום אחר (למשל מהיום למחר) –
+  // מנתקים את המופע הספציפי הזה מהחזרה כדי שיעבור רק ליום החדש ולא יישאר ביום הקודם או ייצור סדרה חדשה!
+  let effectiveRecurring = eventObj.recurring || "none";
+  if (wasRecurringInstance && dateChanged) {
+    effectiveRecurring = "none";
+  }
+  const isRecNow = Boolean(effectiveRecurring && effectiveRecurring !== "none");
+  const baseSeriesId = prevObj.parentId || String(existingId).replace(/_\d{4}-\d{2}-\d{2}$/, "");
+
+  const dbMulti = {};
+
+  // מחיקה מוחלטת מכל יום קודם שבו הפריט הופיע
+  const oldKeysToRemove = new Set(otherBucketsWithId);
+  if (actualOldDk && actualOldDk !== dateKey) oldKeysToRemove.add(actualOldDk);
+  if (prevDk && prevDk !== dateKey) oldKeysToRemove.add(prevDk);
+
+  oldKeysToRemove.forEach((oldK) => {
+    if (state.cache.events?.[oldK]?.[existingId]) {
+      delete state.cache.events[oldK][existingId];
+    }
+    dbMulti[`${oldK}/${existingId}`] = null;
+    cancelDirectReminder(`${oldK}/${existingId}`);
+
+    // אם זה היה מופע של סדרה חוזרת – נסמן על האב שהתאריך הישן הוחרג כדי שהאב לא יצוץ ביום הישן
+    if (wasRecurringInstance) {
+      markRecurringParentExcludedDate(baseSeriesId, oldK, dbMulti);
+    }
+    // אם זה היה אב חוזר שהוזז לתאריך אחר – נמחק גם את המופע התואם של היום הישן אם קיים
+    const pairedInstId = `${existingId}_${oldK}`;
+    if (state.cache.events?.[oldK]?.[pairedInstId]) {
+      delete state.cache.events[oldK][pairedInstId];
+      dbMulti[`${oldK}/${pairedInstId}`] = null;
+      cancelDirectReminder(`${oldK}/${pairedInstId}`);
+    }
+  });
+
+  if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
+  const updatedExisting = {
+    ...eventObj,
+    dateKey,
+    recurring: effectiveRecurring,
+    _id: existingId,
+    parentId: isRecNow ? null : (dateChanged ? null : (prevObj.parentId || null)),
+    isRecurringInstance: isRecNow ? null : (dateChanged ? null : (prevObj.isRecurringInstance || null)),
+    isRecurringParent: isRecNow ? true : null
+  };
+  if (Array.isArray(prevObj.excludedDates) && isRecNow) {
+    updatedExisting.excludedDates = prevObj.excludedDates;
+  }
+
+  state.cache.events[dateKey][existingId] = updatedExisting;
+  dbMulti[`${dateKey}/${existingId}`] = updatedExisting;
+
+  el("editModal")?.classList.add("hidden");
+  renderCalendar();
+  renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+  if (!el("dayModal")?.classList.contains("hidden")) {
+    const activeDayKey = state.ui.openDayKey || dateKey;
+    renderDayEvents(activeDayKey);
+    updateDayRolloverButton(activeDayKey);
+  }
+
+  const rTs = getEventReminderTimestamp(updatedExisting, dateKey);
+  if (rTs && rTs > Date.now()) {
+    scheduleDirectReminder({ id: existingId, dateKey, ev: updatedExisting, targetTs: rTs });
+    showToast(`🔔 עודכן! תזכורת ב-${formatTimeHM(new Date(rTs))}`, 3500);
+  } else {
+    cancelDirectReminder(`${dateKey}/${existingId}`);
+    showToast(toastMsg || "עודכן", 2500);
+  }
+
+  await update(ref(db, "events"), dbMulti);
+  if (isRecNow) {
+    await materializeRecurringTask({ ...updatedExisting, __cleanSeriesId: baseSeriesId });
+    renderCalendar();
+    renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+    if (!el("dayModal")?.classList.contains("hidden")) {
+      const activeDayKey = state.ui.openDayKey || dateKey;
+      renderDayEvents(activeDayKey);
+      updateDayRolloverButton(activeDayKey);
+    }
+  }
+  try { updateStats(); } catch {}
+}
+
 async function handleEditFormSubmit(ev) {
   ev.preventDefault();
   const form = ev.target;
@@ -2897,43 +3086,12 @@ async function handleEditFormSubmit(ev) {
   
 if (existingId) {
   const prevDk = form.dataset.editDateKey || dateKey;
-  const prevObj = state.cache.events?.[prevDk]?.[existingId] || state.cache.events?.[dateKey]?.[existingId] || {};
-  const isRecNow = Boolean(eventObj.recurring && eventObj.recurring !== "none");
-  const baseSeriesId = prevObj.parentId || String(existingId).replace(/_\d{4}-\d{2}-\d{2}$/, "");
-
-  if (prevDk !== dateKey && state.cache.events?.[prevDk]?.[existingId]) {
-    delete state.cache.events[prevDk][existingId];
-    remove(ref(db, `events/${prevDk}/${existingId}`)).catch(() => {});
-  }
-
-  if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
-  const updatedExisting = {
-    ...eventObj,
-    _id: existingId,
-    parentId: isRecNow ? null : (prevObj.parentId || null),
-    isRecurringInstance: isRecNow ? null : (prevObj.isRecurringInstance || null),
-    isRecurringParent: isRecNow ? true : null
-  };
-  state.cache.events[dateKey][existingId] = updatedExisting;
-  el("editModal").classList.add("hidden");
-  renderCalendar();
-  renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
-  if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
-  const rTs = getEventReminderTimestamp(eventObj, dateKey);
-  if (rTs && rTs > Date.now()) {
-    scheduleDirectReminder({ id: existingId, dateKey, ev: updatedExisting, targetTs: rTs });
-    showToast(`🔔 עודכן! תזכורת ב-${formatTimeHM(new Date(rTs))}`, 3500);
-  } else {
-    cancelDirectReminder(`${dateKey}/${existingId}`);
-    showToast("עודכן", 2500);
-  }
-  await update(ref(db, `events/${dateKey}/${existingId}`), updatedExisting);
-  if (isRecNow) {
-    await materializeRecurringTask({ ...updatedExisting, __cleanSeriesId: baseSeriesId });
-    renderCalendar();
-    renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
-  }
-  try { updateStats(); } catch {}
+  await saveEditedEventCleanly({
+    existingId,
+    prevDk,
+    dateKey,
+    eventObj
+  });
 } else {
   const newRef = push(ref(db, `events/${dateKey}`));
   const newId = newRef.key || String(Date.now());
@@ -2942,8 +3100,12 @@ if (existingId) {
   state.cache.events[dateKey][newId] = fullObj;
   el("editModal").classList.add("hidden");
   renderCalendar();
-  renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
-  if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
+  renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+  if (!el("dayModal")?.classList.contains("hidden")) {
+    const activeDayKey = state.ui.openDayKey || dateKey;
+    renderDayEvents(activeDayKey);
+    updateDayRolloverButton(activeDayKey);
+  }
   const rTs = getEventReminderTimestamp(fullObj, dateKey);
   if (rTs && rTs > Date.now()) {
     scheduleDirectReminder({ id: newId, dateKey, ev: fullObj, targetTs: rTs });
@@ -3006,22 +3168,14 @@ function openConflictModal({ newEvent, conflicts, form }) {
     const existingEditId = form?.dataset?.editId || null;
 
     if (existingEditId) {
-      const updatedExisting = {
-        ...newEvent,
-        _id: existingEditId,
-        isRecurringParent: isRec ? true : null
-      };
-      if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
-      state.cache.events[dateKey][existingEditId] = updatedExisting;
-      el("editModal").classList.add("hidden");
-      await update(ref(db, `events/${dateKey}/${existingEditId}`), updatedExisting);
-      if (isRec) {
-        await materializeRecurringTask(updatedExisting);
-      }
-      renderCalendar();
-      renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
-      if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
-      showToast("עודכן למרות ההתנגשות", 2500);
+      const prevDk = form?.dataset?.editDateKey || dateKey;
+      await saveEditedEventCleanly({
+        existingId: existingEditId,
+        prevDk,
+        dateKey,
+        eventObj: newEvent,
+        toastMsg: "עודכן למרות ההתנגשות"
+      });
       return;
     }
 
@@ -3048,8 +3202,12 @@ function openConflictModal({ newEvent, conflicts, form }) {
       await materializeRecurringTask(fullObj);
     }
     renderCalendar();
-    renderTasks(qs("#tasksSection .segmented-btn.active")?.dataset.filter || "undated");
-    if (!el("dayModal")?.classList.contains("hidden")) renderDayEvents(dateKey);
+    renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+    if (!el("dayModal")?.classList.contains("hidden")) {
+      const activeDayKey = state.ui.openDayKey || dateKey;
+      renderDayEvents(activeDayKey);
+      updateDayRolloverButton(activeDayKey);
+    }
   };
 
   qsa("[data-close-conflict]", modal).forEach(
@@ -3866,10 +4024,10 @@ function initFirebaseListeners() {
     if (cityIn && document.activeElement !== cityIn) cityIn.value = state.settings.city || "";
   });
   if (el("targetSleep")) {
-    el("targetSleep").value = state.targets["שינה"]?.hours ?? 8;
+    el("targetSleep").value = state.targets?.["שינה"]?.hours ?? 8;
   }
   if (el("targetWork")) {
-    el("targetWork").value = state.targets["עבודה"]?.hours ?? 8;
+    el("targetWork").value = state.targets?.["עבודה"]?.hours ?? 8;
   }
 }
 
@@ -4104,6 +4262,70 @@ function areNotificationsEnabled() {
   return localStorage.getItem("notificationsEnabled") !== "false";
 }
 
+// זיהוי מצב השמע של הטלפון / האפליקציה:
+// "ring" = צלצול רגוע 8 שניות ואז ג'יחרי מדבר
+// "vibrate" = רטט בלבד (ללא צלצול וללא דיבור)
+// "silent" = שקט (ללא התראה כלל)
+function getEffectiveSoundMode() {
+  if (!areNotificationsEnabled()) return "silent";
+
+  // 1) בדיקה מול גשר אנדרואיד מקורי (AudioManager.getRingerMode: 0=SILENT, 1=VIBRATE, 2=NORMAL)
+  if (hasNativeAndroidBridge()) {
+    try {
+      if (typeof window.AndroidBridge.getRingerMode === "function") {
+        const nativeMode = window.AndroidBridge.getRingerMode();
+        if (nativeMode === 0 || nativeMode === "0" || nativeMode === "silent" || nativeMode === "SILENT") {
+          return "silent";
+        }
+        if (nativeMode === 1 || nativeMode === "1" || nativeMode === "vibrate" || nativeMode === "VIBRATE") {
+          return "vibrate";
+        }
+      } else if (window.AndroidBridge.ringerMode !== undefined) {
+        const rm = window.AndroidBridge.ringerMode;
+        if (rm === 0 || rm === "silent") return "silent";
+        if (rm === 1 || rm === "vibrate") return "vibrate";
+      }
+    } catch {}
+  }
+
+  // 2) בדיקת מצב שמע שנבחר באפליקציה
+  try {
+    const savedMode = localStorage.getItem("bnapp_sound_mode");
+    if (savedMode === "silent" || savedMode === "vibrate" || savedMode === "ring") {
+      return savedMode;
+    }
+  } catch {}
+
+  return "ring";
+}
+
+function setAppSoundMode(mode) {
+  const validMode = mode === "silent" || mode === "vibrate" ? mode : "ring";
+  try {
+    localStorage.setItem("bnapp_sound_mode", validMode);
+    if (validMode === "silent") {
+      localStorage.setItem("notificationsEnabled", "false");
+      if (hasNativeAndroidBridge()) {
+        try { window.AndroidBridge.setNotificationsEnabled(false); } catch {}
+      }
+      stopAlarmLoop();
+    } else {
+      localStorage.setItem("notificationsEnabled", "true");
+      if (hasNativeAndroidBridge()) {
+        try { window.AndroidBridge.setNotificationsEnabled(true); } catch {}
+      }
+    }
+  } catch {}
+  syncSoundModeButtons();
+}
+
+function syncSoundModeButtons() {
+  const mode = getEffectiveSoundMode();
+  qsa("#soundModeSelector [data-sound-mode]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.soundMode === mode);
+  });
+}
+
 function getSharedAudioCtx() {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -4127,6 +4349,7 @@ let _keepAliveWavUrl = null;
 let _alarmMelodyWavUrl = null;
 let _bgAudioEl = null;
 let _isAlarmRinging = false;
+let _alarmMuted = false;
 let _alarmCycleIndex = 0;
 let _currentAlarmTitle = "";
 
@@ -4165,12 +4388,14 @@ function getKeepAliveWavUrl() {
   return _keepAliveWavUrl;
 }
 
+// מנגינת צלצול רגועה ונעימה במשך 8 שניות מלאות (לפני שג'יחרי מתחיל לדבר)
 function getAlarmMelodyWavUrl() {
   if (_alarmMelodyWavUrl) return _alarmMelodyWavUrl;
   const sampleRate = 22050;
-  const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5];
-  const noteDur = 0.28;
-  const totalSec = notes.length * noteDur + 0.25;
+  // תווים חמים ורגועים (C4 -> E4 -> G4 -> B4 -> C5 -> G4) הפרוסים בנחת על פני 8 שניות
+  const notes = [261.63, 329.63, 392.00, 493.88, 523.25, 392.00];
+  const noteDur = 1.32;
+  const totalSec = 8.0;
   const numSamples = Math.floor(sampleRate * totalSec);
   const buffer = new ArrayBuffer(44 + numSamples * 2);
   const view = new DataView(buffer);
@@ -4198,10 +4423,17 @@ function getAlarmMelodyWavUrl() {
     if (noteIdx < notes.length) {
       const localT = t - noteIdx * noteDur;
       const freq = notes[noteIdx];
-      const env = Math.exp(-localT * 5.5) * Math.min(1, localT / 0.01);
-      sample = (Math.sin(2 * Math.PI * freq * localT) * 0.75 + Math.sin(4 * Math.PI * freq * localT) * 0.25) * env;
+      // כניסה רכה (fade-in של 80ms) ודעיכה איטית ורגועה כמו פעמון זן/נבל
+      const attack = Math.min(1, localT / 0.08);
+      const decay = Math.exp(-localT * 2.1);
+      const env = attack * decay;
+      sample =
+        (Math.sin(2 * Math.PI * freq * localT) * 0.78 +
+          Math.sin(4 * Math.PI * freq * localT) * 0.16 +
+          Math.sin(3 * Math.PI * freq * localT) * 0.06) *
+        env;
     }
-    const pcm = Math.max(-32767, Math.min(32767, Math.floor(sample * 24000)));
+    const pcm = Math.max(-32767, Math.min(32767, Math.floor(sample * 13500)));
     view.setInt16(44 + i * 2, pcm, true);
   }
   const blob = new Blob([buffer], { type: "audio/wav" });
@@ -4268,14 +4500,15 @@ function warmUpSpeechEngine() {
 
 // צליל אישור קצר בעת לחיצה על הגדרת תזכורת – משחרר מיד את ערוץ השמע בסיום
 function playConfirmTick() {
+  if (getEffectiveSoundMode() !== "ring") return;
   try {
     const ctx = getSharedAudioCtx();
     if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    osc.frequency.value = 660;
+    gain.gain.setValueAtTime(0.06, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -4286,39 +4519,50 @@ function playConfirmTick() {
 }
 
 function playReminderSound() {
-  if (!areNotificationsEnabled()) return;
+  const mode = getEffectiveSoundMode();
+  if (mode === "silent") return;
+  if (mode === "vibrate") {
+    try {
+      if (navigator.vibrate) navigator.vibrate([350, 180, 350, 180, 500]);
+    } catch {}
+    return;
+  }
   try {
     const ctx = getSharedAudioCtx();
     if (!ctx) return;
-    const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5, 1318.5];
+    // צליל פעמונים רך ונעים (Sine wave) במשך 8 השניות הראשונות
+    const notes = [261.63, 329.63, 392.00, 493.88, 523.25, 392.00];
     notes.forEach((freq, i) => {
+      const startAt = ctx.currentTime + i * 1.3;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "triangle";
+      osc.type = "sine";
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.32, ctx.currentTime + i * 0.16);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.16 + 0.34);
+      gain.gain.setValueAtTime(0.001, startAt);
+      gain.gain.linearRampToValueAtTime(0.16, startAt + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 1.2);
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start(ctx.currentTime + i * 0.16);
-      osc.stop(ctx.currentTime + i * 0.16 + 0.35);
+      osc.start(startAt);
+      osc.stop(startAt + 1.25);
     });
-    setTimeout(releaseAudioFocusIfIdle, 1600);
+    setTimeout(releaseAudioFocusIfIdle, 8200);
   } catch (e) {
     console.warn("Audio reminder failed:", e);
   }
 }
 
 function speakGihariLoud(text) {
-  if (!areNotificationsEnabled() || !text) return;
+  if (getEffectiveSoundMode() !== "ring" || !text || _alarmMuted) return;
   try {
     if ("speechSynthesis" in window) {
       speechSynthesis.cancel();
       speechSynthesis.resume();
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = "he-IL";
-      utter.rate = 1.0;
-      utter.pitch = 1.0;
+      // קול גברי עמוק, חלק ומגניב לג'יחרי
+      utter.rate = 1.08;
+      utter.pitch = 0.82;
       utter.volume = 1.0;
       if (gihariVoice) utter.voice = gihariVoice;
       speechSynthesis.speak(utter);
@@ -4326,21 +4570,66 @@ function speakGihariLoud(text) {
   } catch {}
 }
 
-// מפעיל לולאת שעון מעורר + קריינות קולית של ג'יחרי (עובד גם כשהאתר סגור ברקע וגם כשהמסך כבוי!)
+function updateReminderStageBadge(text) {
+  const badge = el("reminderAlertStageBadge");
+  if (badge) badge.textContent = text;
+}
+
+// מפעיל לולאת שעון מעורר רגועה (8 שניות צלצול רגוע ורק לאחר מכן ג'יחרי מדבר אם לא הושתק!)
 function startAlarmLoop(titleText = "אירוע ביומן") {
-  if (!areNotificationsEnabled()) return;
+  const soundMode = getEffectiveSoundMode();
   stopAlarmLoop();
+
+  // אם הטלפון על שקט -> ללא התראה קולית או רטט כלל
+  if (soundMode === "silent") {
+    updateReminderStageBadge("🔕 מצב שקט פעיל – ללא קול וללא רטט");
+    return;
+  }
+
   _isAlarmRinging = true;
+  _alarmMuted = false;
   _alarmCycleIndex = 0;
   _currentAlarmTitle = titleText;
 
-  const speechText = `תזכורת מג'יחרי: ${titleText}`;
+  const muteBtn = el("btnReminderMuteNow");
+  if (muteBtn) {
+    muteBtn.classList.remove("muted");
+    muteBtn.textContent = "🔇 השתק התראה עכשיו";
+  }
+
+  // אם הטלפון על רטט -> התראה ברטט בלבד ללא צלצול וללא דיבור של ג'יחרי!
+  if (soundMode === "vibrate") {
+    updateReminderStageBadge("📳 מצב רטט – התראה ברטט בלבד (ללא קול)");
+    const triggerVibratePulse = () => {
+      if (!_isAlarmRinging || _alarmMuted) return;
+      try {
+        if (navigator.vibrate) navigator.vibrate([400, 180, 400, 180, 600]);
+      } catch {}
+    };
+    triggerVibratePulse();
+    let vibCount = 1;
+    window._alarmLoopTimer = setInterval(() => {
+      if (!_isAlarmRinging || _alarmMuted || vibCount >= 3) {
+        clearInterval(window._alarmLoopTimer);
+        window._alarmLoopTimer = null;
+        return;
+      }
+      vibCount++;
+      triggerVibratePulse();
+    }, 3200);
+    return;
+  }
+
+  // מצב צלצול רגיל ("ring"):
+  // שלב 1: במשך 8 שניות מלאות מושמע רק צלצול רגוע ונעים.
+  // שלב 2: רק לאחר 8 שניות, אם ההתראה לא הושתקה, ג'יחרי מתחיל לדבר בקול המגניב שלו!
+  const speechText = getCoolGihariAlertLine(titleText);
   const ttsUrl = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=he&q=${encodeURIComponent(speechText)}`;
   const alarmUrl = getAlarmMelodyWavUrl();
   const audio = getBgAudioPlayer();
 
   audio.loop = false;
-  audio.volume = 1.0;
+  audio.volume = 0.85;
 
   if ("mediaSession" in navigator) {
     try {
@@ -4350,56 +4639,96 @@ function startAlarmLoop(titleText = "אירוע ביומן") {
         album: "BNAPP"
       });
       navigator.mediaSession.playbackState = "playing";
+      navigator.mediaSession.setActionHandler("pause", () => stopAlarmLoop());
+      navigator.mediaSession.setActionHandler("stop", () => stopAlarmLoop());
     } catch {}
   }
 
-  const runNextStep = (stepType) => {
-    if (!_isAlarmRinging || !areNotificationsEnabled()) return;
+  const startCalm8SecChimePhase = () => {
+    if (!_isAlarmRinging || _alarmMuted || getEffectiveSoundMode() !== "ring") return;
+    if (_alarmCycleIndex >= 3) {
+      stopAlarmLoop();
+      return;
+    }
+    _alarmCycleIndex++;
 
-    if (stepType === "chime") {
-      if (_alarmCycleIndex >= 4) {
-        stopAlarmLoop();
+    let secsLeft = 8;
+    updateReminderStageBadge(`🎶 צלצול רגוע... ג'יחרי ידבר בעוד ${secsLeft} שניות (אם לא יושתק)`);
+    if (window._alarmCountdownInterval) clearInterval(window._alarmCountdownInterval);
+    window._alarmCountdownInterval = setInterval(() => {
+      if (!_isAlarmRinging || _alarmMuted) {
+        clearInterval(window._alarmCountdownInterval);
+        window._alarmCountdownInterval = null;
         return;
       }
-      _alarmCycleIndex++;
-      playReminderSound();
-      try {
-        if (navigator.vibrate) navigator.vibrate([500, 180, 500, 180, 700]);
-      } catch {}
+      secsLeft = Math.max(0, secsLeft - 1);
+      if (secsLeft > 0) {
+        updateReminderStageBadge(`🎶 צלצול רגוע... ג'יחרי ידבר בעוד ${secsLeft} שניות (אם לא יושתק)`);
+      }
+    }, 1000);
 
-      audio.onended = () => runNextStep("tts");
-      audio.onerror = () => runNextStep("tts");
-      audio.src = alarmUrl;
-      audio.volume = 1.0;
-      audio.play().catch(() => {
-        // אם הניגון נכשל מסיבה כלשהי, נעבור לקריינות אחרי 1.5 שניות
-        window._alarmStepTimer = setTimeout(() => runNextStep("tts"), 1500);
-      });
-    } else if (stepType === "tts") {
-      if (!_isAlarmRinging || !areNotificationsEnabled()) return;
-      // מפעיל גם קריינות Web Speech וגם קריינות בנגן ה-HTML5 (שפועל גם כשהמסך כבוי!)
-      audio.onended = () => {
-        if (!_isAlarmRinging) return;
-        runNextStep("chime");
-      };
-      audio.onerror = () => {
-        speakGihariLoud(speechText);
-        window._alarmStepTimer = setTimeout(() => runNextStep("chime"), 2800);
-      };
-      audio.src = ttsUrl;
-      audio.volume = 1.0;
-      audio.play().catch(() => {
-        speakGihariLoud(speechText);
-        window._alarmStepTimer = setTimeout(() => runNextStep("chime"), 2800);
-      });
-    }
+    playReminderSound();
+    try {
+      if (navigator.vibrate) navigator.vibrate([250, 150, 250]);
+    } catch {}
+
+    audio.onended = null;
+    audio.onerror = null;
+    try {
+      audio.preservesPitch = true;
+      audio.playbackRate = 1.0;
+    } catch {}
+    audio.src = alarmUrl;
+    audio.volume = 0.85;
+    audio.play().catch(() => {});
+
+    // טיימר קשיח של 8 שניות מלאות לפני שג'יחרי מתחיל לדבר!
+    if (window._alarmStepTimer) clearTimeout(window._alarmStepTimer);
+    window._alarmStepTimer = setTimeout(() => {
+      if (window._alarmCountdownInterval) {
+        clearInterval(window._alarmCountdownInterval);
+        window._alarmCountdownInterval = null;
+      }
+      if (!_isAlarmRinging || _alarmMuted || getEffectiveSoundMode() !== "ring") return;
+      startGihariVoicePhase();
+    }, 8000);
   };
 
-  runNextStep("chime");
+  const startGihariVoicePhase = () => {
+    if (!_isAlarmRinging || _alarmMuted || getEffectiveSoundMode() !== "ring") return;
+    updateReminderStageBadge("🎙️ ג'יחרי מדבר עכשיו... (לחץ על השתק להפסקה)");
+
+    // מפעיל קריינות בקול העמוק והמגניב של ג'יחרי
+    audio.onended = () => {
+      if (!_isAlarmRinging || _alarmMuted) return;
+      window._alarmStepTimer = setTimeout(() => startCalm8SecChimePhase(), 1500);
+    };
+    audio.onerror = () => {
+      if (!_isAlarmRinging || _alarmMuted) return;
+      speakGihariLoud(speechText);
+      window._alarmStepTimer = setTimeout(() => startCalm8SecChimePhase(), 4000);
+    };
+    try {
+      audio.preservesPitch = false;
+      audio.mozPreservesPitch = false;
+      audio.webkitPreservesPitch = false;
+      audio.playbackRate = 0.92;
+    } catch {}
+    audio.src = ttsUrl;
+    audio.volume = 1.0;
+    audio.play().catch(() => {
+      if (!_isAlarmRinging || _alarmMuted) return;
+      speakGihariLoud(speechText);
+      window._alarmStepTimer = setTimeout(() => startCalm8SecChimePhase(), 4000);
+    });
+  };
+
+  startCalm8SecChimePhase();
 }
 
 function stopAlarmLoop() {
   _isAlarmRinging = false;
+  _alarmMuted = true;
   if (hasNativeAndroidBridge()) {
     try { window.AndroidBridge.stopAlarm(); } catch (e) {}
   }
@@ -4407,13 +4736,27 @@ function stopAlarmLoop() {
     clearInterval(window._alarmLoopTimer);
     window._alarmLoopTimer = null;
   }
+  if (window._alarmCountdownInterval) {
+    clearInterval(window._alarmCountdownInterval);
+    window._alarmCountdownInterval = null;
+  }
   if (window._alarmStepTimer) {
     clearTimeout(window._alarmStepTimer);
     window._alarmStepTimer = null;
   }
   try {
+    if (navigator.vibrate) navigator.vibrate(0);
+  } catch {}
+  try {
     if ("speechSynthesis" in window) speechSynthesis.cancel();
   } catch {}
+
+  const muteBtn = el("btnReminderMuteNow");
+  if (muteBtn) {
+    muteBtn.classList.add("muted");
+    muteBtn.textContent = "🔇 ההתראה הושתקה";
+  }
+  updateReminderStageBadge("🔇 ההתראה הושתקה");
 
   releaseAudioFocusIfIdle();
 }
@@ -4430,14 +4773,16 @@ async function postToServiceWorker(message) {
 }
 
 async function showSystemNotification(title, body, tagKey) {
-  if (!areNotificationsEnabled()) return;
+  const soundMode = getEffectiveSoundMode();
+  if (!areNotificationsEnabled() || soundMode === "silent") return;
   const tag = tagKey || `bnapp-rem-${Date.now()}`;
   try {
     postToServiceWorker({
       type: "TRIGGER_SW_NOTIFICATION_NOW",
       key: tag,
       title,
-      body
+      body,
+      soundMode
     });
   } catch {}
 
@@ -4450,10 +4795,14 @@ async function showSystemNotification(title, body, tagKey) {
             body,
             icon: "./icon-192.png",
             badge: "./icon-192.png",
-            vibrate: [500, 180, 500, 180, 700],
+            vibrate: soundMode === "vibrate" ? [350, 180, 350, 180, 500] : [250, 150, 250],
             requireInteraction: true,
             renotify: true,
-            tag
+            tag,
+            actions: [
+              { action: "mute", title: "🔇 השתק התראה" },
+              { action: "open", title: "פתח" }
+            ]
           });
           return;
         }
@@ -4732,7 +5081,13 @@ function tickDirectReminders() {
 }
 
 function triggerReminderAlert(item) {
-  if (!areNotificationsEnabled()) return;
+  const soundMode = getEffectiveSoundMode();
+  if (!areNotificationsEnabled() || soundMode === "silent") {
+    if (item && (item.id === "test" || item.id === "test-manual")) {
+      showToast("🔕 הטלפון/אפליקציה במצב שקט – ללא התראה (ניתן לשנות לצלצול או רטט בהגדרות)", 4000);
+    }
+    return;
+  }
   const { id, dateKey, ev } = item;
   if (id !== "test" && id !== "test-manual" && ev && !shouldRemindCurrentUser(ev)) {
     return;
@@ -4741,7 +5096,7 @@ function triggerReminderAlert(item) {
   const timeInfo = ev?.startTime ? `שעה: ${ev.startTime}` : (ev?.reminderTime ? `שעת תזכורת: ${ev.reminderTime}` : "");
   const notifBody = timeInfo ? `${titleText} • ${timeInfo}` : titleText;
 
-  // מפעיל גם את מנגנון השעון המעורר וגם קריינות קולית של ג'יחרי (עובד גם ברקע וגם כשהמסך כבוי!)
+  // מפעיל את ההתראה לפי מצב השמע (במצב צלצול: 8 שניות צלצול רגוע ורק אז ג'יחרי מדבר; במצב רטט: רטט בלבד)
   startAlarmLoop(titleText);
 
   // התראת מערכת
@@ -4753,6 +5108,22 @@ function triggerReminderAlert(item) {
     el("reminderAlertTitle").textContent = titleText;
     el("reminderAlertMeta").textContent = timeInfo || "הגיע זמן התזכורת שהגדרת!";
     modal.classList.remove("hidden");
+
+    const muteNowBtn = el("btnReminderMuteNow");
+    if (muteNowBtn) {
+      muteNowBtn.onclick = () => {
+        stopAlarmLoop();
+        showToast("🔇 השמע הושתק", 2000);
+      };
+    }
+
+    const backdrop = el("reminderAlertBackdrop") || modal.querySelector(".modal-backdrop");
+    if (backdrop) {
+      backdrop.onclick = () => {
+        stopAlarmLoop();
+        modal.classList.add("hidden");
+      };
+    }
 
     el("btnReminderDone").onclick = () => {
       stopAlarmLoop();
@@ -4786,7 +5157,7 @@ function triggerReminderAlert(item) {
           ...clearRem
         });
       }
-      showToast("⏰ נדחה ב-10 דקות (ספירה לאחור פעילה למעלה)");
+      showToast("⏰ נדחה ב-10 דקות");
       if (targetId !== "test" && targetId !== "test-manual") {
         await update(ref(db, `events/${targetDk}/${targetId}`), {
           reminderCustomTs: snoozeTs,
@@ -5298,6 +5669,10 @@ const ROUTINE_STAT_TITLES = [
 
 const SMART_EVENT_DOMAINS = [
   {
+    category: "SELS",
+    keywords: ["sels"]
+  },
+  {
     category: "פגישות",
     keywords: [
       "לדבר עם", "לדבר ", "להתקשר", "טלפון", "שיחה", "שיחת", "פגישה", "פגישת",
@@ -5361,6 +5736,9 @@ function isRoutineStatEvent(ev) {
 function normalizeStatCategoryTitle(rawTitle) {
   const t = (rawTitle || "").trim();
   if (!t) return "משימה";
+  if (/sels/i.test(t)) {
+    return "SELS";
+  }
   if (t === "אוכל + מקלחת" || t === "אוכל ומקלחת" || t === "אוכל ומקלחות" || t === "אוכל" || t === "מקלחת") {
     return "אוכל ומקלחות";
   }
@@ -5370,7 +5748,13 @@ function normalizeStatCategoryTitle(rawTitle) {
   return t;
 }
 
+function formatStatCategoryDisplay(catLabel) {
+  if (catLabel === "SELS") return "🛗 SELS";
+  return catLabel;
+}
+
 function detectSmartDomainCategory(rawTitle) {
+  if (/sels/i.test(String(rawTitle || ""))) return "SELS";
   const clean = normalizeStatCategoryTitle(rawTitle);
   if (ROUTINE_STAT_TITLES.includes(clean)) return clean;
   const lower = clean.toLowerCase();
@@ -5628,9 +6012,11 @@ function computeStatsForDatesList(dates, user) {
         const foundGoal = userGoalsList.find((g) => doesItemMatchGoal(ev, g.title));
         if (foundGoal) matchedGoalTitle = foundGoal.title;
       }
-      const label = matchedGoalTitle
-        ? normalizeStatCategoryTitle(matchedGoalTitle)
-        : resolveCategory(ev.title);
+      const label = isSelsEvent(ev)
+        ? "SELS"
+        : matchedGoalTitle
+          ? normalizeStatCategoryTitle(matchedGoalTitle)
+          : resolveCategory(ev.title);
       const sig = `${rawClean}|${ev.owner || "shared"}|${ev.startTime || ""}|${ev.endTime || ""}|${ev.type || ""}`;
       if (seen.has(sig)) return;
       seen.add(sig);
@@ -5816,10 +6202,9 @@ function getCategorizedStatsItems(dates, user) {
       if (!isEventRelevantForUser(ev, user)) return;
       if (isRoutineStatEvent(ev)) return;
 
-      // אם זה אב של סדרה חוזרת ויש לו מופע באותו יום, נדלג על האב כדי לא לספור פעמיים
-      if (ev.isRecurringParent && ev.recurring && ev.recurring !== "none") {
-        const instanceId = `${id}_${dk}`;
-        if (dayEvents[instanceId]) return;
+      // אם זה אב של סדרה חוזרת ויש לו מופע באותו יום (או שהיום הוחרג), נדלג על האב כדי לא לספור פעמיים
+      if (shouldHideRecurringParentOnDate(ev, id, dk, dayEvents)) {
+        return;
       }
 
       const uniqueKey = `${dk}|${id}`;
@@ -5921,7 +6306,7 @@ function openStatCategoryBreakdown(categoryLabel) {
   const totalMins = items.reduce((acc, it) => acc + (Number(it.effectiveDuration) || 60), 0);
   const totalHours = formatHoursClean(totalMins / 60);
 
-  if (titleEl) titleEl.textContent = `📊 פירוט קטגוריה: ${categoryLabel}`;
+  if (titleEl) titleEl.textContent = `📊 פירוט קטגוריה: ${formatStatCategoryDisplay(categoryLabel)}`;
   if (subEl) {
     if (ROUTINE_STAT_TITLES.includes(categoryLabel)) {
       subEl.textContent = `קטגוריית שגרה אוטומטית מתוך 24 שעות היממה`;
@@ -6137,11 +6522,12 @@ function updateStats() {
         const countInCat = (state.cache.lastStatsBreakdown?.[label] || []).length;
         const countBadge = countInCat > 0 ? ` <span class="cat-count-tag">(${countInCat}) 🔍</span>` : "";
         const safeLabel = label.replace(/"/g, "&quot;");
+        const displayLabel = formatStatCategoryDisplay(label);
         return `
           <div class="stats-legend-item clickable-legend" data-cat-label="${safeLabel}" title="לחץ לפירוט הקטגוריה">
             <span class="stats-legend-dot" style="background:${color};"></span>
             <span class="stats-legend-text">
-              <strong>${label}${countBadge}</strong>
+              <strong>${displayLabel}${countBadge}</strong>
               <span class="stats-legend-val">${formatHoursClean(hours)} ש׳ (${pct}%)</span>
             </span>
           </div>
@@ -6573,17 +6959,26 @@ async function deleteTaskSmart(task) {
     showToast("🗑 כל מופעי הסדרה החוזרת נמחקו");
   } else {
     // מחיקה רגילה של מופע בודד
+    const singleRemovals = {};
     if (state.cache.events[task.dateKey]?.[id]) {
       delete state.cache.events[task.dateKey][id];
     }
+    singleRemovals[`${task.dateKey}/${id}`] = null;
+    cancelDirectReminder(`${task.dateKey}/${id}`);
+
+    if (task.isRecurringInstance || task.parentId || /_\d{4}-\d{2}-\d{2}$/.test(String(id))) {
+      markRecurringParentExcludedDate(task.parentId || id, task.dateKey, singleRemovals);
+    }
+
     renderCalendar();
     renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
     if (!el("dayModal")?.classList.contains("hidden") && state.ui.openDayKey) {
       renderDayEvents(state.ui.openDayKey);
+      updateDayRolloverButton(state.ui.openDayKey);
     }
     try { updateStats(); } catch {}
 
-    await remove(ref(db, `events/${task.dateKey}/${id}`));
+    await update(ref(db, "events"), singleRemovals);
     showToast("נמחק");
   }
 
@@ -6738,6 +7133,9 @@ function openGoalsModal(opts = {}) {
 
 function doesItemMatchGoal(ev, goalTitle) {
   if (!ev || !ev.title || !goalTitle) return false;
+  if (/sels/i.test(goalTitle) && isSelsEvent(ev)) {
+    return true;
+  }
   const normEv = normalizeStatCategoryTitle(ev.title).toLowerCase();
   const normGoal = normalizeStatCategoryTitle(goalTitle).toLowerCase();
   if (!normEv || !normGoal) return false;
@@ -6821,6 +7219,7 @@ function renderGoalsProgress(showMotzashBanner = false) {
         <div class="goals-empty-title">🎯 עדיין לא הוגדרו מטרות שבועיות עבור ${userLabel}</div>
         <div class="goals-empty-sub">בחרו מטרה מהירה להוספה בלחיצה או פתחו את "ניהול והוספת מטרות" למטה:</div>
         <div class="goals-preset-chips">
+          <button type="button" class="chip" onclick="window.quickAddPresetGoal('SELS', 4)">🛗 SELS (4 ש׳/שבוע)</button>
           <button type="button" class="chip" onclick="window.quickAddPresetGoal('אימון כושר', 3)">💪 אימון כושר (3 ש׳/שבוע)</button>
           <button type="button" class="chip" onclick="window.quickAddPresetGoal('לימודים וקריאה', 4)">📚 לימודים וקריאה (4 ש׳/שבוע)</button>
           <button type="button" class="chip" onclick="window.quickAddPresetGoal('זמן זוגי איכותי', 5)">💑 זמן זוגי (5 ש׳/שבוע)</button>
@@ -6847,7 +7246,7 @@ function renderGoalsProgress(showMotzashBanner = false) {
       const dayEvents = state.cache.events?.[dk] || {};
       Object.entries(dayEvents).forEach(([id, ev]) => {
         if (!ev) return;
-        if (ev.isRecurringParent && dayEvents[`${id}_${dk}`]) return;
+        if (shouldHideRecurringParentOnDate(ev, id, dk, dayEvents)) return;
         if (!isEventRelevantForUser(ev, owner)) return;
         if (isDefaultEvent(ev)) return;
         if (!doesItemMatchGoal(ev, g.title)) return;
@@ -7086,7 +7485,7 @@ async function rolloverAllGoalUncompleted(goalTitle, owner) {
     const dayEvents = state.cache.events?.[dk] || {};
     Object.entries(dayEvents).forEach(([id, ev]) => {
       if (!ev || ev.completed || ev.completedAt) return;
-      if (ev.isRecurringParent && dayEvents[`${id}_${dk}`]) return;
+      if (shouldHideRecurringParentOnDate(ev, id, dk, dayEvents)) return;
       if (!isEventRelevantForUser(ev, owner)) return;
       if (!doesItemMatchGoal(ev, goalTitle)) return;
       if (dk < todayKey) toToday.push({ dateKey: dk, id });
@@ -7341,7 +7740,7 @@ function renderDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
 
   Object.entries(dayEventsObj).forEach(([id, ev]) => {
     if (!ev) return;
-    if (ev.isRecurringParent && dayEventsObj[`${id}_${dateKey}`]) return;
+    if (shouldHideRecurringParentOnDate(ev, id, dateKey, dayEventsObj)) return;
     if (!isEventRelevantForUser(ev, user)) return;
     if (isDefaultEvent(ev) || isRoutineStatEvent(ev)) return;
 
@@ -7359,7 +7758,7 @@ function renderDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
     : 100;
 
   const customCatsHtml = Object.entries(stats.otherMap || {})
-    .map(([cat, mins]) => `<span class="summary-stat-pill custom">✨ ${cat}: <strong>${formatMinutesReadable(mins)}</strong></span>`)
+    .map(([cat, mins]) => `<span class="summary-stat-pill custom">${cat === "SELS" ? "🛗" : "✨"} ${cat}: <strong>${formatMinutesReadable(mins)}</strong></span>`)
     .join("");
 
   const uncompletedHtml = uncompletedToday.length
@@ -7809,17 +8208,45 @@ if (userSel) {
     );
     if (closeTrigger) {
       const parentModal = closeTrigger.closest(".modal");
-      if (parentModal && parentModal.id !== "reminderAlertModal") {
+      if (parentModal) {
+        if (parentModal.id === "reminderAlertModal") {
+          stopAlarmLoop();
+        }
         parentModal.classList.add("hidden");
       }
     }
   });
 
   el("btnThemeToggle").onclick = toggleTheme;
-  el("btnRequestNotifications").onclick = requestNotifications;
+  el("btnRequestNotifications").onclick = async () => {
+    setAppSoundMode("ring");
+    await requestNotifications();
+  };
   if (el("btnTestNotificationNow")) {
     el("btnTestNotificationNow").onclick = testNotificationNow;
   }
+  if (el("btnDisableNotifications")) {
+    el("btnDisableNotifications").onclick = () => {
+      setAppSoundMode("silent");
+      showToast("🔕 התראות הושתקו (מצב שקט)");
+    };
+  }
+  qsa("#soundModeSelector [data-sound-mode]").forEach((btn) => {
+    btn.onclick = () => {
+      const mode = btn.dataset.soundMode;
+      setAppSoundMode(mode);
+      if (mode === "ring") {
+        playConfirmTick();
+        showToast("🔊 מצב צלצול: 8 שניות צלצול רגוע ואז ג'יחרי מדבר");
+      } else if (mode === "vibrate") {
+        try { if (navigator.vibrate) navigator.vibrate([220, 120, 220]); } catch {}
+        showToast("📳 מצב רטט: התראות ברטט בלבד ללא קול");
+      } else {
+        showToast("🔕 מצב שקט: ללא התראות קוליות וללא רטט");
+      }
+    };
+  });
+  syncSoundModeButtons();
   if (hasNativeAndroidBridge() || window.location.search.includes("native=1")) {
     const promo = el("apkInstallPromo");
     if (promo) promo.style.display = "none";

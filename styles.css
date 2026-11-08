@@ -1282,6 +1282,60 @@ body.dark .ghost-pill.reminder-set {
   text-align: center;
 }
 
+.reminder-stage-badge {
+  display: inline-block;
+  margin: 4px auto 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.14);
+  color: #0284c7;
+  border: 1px solid rgba(14, 165, 233, 0.35);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+body.dark .reminder-stage-badge {
+  background: rgba(56, 189, 248, 0.18);
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.reminder-mute-hero-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 16px;
+  border-radius: 14px;
+  border: 2px solid #f59e0b;
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  color: #ffffff;
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(234, 88, 12, 0.38);
+  transition: transform 0.12s ease, opacity 0.15s ease;
+}
+
+.reminder-mute-hero-btn:active {
+  transform: scale(0.97);
+}
+
+.reminder-mute-hero-btn.muted {
+  background: rgba(100, 116, 139, 0.2);
+  border-color: rgba(100, 116, 139, 0.45);
+  color: #64748b;
+  box-shadow: none;
+}
+
+#soundModeSelector .ghost-pill.active {
+  background: linear-gradient(135deg, #0284c7, #0ea5e9);
+  color: #ffffff;
+  border-color: #0284c7;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.32);
+}
+
 .active-reminders-bar {
   position: fixed;
   top: 8px;
