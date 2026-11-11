@@ -11,9 +11,10 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-const CACHE_NAME = 'bnapp-v4-4-2-live';
+const CACHE_NAME = 'bnapp-v4-4-3-live';
 const swTimers = new Map();
 const firedKeys = new Set();
+let swSnoozeMinutes = 10;
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -75,11 +76,12 @@ self.addEventListener('fetch', (event) => {
 // ===============================
 // LOCAL & SCHEDULED SW REMINDERS
 // ===============================
-async function showSwReminderNotification(key, title, body, soundMode = 'ring') {
+async function showSwReminderNotification(key, title, body, soundMode = 'ring', snoozeMinsOverride = null) {
   if (soundMode === 'silent') return;
-  const notifTitle = title || "🔔 תזכורת BNAPP";
+  const notifTitle = title || "⏰ תזכורת BNAPP";
   const notifBody = body || "הגיע זמן התזכורת שהגדרת";
   const tag = key ? `bnapp-rem-${key}` : `bnapp-rem-${Date.now()}`;
+  const snoozeMins = Number(snoozeMinsOverride || swSnoozeMinutes || 10);
 
   try {
     await self.registration.showNotification(notifTitle, {
@@ -92,10 +94,17 @@ async function showSwReminderNotification(key, title, body, soundMode = 'ring') 
       renotify: true,
       tag,
       actions: [
-        { action: 'mute', title: '🔇 השתק התראה' },
-        { action: 'open', title: 'פתח' }
+        { action: 'mute', title: '🔇 השתק' },
+        { action: 'snooze', title: `😴 נודניק (${snoozeMins} דק׳)` }
       ],
-      data: "./"
+      data: {
+        url: "./",
+        key: key || tag,
+        title: notifTitle,
+        body: notifBody,
+        soundMode,
+        snoozeMinutes: snoozeMins
+      }
     });
   } catch (e) {}
 
@@ -112,14 +121,51 @@ async function showSwReminderNotification(key, title, body, soundMode = 'ring') 
   } catch (e) {}
 }
 
+function scheduleSwReminderInternal(key, title, body, targetTs, soundMode = 'ring', snoozeMins = 10, waitUntilEvent = null) {
+  if (!key || !targetTs) return;
+
+  if (swTimers.has(key)) {
+    const existing = swTimers.get(key);
+    clearTimeout(existing.timerId);
+    if (existing.resolve) existing.resolve();
+    swTimers.delete(key);
+  }
+
+  const delay = Math.max(0, Number(targetTs) - Date.now() + 1200);
+  if (delay <= 60 * 60 * 1000) {
+    const p = new Promise((resolve) => {
+      const timerId = setTimeout(async () => {
+        swTimers.delete(key);
+        const dedupKey = `${key}_${Math.floor(Date.now() / 30000)}`;
+        if (!firedKeys.has(dedupKey)) {
+          firedKeys.add(dedupKey);
+          await showSwReminderNotification(key, title, body, soundMode || 'ring', snoozeMins);
+        }
+        resolve();
+      }, delay);
+      swTimers.set(key, { timerId, resolve, targetTs });
+    });
+    if (waitUntilEvent && typeof waitUntilEvent.waitUntil === 'function') {
+      waitUntilEvent.waitUntil(p);
+    }
+  }
+}
+
 self.addEventListener('message', (event) => {
   const msg = event.data;
   if (!msg || !msg.type) return;
 
+  if (msg.type === 'SET_SNOOZE_MINUTES') {
+    const m = Number(msg.snoozeMinutes);
+    if (m > 0 && m <= 240) swSnoozeMinutes = m;
+    return;
+  }
+
   if (msg.type === 'TRIGGER_SW_NOTIFICATION_NOW') {
-    const { key, title, body, soundMode } = msg;
-    if (key) firedKeys.add(`${key}_${ Math.floor(Date.now() / 30000) }`);
-    event.waitUntil(showSwReminderNotification(key, title, body, soundMode || 'ring'));
+    const { key, title, body, soundMode, snoozeMinutes } = msg;
+    if (snoozeMinutes > 0) swSnoozeMinutes = Number(snoozeMinutes);
+    if (key) firedKeys.add(`${key}_${Math.floor(Date.now() / 30000)}`);
+    event.waitUntil(showSwReminderNotification(key, title, body, soundMode || 'ring', swSnoozeMinutes));
     return;
   }
 
@@ -135,32 +181,9 @@ self.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'SCHEDULE_SW_NOTIFICATION') {
-    const { key, title, body, targetTs, soundMode } = msg;
-    if (!key || !targetTs) return;
-
-    if (swTimers.has(key)) {
-      const existing = swTimers.get(key);
-      clearTimeout(existing.timerId);
-      if (existing.resolve) existing.resolve();
-      swTimers.delete(key);
-    }
-
-    const delay = Math.max(0, Number(targetTs) - Date.now() + 1200);
-    // שומרים את ה-Service Worker ער עד שהטיימר יפעל (עד 30 דקות קדימה)
-    if (delay <= 30 * 60 * 1000) {
-      event.waitUntil(new Promise((resolve) => {
-        const timerId = setTimeout(async () => {
-          swTimers.delete(key);
-          const dedupKey = `${key}_${Math.floor(Date.now() / 30000)}`;
-          if (!firedKeys.has(dedupKey)) {
-            firedKeys.add(dedupKey);
-            await showSwReminderNotification(key, title, body, soundMode || 'ring');
-          }
-          resolve();
-        }, delay);
-        swTimers.set(key, { timerId, resolve, targetTs });
-      }));
-    }
+    const { key, title, body, targetTs, soundMode, snoozeMinutes } = msg;
+    if (snoozeMinutes > 0) swSnoozeMinutes = Number(snoozeMinutes);
+    scheduleSwReminderInternal(key, title, body, targetTs, soundMode || 'ring', swSnoozeMinutes, event);
   }
 });
 
@@ -177,8 +200,9 @@ self.addEventListener("push", (event) => {
 
   const notif = data.notification || {};
   const d = data.data || {};
-  const title = notif.title || d.title || data.title || "BNAPP – תזכורת";
+  const title = notif.title || d.title || data.title || "⏰ BNAPP – תזכורת";
   const body = notif.body || d.body || data.body || "יש תזכורת חדשה";
+  const snoozeMins = Number(d.snoozeMinutes || swSnoozeMinutes || 10);
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -187,30 +211,74 @@ self.addEventListener("push", (event) => {
       badge: "./icon-192.png",
       vibrate: [400, 150, 400, 150, 600],
       requireInteraction: true,
-      data: d.url || data.url || "./"
+      actions: [
+        { action: 'mute', title: '🔇 השתק' },
+        { action: 'snooze', title: `😴 נודניק (${snoozeMins} דק׳)` }
+      ],
+      data: {
+        url: d.url || data.url || "./",
+        key: d.key || `push_${Date.now()}`,
+        title,
+        body,
+        snoozeMinutes: snoozeMins
+      }
     })
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
+  const notifData = event.notification.data || {};
+  const targetUrl = typeof notifData === 'string' ? notifData : (notifData.url || "./");
+  const snoozeMins = Number((typeof notifData === 'object' && notifData.snoozeMinutes) || swSnoozeMinutes || 10);
+  const key = (typeof notifData === 'object' && notifData.key) || `snooze_${Date.now()}`;
+  const title = (typeof notifData === 'object' && notifData.title) || event.notification.title || "⏰ תזכורת BNAPP";
+  const body = (typeof notifData === 'object' && notifData.body) || event.notification.body || "הגיע זמן התזכורת";
+  const soundMode = (typeof notifData === 'object' && notifData.soundMode) || 'ring';
+
   event.notification.close();
+
   event.waitUntil((async () => {
     const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+    // תמיד משתיקים את הצלצול הפעיל בלחיצה על ההתראה או כפתוריה
     for (const client of windowClients) {
       try {
         client.postMessage({ type: 'MUTE_ALARM_NOW' });
       } catch (e) {}
     }
+
+    // לחיצה על "🔇 השתק" -> משתיקה מיד מבלי להיכנס לאפליקציה!
     if (event.action === 'mute') {
       return;
     }
+
+    // לחיצה על "😴 נודניק" -> מתזמנת נודניק לפי זמן ברירת המחדל מבלי להיכנס לאפליקציה!
+    if (event.action === 'snooze') {
+      const snoozeTargetTs = Date.now() + snoozeMins * 60 * 1000;
+      for (const client of windowClients) {
+        try {
+          client.postMessage({
+            type: 'SNOOZE_ALARM_FROM_SW',
+            key,
+            title,
+            body,
+            snoozeMinutes: snoozeMins,
+            targetTs: snoozeTargetTs
+          });
+        } catch (e) {}
+      }
+      scheduleSwReminderInternal(`${key}_snooze`, title, body, snoozeTargetTs, soundMode, snoozeMins, event);
+      return;
+    }
+
+    // לחיצה על גוף ההתראה עצמה -> פותחת את האפליקציה
     if (windowClients.length > 0) {
       const client = windowClients[0];
       if ('focus' in client) await client.focus();
       return;
     }
     if (self.clients.openWindow) {
-      await self.clients.openWindow(event.notification.data || "./");
+      await self.clients.openWindow(targetUrl);
     }
   })());
 });

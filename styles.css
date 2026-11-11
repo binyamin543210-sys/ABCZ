@@ -1405,3 +1405,391 @@ body.dark .reminder-stage-badge {
   font-weight: 700;
   box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
 }
+
+/* ===================================================
+   חלונית התראה עליונה יוקרתית (כמו שעון מעורר יוקרתי)
+   =================================================== */
+.luxury-top-alarm-banner {
+  position: fixed;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  max-width: 480px;
+  margin: 0 auto;
+  z-index: 12000;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96) 0%, rgba(12, 74, 110, 0.95) 60%, rgba(30, 27, 75, 0.96) 100%);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1.5px solid rgba(56, 189, 248, 0.55);
+  border-radius: 24px;
+  padding: 14px 16px;
+  color: #ffffff;
+  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.65), 0 0 24px rgba(14, 165, 233, 0.35);
+  animation: luxBannerSlideDown 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luxury-top-alarm-banner.hidden {
+  display: none !important;
+}
+
+@keyframes luxBannerSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.lux-alarm-top-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lux-alarm-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.35), rgba(245, 158, 11, 0.35));
+  border: 1px solid rgba(253, 230, 138, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.55rem;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.18);
+}
+
+.lux-alarm-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.lux-alarm-kicker {
+  font-size: 0.72rem;
+  color: #bae6fd;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+}
+
+.lux-alarm-title {
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.lux-alarm-meta {
+  font-size: 0.8rem;
+  color: #fde68a;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.lux-alarm-clock {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #f8fafc;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.lux-alarm-status {
+  font-size: 0.76rem;
+  color: rgba(224, 242, 254, 0.88);
+  margin: 8px 0 10px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.lux-alarm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.lux-alarm-btn {
+  height: 44px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: transform 0.14s ease, filter 0.14s ease;
+}
+
+.lux-alarm-btn:active {
+  transform: scale(0.97);
+}
+
+.lux-btn-mute {
+  background: rgba(255, 255, 255, 0.16);
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+}
+
+.lux-btn-snooze {
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+  border: 1.5px solid #fde68a;
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.35);
+}
+
+/* ===================================================
+   הגדרת זמן ברירת מחדל לנודניק בהגדרות
+   =================================================== */
+.snooze-setting-card {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 8px !important;
+}
+
+.snooze-setting-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.snooze-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: auto;
+}
+
+.snooze-num-input {
+  width: 64px !important;
+  text-align: center;
+  font-weight: 800;
+  padding: 5px 6px !important;
+  border-radius: 10px !important;
+}
+
+.snooze-unit-lbl {
+  font-size: 0.82rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.snooze-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ===================================================
+   ווידג'ט יוקרתי למסך הבית (מזג אוויר, מיקום ואירוע קרוב)
+   =================================================== */
+.widget-showcase-card {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 12px !important;
+  padding: 14px !important;
+}
+
+.widget-showcase-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.widget-showcase-sub {
+  font-size: 0.78rem;
+  opacity: 0.82;
+  margin-top: 2px;
+}
+
+.bnapp-luxury-widget {
+  background: linear-gradient(135deg, #0b132b 0%, #0c4a6e 52%, #0284c7 100%);
+  border-radius: 24px;
+  padding: 16px;
+  color: #ffffff;
+  border: 1.5px solid rgba(125, 211, 252, 0.42);
+  box-shadow: 0 14px 32px rgba(2, 132, 199, 0.32), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.lux-widget-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lux-widget-date-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lux-widget-day {
+  font-size: 1.32rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.lux-widget-date {
+  font-size: 0.85rem;
+  color: #bae6fd;
+  font-weight: 600;
+}
+
+.lux-widget-loc {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 3px;
+  font-weight: 600;
+}
+
+.lux-widget-weather-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: left;
+}
+
+.lux-widget-temp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lux-widget-emoji {
+  font-size: 1.9rem;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
+}
+
+.lux-widget-temp {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.lux-widget-wdesc {
+  font-size: 0.76rem;
+  color: #e0f2fe;
+  margin-top: 3px;
+  font-weight: 600;
+}
+
+.lux-widget-bottom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lux-widget-next-card {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 16px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.lux-widget-next-card:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.lux-widget-next-ico {
+  font-size: 1.35rem;
+  flex-shrink: 0;
+}
+
+.lux-widget-next-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.lux-widget-next-title {
+  font-size: 0.93rem;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lux-widget-next-time {
+  font-size: 0.78rem;
+  color: #fde68a;
+  font-weight: 600;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lux-widget-add-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.8);
+  color: #ffffff;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 8px 18px rgba(2, 132, 199, 0.45);
+  transition: transform 0.15s ease;
+}
+
+.lux-widget-add-btn:active {
+  transform: scale(0.93);
+}
+
+.widget-install-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.widget-apk-link {
+  text-align: center;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.widget-install-help {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(14, 165, 233, 0.35);
+}

@@ -9,7 +9,7 @@ function hasNativeAndroidBridge() {
 }
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue24").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue25").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
@@ -18,6 +18,15 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
     if (!msg || !msg.type) return;
     if (msg.type === "MUTE_ALARM_NOW") {
       if (typeof stopAlarmLoop === "function") stopAlarmLoop();
+      el("luxuryTopAlarmBanner")?.classList.add("hidden");
+      return;
+    }
+    if (msg.type === "SNOOZE_ALARM_FROM_SW") {
+      if (typeof stopAlarmLoop === "function") stopAlarmLoop();
+      el("luxuryTopAlarmBanner")?.classList.add("hidden");
+      el("reminderAlertModal")?.classList.add("hidden");
+      const mins = Number(msg.snoozeMinutes) || (typeof getSnoozeMinutes === "function" ? getSnoozeMinutes() : 10);
+      showToast(`😴 נודניק הופעל ל-${mins} דקות`);
       return;
     }
     if (msg.type === "SW_REMINDER_FIRED" && msg.key) {
@@ -3955,6 +3964,7 @@ function initFirebaseListeners() {
     renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
     try { updateStats(); } catch (e) { console.warn("updateStats error:", e); }
     checkDueReminders();
+    try { syncWidgetDataAndPreview(); } catch {}
   });
 
   onValue(ref(db, "goals"), (snap) => {
@@ -4017,11 +4027,19 @@ function initFirebaseListeners() {
       renderShoppingFavoritesBar();
     }
 
+    if (settings.snoozeMinutes && Number(settings.snoozeMinutes) > 0) {
+      const sMins = Math.max(1, Math.min(180, Math.round(Number(settings.snoozeMinutes))));
+      state.settings.snoozeMinutes = sMins;
+      try { localStorage.setItem("bnapp_snooze_minutes", String(sMins)); } catch {}
+      try { syncSnoozeUI(); } catch {}
+    }
+
     state.targets = settings.targets || state.targets;
 
     el("cityLabel").textContent = state.settings.city || "לא נבחרה";
     const cityIn = el("settingsCityInput");
     if (cityIn && document.activeElement !== cityIn) cityIn.value = state.settings.city || "";
+    try { syncWidgetDataAndPreview(coordsChanged); } catch {}
   });
   if (el("targetSleep")) {
     el("targetSleep").value = state.targets?.["שינה"]?.hours ?? 8;
@@ -4570,9 +4588,74 @@ function speakGihariLoud(text) {
   } catch {}
 }
 
+function getSnoozeMinutes() {
+  const fromState = Number(state.settings?.snoozeMinutes);
+  if (fromState > 0 && fromState <= 180) return Math.round(fromState);
+  try {
+    const saved = Number(localStorage.getItem("bnapp_snooze_minutes"));
+    if (saved > 0 && saved <= 180) return Math.round(saved);
+  } catch {}
+  if (hasNativeAndroidBridge() && typeof window.AndroidBridge.getSnoozeMinutes === "function") {
+    try {
+      const nVal = Number(window.AndroidBridge.getSnoozeMinutes());
+      if (nVal > 0 && nVal <= 180) return Math.round(nVal);
+    } catch {}
+  }
+  return 10;
+}
+
+function syncSnoozeUI() {
+  const mins = getSnoozeMinutes();
+  const input = el("settingsSnoozeMinutes");
+  if (input && document.activeElement !== input) {
+    input.value = String(mins);
+  }
+  qsa("#snoozePresetChips [data-snooze-preset]").forEach((btn) => {
+    btn.classList.toggle("active", Number(btn.dataset.snoozePreset) === mins);
+  });
+  const modalSnoozeBtn = el("btnReminderSnooze");
+  if (modalSnoozeBtn) {
+    modalSnoozeBtn.textContent = `⏰ הזכר לי שוב בעוד ${mins} דקות`;
+  }
+  const luxSnoozeBtn = el("btnLuxAlarmSnooze");
+  if (luxSnoozeBtn) {
+    luxSnoozeBtn.textContent = `😴 נודניק (${mins} דק׳)`;
+  }
+  if (hasNativeAndroidBridge() && typeof window.AndroidBridge.setSnoozeMinutes === "function") {
+    try { window.AndroidBridge.setSnoozeMinutes(mins); } catch {}
+  }
+  postToServiceWorker({
+    type: "SET_SNOOZE_MINUTES",
+    snoozeMinutes: mins
+  });
+}
+
+async function saveSnoozeMinutes(overrideMins = null) {
+  const input = el("settingsSnoozeMinutes");
+  const raw = overrideMins != null ? Number(overrideMins) : Number(input?.value || 10);
+  if (isNaN(raw) || raw < 1 || raw > 180) {
+    showToast("נא לבחור זמן נודניק בין 1 ל-180 דקות");
+    return;
+  }
+  const mins = Math.round(raw);
+  state.settings.snoozeMinutes = mins;
+  try {
+    localStorage.setItem("bnapp_snooze_minutes", String(mins));
+  } catch {}
+  syncSnoozeUI();
+  try {
+    await update(ref(db, "settings"), { snoozeMinutes: mins });
+  } catch (e) {
+    console.warn("Failed saving snoozeMinutes to Firebase", e);
+  }
+  showToast(`😴 זמן ברירת המחדל לנודניק עודכן ל-${mins} דקות`);
+}
+
 function updateReminderStageBadge(text) {
   const badge = el("reminderAlertStageBadge");
   if (badge) badge.textContent = text;
+  const luxStatus = el("luxAlarmStatus");
+  if (luxStatus) luxStatus.textContent = text;
 }
 
 // מפעיל לולאת שעון מעורר רגועה (8 שניות צלצול רגוע ורק לאחר מכן ג'יחרי מדבר אם לא הושתק!)
@@ -4776,13 +4859,15 @@ async function showSystemNotification(title, body, tagKey) {
   const soundMode = getEffectiveSoundMode();
   if (!areNotificationsEnabled() || soundMode === "silent") return;
   const tag = tagKey || `bnapp-rem-${Date.now()}`;
+  const snoozeMins = getSnoozeMinutes();
   try {
     postToServiceWorker({
       type: "TRIGGER_SW_NOTIFICATION_NOW",
       key: tag,
       title,
       body,
-      soundMode
+      soundMode,
+      snoozeMinutes: snoozeMins
     });
   } catch {}
 
@@ -4800,9 +4885,17 @@ async function showSystemNotification(title, body, tagKey) {
             renotify: true,
             tag,
             actions: [
-              { action: "mute", title: "🔇 השתק התראה" },
-              { action: "open", title: "פתח" }
-            ]
+              { action: "mute", title: "🔇 השתק" },
+              { action: "snooze", title: `😴 נודניק (${snoozeMins} דק׳)` }
+            ],
+            data: {
+              url: "./",
+              key: tag,
+              title,
+              body,
+              soundMode,
+              snoozeMinutes: snoozeMins
+            }
           });
           return;
         }
@@ -4976,9 +5069,11 @@ function scheduleDirectReminder({ id, dateKey, ev, targetTs }) {
   postToServiceWorker({
     type: "SCHEDULE_SW_NOTIFICATION",
     key,
-    title: `🔔 תזכורת BNAPP: ${title}`,
+    title: `⏰ תזכורת BNAPP: ${title}`,
     body: `${title} • ${timeInfo}`,
-    targetTs: Number(targetTs)
+    targetTs: Number(targetTs),
+    soundMode: getEffectiveSoundMode(),
+    snoozeMinutes: getSnoozeMinutes()
   });
 }
 
@@ -5095,24 +5190,101 @@ function triggerReminderAlert(item) {
   const titleText = ev?.title || "אירוע / משימה";
   const timeInfo = ev?.startTime ? `שעה: ${ev.startTime}` : (ev?.reminderTime ? `שעת תזכורת: ${ev.reminderTime}` : "");
   const notifBody = timeInfo ? `${titleText} • ${timeInfo}` : titleText;
+  const snoozeMins = getSnoozeMinutes();
+
+  // אם מדובר בבדיקה ידנית בתוך אפליקציית האנדרואיד – נפעיל גם את חלונית השעון המעורר העליונה של אנדרואיד
+  if ((id === "test" || id === "test-manual") && hasNativeAndroidBridge() && typeof window.AndroidBridge.triggerAlarmNow === "function") {
+    try {
+      window.AndroidBridge.triggerAlarmNow("test_alarm", titleText, notifBody);
+    } catch {}
+  }
 
   // מפעיל את ההתראה לפי מצב השמע (במצב צלצול: 8 שניות צלצול רגוע ורק אז ג'יחרי מדבר; במצב רטט: רטט בלבד)
   startAlarmLoop(titleText);
 
-  // התראת מערכת
-  showSystemNotification(`🔔 תזכורת: ${titleText}`, notifBody, `${dateKey}-${id}-${Date.now()}`);
+  // התראת מערכת (עם כפתורי השתק ונודניק ישירות מהחלונית העליונה)
+  showSystemNotification(`⏰ תזכורת: ${titleText}`, notifBody, `${dateKey}-${id}-${Date.now()}`);
 
-  // חלון התראה קופץ באפליקציה (מעל כל המודאלים!)
+  const executeSnoozeAction = async () => {
+    stopAlarmLoop();
+    el("reminderAlertModal")?.classList.add("hidden");
+    el("luxuryTopAlarmBanner")?.classList.add("hidden");
+
+    const mins = getSnoozeMinutes();
+    const snoozeTs = Date.now() + mins * 60 * 1000;
+    const snoozeDate = new Date(snoozeTs);
+    const targetId = id || "snooze";
+    const targetDk = dateKey || dateKeyFromDate(new Date());
+
+    if (hasNativeAndroidBridge() && typeof window.AndroidBridge.snoozeAlarmNow === "function") {
+      try {
+        window.AndroidBridge.snoozeAlarmNow(`${targetDk}/${targetId}`, titleText, notifBody, mins);
+      } catch {}
+    }
+
+    scheduleDirectReminder({
+      id: targetId,
+      dateKey: targetDk,
+      ev: ev || { title: titleText },
+      targetTs: snoozeTs
+    });
+
+    const clearRem = getClearRemindedPayload();
+    if (state.cache.events[targetDk]?.[targetId]) {
+      Object.assign(state.cache.events[targetDk][targetId], {
+        reminderCustomTs: snoozeTs,
+        reminderDate: dateKeyFromDate(snoozeDate),
+        reminderTime: formatTimeHM(snoozeDate),
+        ...clearRem
+      });
+    }
+    showToast(`😴 נודניק הופעל – נזכיר שוב בעוד ${mins} דקות`);
+    if (targetId !== "test" && targetId !== "test-manual") {
+      await update(ref(db, `events/${targetDk}/${targetId}`), {
+        reminderCustomTs: snoozeTs,
+        reminderDate: dateKeyFromDate(snoozeDate),
+        reminderTime: formatTimeHM(snoozeDate),
+        ...clearRem
+      });
+    }
+  };
+
+  // חלונית התראה עליונה יוקרתית (בחלק העליון של המסך עם השתק ונודניק בלחיצה אחת)
+  const topBanner = el("luxuryTopAlarmBanner");
+  if (topBanner) {
+    if (el("luxAlarmTitle")) el("luxAlarmTitle").textContent = titleText;
+    if (el("luxAlarmMeta")) el("luxAlarmMeta").textContent = timeInfo || "הגיע זמן התזכורת";
+    if (el("luxAlarmClock")) el("luxAlarmClock").textContent = formatTimeHM(new Date());
+    if (el("btnLuxAlarmSnooze")) {
+      el("btnLuxAlarmSnooze").textContent = `😴 נודניק (${snoozeMins} דק׳)`;
+      el("btnLuxAlarmSnooze").onclick = executeSnoozeAction;
+    }
+    if (el("btnLuxAlarmMute")) {
+      el("btnLuxAlarmMute").onclick = () => {
+        stopAlarmLoop();
+        topBanner.classList.add("hidden");
+        el("reminderAlertModal")?.classList.add("hidden");
+        showToast("🔇 ההתראה הושתקה", 2000);
+      };
+    }
+    topBanner.classList.remove("hidden");
+  }
+
+  // חלון התראה קופץ בתוך האפליקציה (נשאר פעיל כרגיל כשנמצאים בתוך האפליקציה!)
   const modal = el("reminderAlertModal");
   if (modal) {
     el("reminderAlertTitle").textContent = titleText;
     el("reminderAlertMeta").textContent = timeInfo || "הגיע זמן התזכורת שהגדרת!";
+    if (el("btnReminderSnooze")) {
+      el("btnReminderSnooze").textContent = `⏰ הזכר לי שוב בעוד ${snoozeMins} דקות`;
+    }
     modal.classList.remove("hidden");
 
     const muteNowBtn = el("btnReminderMuteNow");
     if (muteNowBtn) {
       muteNowBtn.onclick = () => {
         stopAlarmLoop();
+        topBanner?.classList.add("hidden");
         showToast("🔇 השמע הושתק", 2000);
       };
     }
@@ -5121,55 +5293,25 @@ function triggerReminderAlert(item) {
     if (backdrop) {
       backdrop.onclick = () => {
         stopAlarmLoop();
+        topBanner?.classList.add("hidden");
         modal.classList.add("hidden");
       };
     }
 
     el("btnReminderDone").onclick = () => {
       stopAlarmLoop();
+      topBanner?.classList.add("hidden");
       modal.classList.add("hidden");
       if (id && id !== "test" && id !== "test-manual") {
         toggleTaskDone({ ...ev, id, _id: id, dateKey });
       }
     };
 
-    el("btnReminderSnooze").onclick = async () => {
-      stopAlarmLoop();
-      modal.classList.add("hidden");
-      const snoozeTs = Date.now() + 10 * 60 * 1000;
-      const snoozeDate = new Date(snoozeTs);
-      const targetId = id || "snooze";
-      const targetDk = dateKey || dateKeyFromDate(new Date());
-
-      scheduleDirectReminder({
-        id: targetId,
-        dateKey: targetDk,
-        ev: ev || { title: titleText },
-        targetTs: snoozeTs
-      });
-
-      const clearRem = getClearRemindedPayload();
-      if (state.cache.events[targetDk]?.[targetId]) {
-        Object.assign(state.cache.events[targetDk][targetId], {
-          reminderCustomTs: snoozeTs,
-          reminderDate: dateKeyFromDate(snoozeDate),
-          reminderTime: formatTimeHM(snoozeDate),
-          ...clearRem
-        });
-      }
-      showToast("⏰ נדחה ב-10 דקות");
-      if (targetId !== "test" && targetId !== "test-manual") {
-        await update(ref(db, `events/${targetDk}/${targetId}`), {
-          reminderCustomTs: snoozeTs,
-          reminderDate: dateKeyFromDate(snoozeDate),
-          reminderTime: formatTimeHM(snoozeDate),
-          ...clearRem
-        });
-      }
-    };
+    el("btnReminderSnooze").onclick = executeSnoozeAction;
 
     el("btnReminderDismiss").onclick = () => {
       stopAlarmLoop();
+      topBanner?.classList.add("hidden");
       modal.classList.add("hidden");
     };
   } else {
@@ -8198,6 +8340,54 @@ if (userSel) {
   if (el("btnShowSummaryNow")) {
     el("btnShowSummaryNow").onclick = () => openDailySummaryModal();
   }
+
+  // הגדרת זמן ברירת מחדל לנודניק בהגדרות היומן
+  syncSnoozeUI();
+  if (el("btnSaveSnoozeMinutes")) {
+    el("btnSaveSnoozeMinutes").onclick = () => saveSnoozeMinutes();
+  }
+  qsa("#snoozePresetChips [data-snooze-preset]").forEach((btn) => {
+    btn.onclick = () => {
+      const mins = Number(btn.dataset.snoozePreset);
+      if (mins > 0) saveSnoozeMinutes(mins);
+    };
+  });
+
+  // ווידג'ט יוקרתי למסך הבית (תצוגה מקדימה חיה + כפתור + להוספה מהירה + התקנה למסך הבית)
+  if (el("btnWidgetQuickAdd")) {
+    el("btnWidgetQuickAdd").onclick = (e) => {
+      e.stopPropagation();
+      openQuickAddFromWidget();
+    };
+  }
+  if (el("btnRefreshWidgetPreview")) {
+    el("btnRefreshWidgetPreview").onclick = () => {
+      syncWidgetDataAndPreview(true);
+      showToast("🌤️ נתוני הווידג'ט רועננו!");
+    };
+  }
+  if (el("btnInstallHomeWidget")) {
+    el("btnInstallHomeWidget").onclick = handleInstallHomeWidget;
+  }
+  syncWidgetDataAndPreview(true);
+  setInterval(() => syncWidgetDataAndPreview(false), 60000);
+
+  // בדיקה האם נפתח מכפתור ה-"+" של הווידג'ט במסך הבית (?action=add_task)
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("action") === "add_task") {
+      setTimeout(() => {
+        openQuickAddFromWidget();
+        try {
+          urlParams.delete("action");
+          const cleanSearch = urlParams.toString();
+          const cleanUrl = window.location.pathname + (cleanSearch ? `?${cleanSearch}` : "");
+          window.history.replaceState({}, "", cleanUrl);
+        } catch {}
+      }, 350);
+    }
+  } catch {}
+
   scheduleDailySummaryAlarm();
   scheduleMotzeiShabbatGoalsAlarm();
 
@@ -8287,6 +8477,228 @@ if (userSel) {
   window.completeDailySummaryItem = completeDailySummaryItem;
   window.moveDailySummaryItemToTomorrow = moveDailySummaryItemToTomorrow;
   window.rolloverAllTodayToTomorrow = rolloverAllTodayToTomorrow;
+  window.openQuickAddFromWidget = openQuickAddFromWidget;
+}
+
+// ===================================================
+// ווידג'ט יוקרתי למסך הבית (יום, מזג אוויר, מיקום, משימה קרובה וכפתור +)
+// ===================================================
+let _widgetWeatherCache = {
+  ts: 0,
+  cityKey: "",
+  temp: "22°",
+  emoji: "☀️",
+  label: "נעים ובהיר"
+};
+
+function openQuickAddFromWidget() {
+  const todayKey = dateKeyFromDate(new Date());
+  openEditModal({
+    dateKey: todayKey,
+    type: "task",
+    owner: state.currentUser || "binyamin"
+  });
+}
+
+function handleInstallHomeWidget() {
+  syncWidgetDataAndPreview(false);
+  if (hasNativeAndroidBridge() && typeof window.AndroidBridge.requestPinWidget === "function") {
+    try {
+      const pinned = window.AndroidBridge.requestPinWidget();
+      if (pinned) {
+        showToast("📲 אשר את חלונית ההוספה כדי להצמיד את הווידג'ט למסך הבית!");
+        return;
+      }
+    } catch (e) {
+      console.warn("requestPinWidget error:", e);
+    }
+  }
+  const helpBox = el("widgetInstallHelpBox");
+  if (helpBox) {
+    helpBox.classList.remove("hidden");
+    helpBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  showToast("📲 הווידג'ט מוכן! ראה הנחיות הצמדה למסך הבית למטה", 4000);
+}
+
+function findClosestUpcomingEventForWidget() {
+  const now = new Date();
+  const todayKey = dateKeyFromDate(now);
+  const tomorrowDate = new Date(now);
+  tomorrowDate.setDate(now.getDate() + 1);
+  const tomorrowKey = dateKeyFromDate(tomorrowDate);
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  const collectForDay = (dk, isToday) => {
+    const dayObj = state.cache.events?.[dk] || {};
+    const list = [];
+    Object.entries(dayObj).forEach(([id, ev]) => {
+      if (!ev || isDefaultEvent(ev) || isRoutineStatEvent(ev)) return;
+      if (ev.completed || ev.completedAt) return;
+      if (shouldHideRecurringParentOnDate(ev, id, dk, dayObj)) return;
+      if (!isEventRelevantForUser(ev, state.currentUser)) return;
+
+      let startMins = 23 * 60 + 59;
+      if (ev.startTime) {
+        const parsed = timeToMinutes(ev.startTime);
+        if (Number.isFinite(parsed)) startMins = parsed;
+      }
+      if (isToday && ev.startTime && startMins + 30 < nowMins) {
+        return;
+      }
+      list.push({
+        ...ev,
+        _id: id,
+        dateKey: dk,
+        _sortMins: startMins,
+        _isToday: isToday
+      });
+    });
+    list.sort((a, b) => a._sortMins - b._sortMins);
+    return list;
+  };
+
+  const todayItems = collectForDay(todayKey, true);
+  if (todayItems.length > 0) return todayItems[0];
+
+  const tomorrowItems = collectForDay(tomorrowKey, false);
+  if (tomorrowItems.length > 0) return tomorrowItems[0];
+
+  // בדיקת משימות ללא תאריך אם אין משימות להיום או למחר
+  const undatedObj = state.cache.events?.["undated"] || {};
+  for (const [id, ev] of Object.entries(undatedObj)) {
+    if (!ev || ev.completed || ev.completedAt) continue;
+    if (!isEventRelevantForUser(ev, state.currentUser)) continue;
+    return { ...ev, _id: id, dateKey: "undated", _isUndated: true };
+  }
+
+  return null;
+}
+
+async function fetchWidgetWeatherIfNeeded(forceRefresh = false) {
+  try {
+    await ensureCityCoords();
+  } catch {
+    return _widgetWeatherCache;
+  }
+  const lat = state.settings.cityLat || 31.7683;
+  const lon = state.settings.cityLon || 35.2137;
+  const cityKey = `${lat},${lon}`;
+  const now = Date.now();
+
+  if (!forceRefresh && _widgetWeatherCache.cityKey === cityKey && now - _widgetWeatherCache.ts < 15 * 60 * 1000) {
+    return _widgetWeatherCache;
+  }
+
+  const todayStr = dateKeyFromDate(new Date());
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}` +
+    `&longitude=${lon}` +
+    `&hourly=temperature_2m,weather_code` +
+    `&timezone=${encodeURIComponent(state.settings.cityTz || "auto")}` +
+    `&start_date=${todayStr}&end_date=${todayStr}`;
+
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data && data.hourly && Array.isArray(data.hourly.temperature_2m) && data.hourly.temperature_2m.length) {
+      const curHour = String(new Date().getHours()).padStart(2, "0") + ":00";
+      const idx = data.hourly.time.findIndex((t) => t.endsWith(curHour));
+      const i = idx >= 0 ? idx : Math.min(12, data.hourly.temperature_2m.length - 1);
+      const tempNum = Math.round(data.hourly.temperature_2m[i]);
+      const code = data.hourly.weather_code[i];
+      const mapped = mapOpenMeteoWeather(code);
+      _widgetWeatherCache = {
+        ts: now,
+        cityKey,
+        temp: `${tempNum}°`,
+        emoji: mapped.emoji || "☀️",
+        label: mapped.label || "נעים"
+      };
+    }
+  } catch {}
+  return _widgetWeatherCache;
+}
+
+async function syncWidgetDataAndPreview(forceWeather = false) {
+  const now = new Date();
+  const hebDays = ["יום ראשון", "יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "שבת"];
+  const dayName = hebDays[now.getDay()] || "היום";
+  const gregDateStr = now.toLocaleDateString("he-IL", { day: "numeric", month: "long" });
+  let hebDateStr = "";
+  try {
+    hebDateStr = formatHebrewDate(now) || "";
+  } catch {}
+  const dateLine = hebDateStr ? `${gregDateStr} • ${hebDateStr}` : gregDateStr;
+  const city = state.settings.city || localStorage.getItem("bnapp_city") || "ירושלים";
+  const locText = `📍 ${city}`;
+
+  const nextEv = findClosestUpcomingEventForWidget();
+  let nextIcon = "✨";
+  let nextTitle = "אין משימות או אירועים קרובים";
+  let nextTime = "הכל פנוי! לחץ על + להוספה";
+
+  if (nextEv) {
+    nextIcon = getSmartFunnyEventIcon(nextEv) || (nextEv.type === "task" ? "📝" : "📅");
+    nextTitle = nextEv.title || "משימה קרובה";
+    const dayPrefix = nextEv._isToday ? "היום" : (nextEv._isUndated ? "ללא תאריך" : "מחר");
+    const timePart = nextEv.startTime
+      ? `🕒 ${nextEv.startTime}${nextEv.endTime ? "–" + nextEv.endTime : ""}`
+      : (nextEv.type === "task" ? "משימה פתוחה" : "כל היום");
+    nextTime = `${dayPrefix} • ${timePart}`;
+  }
+
+  // עדכון מיידי של התצוגה בהגדרות
+  if (el("widgetPreviewDay")) el("widgetPreviewDay").textContent = dayName;
+  if (el("widgetPreviewDate")) el("widgetPreviewDate").textContent = dateLine;
+  if (el("widgetPreviewLocation")) el("widgetPreviewLocation").textContent = locText;
+  if (el("widgetPreviewWeatherEmoji")) el("widgetPreviewWeatherEmoji").textContent = _widgetWeatherCache.emoji;
+  if (el("widgetPreviewTemp")) el("widgetPreviewTemp").textContent = _widgetWeatherCache.temp;
+  if (el("widgetPreviewWeatherDesc")) el("widgetPreviewWeatherDesc").textContent = _widgetWeatherCache.label;
+  if (el("widgetPreviewNextIcon")) el("widgetPreviewNextIcon").textContent = nextIcon;
+  if (el("widgetPreviewNextTitle")) el("widgetPreviewNextTitle").textContent = nextTitle;
+  if (el("widgetPreviewNextTime")) el("widgetPreviewNextTime").textContent = nextTime;
+
+  const nextBox = el("widgetPreviewNextBox");
+  if (nextBox) {
+    nextBox.onclick = () => {
+      if (nextEv && nextEv._id && nextEv.dateKey) {
+        openEditModal({ id: nextEv._id, dateKey: nextEv.dateKey });
+      } else {
+        openQuickAddFromWidget();
+      }
+    };
+  }
+
+  const pushToAndroidWidget = () => {
+    if (hasNativeAndroidBridge() && typeof window.AndroidBridge.updateWidgetData === "function") {
+      try {
+        window.AndroidBridge.updateWidgetData(
+          JSON.stringify({
+            day: dayName,
+            date: dateLine,
+            location: locText,
+            temp: _widgetWeatherCache.temp,
+            weatherEmoji: _widgetWeatherCache.emoji,
+            weatherLabel: _widgetWeatherCache.label,
+            nextTitle,
+            nextTime,
+            nextIcon
+          })
+        );
+      } catch {}
+    }
+  };
+
+  pushToAndroidWidget();
+
+  const w = await fetchWidgetWeatherIfNeeded(forceWeather);
+  if (w) {
+    if (el("widgetPreviewWeatherEmoji")) el("widgetPreviewWeatherEmoji").textContent = w.emoji;
+    if (el("widgetPreviewTemp")) el("widgetPreviewTemp").textContent = w.temp;
+    if (el("widgetPreviewWeatherDesc")) el("widgetPreviewWeatherDesc").textContent = w.label;
+    pushToAndroidWidget();
+  }
 }
 
 if (document.readyState === "loading") {

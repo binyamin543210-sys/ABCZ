@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=blue24" />
-  <link rel="stylesheet" href="theme.css?v=blue24" />
+  <link rel="stylesheet" href="styles.css?v=blue25" />
+  <link rel="stylesheet" href="theme.css?v=blue25" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -31,12 +31,29 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue24"></script>
+  <script defer src="app.js?v=blue25"></script>
 </head>
 
 <body>
   <!-- Toast -->
   <div id="toast" class="toast hidden">בוצע</div>
+  <!-- חלונית התראה עליונה יוקרתית בסגנון שעון מעורר -->
+  <div id="luxuryTopAlarmBanner" class="luxury-top-alarm-banner hidden" dir="rtl">
+    <div class="lux-alarm-top-row">
+      <div class="lux-alarm-icon-wrap">⏰</div>
+      <div class="lux-alarm-info">
+        <div class="lux-alarm-kicker">BNAPP • שעון מעורר ותזכורת</div>
+        <div id="luxAlarmTitle" class="lux-alarm-title">תזכורת</div>
+        <div id="luxAlarmMeta" class="lux-alarm-meta"></div>
+      </div>
+      <div id="luxAlarmClock" class="lux-alarm-clock">00:00</div>
+    </div>
+    <div id="luxAlarmStatus" class="lux-alarm-status">🎶 צלצול רגוע (8 שניות לפני שג'יחרי מדבר)</div>
+    <div class="lux-alarm-actions">
+      <button id="btnLuxAlarmMute" type="button" class="lux-alarm-btn lux-btn-mute">🔇 השתק</button>
+      <button id="btnLuxAlarmSnooze" type="button" class="lux-alarm-btn lux-btn-snooze">😴 נודניק (10 דק׳)</button>
+    </div>
+  </div>
   <!-- סרגל ספירה לאחור חיה לתזכורות פעילות -->
   <div id="activeRemindersBar" class="active-reminders-bar hidden"></div>
 
@@ -234,6 +251,24 @@
             <button id="btnShowSummaryNow" type="button" class="ghost-pill small" title="הצג סיכום עכשיו">👁️</button>
           </div>
 
+          <div class="setting-row snooze-setting-card">
+            <div class="snooze-setting-top">
+              <span class="setting-icon">😴</span>
+              <span class="setting-label">זמן ברירת מחדל לנודניק</span>
+              <div class="snooze-input-wrap">
+                <input id="settingsSnoozeMinutes" type="number" min="1" max="180" value="10" class="snooze-num-input" />
+                <span class="snooze-unit-lbl">דק׳</span>
+              </div>
+              <button id="btnSaveSnoozeMinutes" type="button" class="primary-pill small">שמור</button>
+            </div>
+            <div class="snooze-chips-row" id="snoozePresetChips">
+              <button type="button" class="ghost-pill small" data-snooze-preset="5">5 דק׳</button>
+              <button type="button" class="ghost-pill small active" data-snooze-preset="10">10 דק׳ (ברירת מחדל)</button>
+              <button type="button" class="ghost-pill small" data-snooze-preset="15">15 דק׳</button>
+              <button type="button" class="ghost-pill small" data-snooze-preset="30">30 דק׳</button>
+            </div>
+          </div>
+
           <div class="setting-row notif-card">
             <div class="notif-title"><span class="setting-icon">🔔</span><span class="setting-label">התראות ומצב צליל</span></div>
             <div class="notif-grid" id="soundModeSelector" style="margin-bottom:6px;">
@@ -245,6 +280,55 @@
               <button id="btnRequestNotifications" class="primary-pill">🔔 הפעל</button>
               <button id="btnTestNotificationNow" type="button" class="ghost-pill">🔊 בדיקה</button>
               <button id="btnDisableNotifications" class="ghost-pill">🔕 כבה</button>
+            </div>
+          </div>
+
+          <div class="setting-row widget-showcase-card" id="settingsWidgetCard">
+            <div class="widget-showcase-header">
+              <div>
+                <div class="notif-title"><span class="setting-icon">🌤️</span><span class="setting-label">ווידג'ט יוקרתי למסך הבית</span></div>
+                <div class="widget-showcase-sub">מציג יום ותאריך, מזג אוויר, מיקום, משימה/אירוע קרוב וכפתור + להוספה מהירה</div>
+              </div>
+              <button id="btnRefreshWidgetPreview" type="button" class="ghost-pill small" title="רענן נתוני ווידג'ט">🔄</button>
+            </div>
+
+            <!-- Live Luxury Widget Card -->
+            <div class="bnapp-luxury-widget" id="liveLuxuryWidgetPreview">
+              <div class="lux-widget-top">
+                <div class="lux-widget-date-col">
+                  <div class="lux-widget-day" id="widgetPreviewDay">יום רביעי</div>
+                  <div class="lux-widget-date" id="widgetPreviewDate">11 בנובמבר</div>
+                  <div class="lux-widget-loc" id="widgetPreviewLocation">📍 ירושלים</div>
+                </div>
+                <div class="lux-widget-weather-col">
+                  <div class="lux-widget-temp-row">
+                    <span class="lux-widget-emoji" id="widgetPreviewWeatherEmoji">☀️</span>
+                    <span class="lux-widget-temp" id="widgetPreviewTemp">22°</span>
+                  </div>
+                  <div class="lux-widget-wdesc" id="widgetPreviewWeatherDesc">נעים ובהיר</div>
+                </div>
+              </div>
+
+              <div class="lux-widget-bottom">
+                <div class="lux-widget-next-card" id="widgetPreviewNextBox" title="לחץ לפתיחת האירוע הקרוב">
+                  <span class="lux-widget-next-ico" id="widgetPreviewNextIcon">📌</span>
+                  <div class="lux-widget-next-text">
+                    <div class="lux-widget-next-title" id="widgetPreviewNextTitle">טוען משימה קרובה...</div>
+                    <div class="lux-widget-next-time" id="widgetPreviewNextTime">הבא בתור ביומן</div>
+                  </div>
+                </div>
+                <button type="button" id="btnWidgetQuickAdd" class="lux-widget-add-btn" title="הוסף משימה חדשה">+</button>
+              </div>
+            </div>
+
+            <div class="widget-install-actions">
+              <button type="button" id="btnInstallHomeWidget" class="primary-pill full-width">📲 הוסף ווידג'ט למסך הבית</button>
+              <a href="./BNAPP.apk" download="BNAPP.apk" class="ghost-pill full-width widget-apk-link">📦 הורד/עדכן אפליקציית BNAPP (כולל ווידג'ט והתראות נעילה)</a>
+            </div>
+            <div id="widgetInstallHelpBox" class="widget-install-help hidden">
+              💡 <strong>איך מוסיפים את הווידג'ט למסך הבית בטלפון:</strong><br>
+              1. ודא שהתקנת את הגרסה העדכנית מהכפתור <strong>"הורד/עדכן אפליקציית BNAPP"</strong> למעלה.<br>
+              2. לחץ על <strong>"📲 הוסף ווידג'ט למסך הבית"</strong> (או לחץ לחיצה ארוכה על מקום פנוי במסך הבית של הטלפון ⬅️ <strong>ווידג'טים / Widgets</strong> ⬅️ בחר <strong>BNAPP יומן</strong>).
             </div>
           </div>
 
