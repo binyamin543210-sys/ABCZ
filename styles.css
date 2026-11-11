@@ -1628,6 +1628,36 @@ body.dark .reminder-stage-badge {
   overflow: hidden;
 }
 
+.calendar-top-luxury-widget {
+  margin: 4px 2px 8px;
+  padding: 12px 14px;
+  border-radius: 20px;
+  gap: 10px;
+}
+
+.calendar-top-luxury-widget.hidden {
+  display: none !important;
+}
+
+.calendar-top-luxury-widget .lux-widget-day {
+  font-size: 1.12rem;
+}
+
+.calendar-top-luxury-widget .lux-widget-emoji,
+.calendar-top-luxury-widget .lux-widget-temp {
+  font-size: 1.55rem;
+}
+
+.calendar-top-luxury-widget .lux-widget-next-card {
+  padding: 8px 10px;
+}
+
+.calendar-top-luxury-widget .lux-widget-add-btn {
+  width: 42px;
+  height: 42px;
+  font-size: 1.55rem;
+}
+
 .lux-widget-top {
   display: flex;
   align-items: flex-start;

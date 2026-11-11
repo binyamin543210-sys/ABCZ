@@ -8,8 +8,12 @@ function hasNativeAndroidBridge() {
   return typeof window.AndroidBridge !== "undefined" && window.AndroidBridge !== null;
 }
 
+function isUpdatedNativeApk() {
+  return hasNativeAndroidBridge() && typeof window.AndroidBridge.getSnoozeMinutes === "function";
+}
+
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue25").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue26").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
@@ -5104,6 +5108,15 @@ function fireDirectReminder(key) {
   if (!rem || rem.fired) return;
   rem.fired = true;
 
+  // אם המשתמש עדיין על גרסת ה-APK הישנה – נבטל את השעון הישן של ה-APK כדי שלא יפעיל את ההתראה הישנה (0.9 שניות),
+  // והאפליקציה תפעיל אוטומטית את ההתראה היוקרתית החדשה (8 שניות צלצול רגוע + חלונית עליונה עם השתק ונודניק)!
+  if (hasNativeAndroidBridge() && !isUpdatedNativeApk()) {
+    try {
+      window.AndroidBridge.cancelAlarm(key);
+      window.AndroidBridge.stopAlarm();
+    } catch {}
+  }
+
   if (directTimeouts[key]) {
     clearTimeout(directTimeouts[key]);
     delete directTimeouts[key];
@@ -5192,10 +5205,14 @@ function triggerReminderAlert(item) {
   const notifBody = timeInfo ? `${titleText} • ${timeInfo}` : titleText;
   const snoozeMins = getSnoozeMinutes();
 
-  // אם מדובר בבדיקה ידנית בתוך אפליקציית האנדרואיד – נפעיל גם את חלונית השעון המעורר העליונה של אנדרואיד
-  if ((id === "test" || id === "test-manual") && hasNativeAndroidBridge() && typeof window.AndroidBridge.triggerAlarmNow === "function") {
+  // אם מדובר בבדיקה ידנית בתוך אפליקציית האנדרואיד המעודכנת – נפעיל גם את חלונית השעון המעורר העליונה של אנדרואיד
+  if ((id === "test" || id === "test-manual") && isUpdatedNativeApk() && typeof window.AndroidBridge.triggerAlarmNow === "function") {
     try {
       window.AndroidBridge.triggerAlarmNow("test_alarm", titleText, notifBody);
+    } catch {}
+  } else if (hasNativeAndroidBridge() && !isUpdatedNativeApk()) {
+    try {
+      window.AndroidBridge.stopAlarm();
     } catch {}
   }
 
@@ -8353,11 +8370,24 @@ if (userSel) {
     };
   });
 
-  // ווידג'ט יוקרתי למסך הבית (תצוגה מקדימה חיה + כפתור + להוספה מהירה + התקנה למסך הבית)
+  // ווידג'ט יוקרתי למסך הבית ובראש היומן (תצוגה חיה + כפתור + להוספה מהירה + עדכון אוטומטי)
   if (el("btnWidgetQuickAdd")) {
     el("btnWidgetQuickAdd").onclick = (e) => {
       e.stopPropagation();
       openQuickAddFromWidget();
+    };
+  }
+  if (el("btnCalWidgetQuickAdd")) {
+    el("btnCalWidgetQuickAdd").onclick = (e) => {
+      e.stopPropagation();
+      openQuickAddFromWidget();
+    };
+  }
+  if (el("btnToggleTopCalWidget")) {
+    el("btnToggleTopCalWidget").onclick = () => {
+      const nextState = !isTopCalWidgetEnabled();
+      setTopCalWidgetEnabled(nextState);
+      showToast(nextState ? "✨ הווידג'ט היוקרתי מופיע כעת בראש היומן!" : "הווידג'ט בראש היומן הוסתר");
     };
   }
   if (el("btnRefreshWidgetPreview")) {
@@ -8369,6 +8399,10 @@ if (userSel) {
   if (el("btnInstallHomeWidget")) {
     el("btnInstallHomeWidget").onclick = handleInstallHomeWidget;
   }
+  if (el("btnLiveAutoUpdate")) {
+    el("btnLiveAutoUpdate").onclick = forceLiveAutoUpdateNow;
+  }
+  syncTopCalWidgetVisibility();
   syncWidgetDataAndPreview(true);
   setInterval(() => syncWidgetDataAndPreview(false), 60000);
 
@@ -8500,7 +8534,59 @@ function openQuickAddFromWidget() {
   });
 }
 
+function isTopCalWidgetEnabled() {
+  try {
+    return localStorage.getItem("bnapp_show_top_cal_widget") !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function setTopCalWidgetEnabled(enabled) {
+  try {
+    localStorage.setItem("bnapp_show_top_cal_widget", enabled ? "1" : "0");
+  } catch {}
+  syncTopCalWidgetVisibility();
+}
+
+function syncTopCalWidgetVisibility() {
+  const enabled = isTopCalWidgetEnabled();
+  const topWidget = el("topCalendarLuxuryWidget");
+  if (topWidget) {
+    topWidget.classList.toggle("hidden", !enabled);
+  }
+  const toggleBtn = el("btnToggleTopCalWidget");
+  if (toggleBtn) {
+    toggleBtn.textContent = enabled
+      ? "✨ ווידג'ט יוקרתי בראש היומן: פעיל ✅ (לחץ להסתרה)"
+      : "✨ הפעל ווידג'ט יוקרתי בראש היומן";
+    toggleBtn.className = enabled ? "primary-pill full-width" : "ghost-pill full-width";
+  }
+}
+
+async function forceLiveAutoUpdateNow() {
+  showToast("⚡ מסנכרן ומעדכן את כל השינויים אוטומטית...", 2500);
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) {
+        try { await r.update(); } catch {}
+      }
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch {}
+  setTimeout(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("v", String(Date.now()));
+    window.location.replace(url.toString());
+  }, 500);
+}
+
 function handleInstallHomeWidget() {
+  setTopCalWidgetEnabled(true);
   syncWidgetDataAndPreview(false);
   if (hasNativeAndroidBridge() && typeof window.AndroidBridge.requestPinWidget === "function") {
     try {
@@ -8518,7 +8604,7 @@ function handleInstallHomeWidget() {
     helpBox.classList.remove("hidden");
     helpBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
-  showToast("📲 הווידג'ט מוכן! ראה הנחיות הצמדה למסך הבית למטה", 4000);
+  showToast("✨ הווידג'ט היוקרתי הופעל בראש היומן! (למסך הבית בטלפון – ראה הנחיות למטה)", 4000);
 }
 
 function findClosestUpcomingEventForWidget() {
@@ -8648,27 +8734,32 @@ async function syncWidgetDataAndPreview(forceWeather = false) {
     nextTime = `${dayPrefix} • ${timePart}`;
   }
 
-  // עדכון מיידי של התצוגה בהגדרות
-  if (el("widgetPreviewDay")) el("widgetPreviewDay").textContent = dayName;
-  if (el("widgetPreviewDate")) el("widgetPreviewDate").textContent = dateLine;
-  if (el("widgetPreviewLocation")) el("widgetPreviewLocation").textContent = locText;
-  if (el("widgetPreviewWeatherEmoji")) el("widgetPreviewWeatherEmoji").textContent = _widgetWeatherCache.emoji;
-  if (el("widgetPreviewTemp")) el("widgetPreviewTemp").textContent = _widgetWeatherCache.temp;
-  if (el("widgetPreviewWeatherDesc")) el("widgetPreviewWeatherDesc").textContent = _widgetWeatherCache.label;
-  if (el("widgetPreviewNextIcon")) el("widgetPreviewNextIcon").textContent = nextIcon;
-  if (el("widgetPreviewNextTitle")) el("widgetPreviewNextTitle").textContent = nextTitle;
-  if (el("widgetPreviewNextTime")) el("widgetPreviewNextTime").textContent = nextTime;
+  // עדכון מיידי של הווידג'ט בהגדרות ובראש היומן
+  const bindWidgetSet = (prefix) => {
+    if (el(`${prefix}Day`)) el(`${prefix}Day`).textContent = dayName;
+    if (el(`${prefix}Date`)) el(`${prefix}Date`).textContent = dateLine;
+    if (el(`${prefix}Location`)) el(`${prefix}Location`).textContent = locText;
+    if (el(`${prefix}WeatherEmoji`)) el(`${prefix}WeatherEmoji`).textContent = _widgetWeatherCache.emoji;
+    if (el(`${prefix}Temp`)) el(`${prefix}Temp`).textContent = _widgetWeatherCache.temp;
+    if (el(`${prefix}WeatherDesc`)) el(`${prefix}WeatherDesc`).textContent = _widgetWeatherCache.label;
+    if (el(`${prefix}NextIcon`)) el(`${prefix}NextIcon`).textContent = nextIcon;
+    if (el(`${prefix}NextTitle`)) el(`${prefix}NextTitle`).textContent = nextTitle;
+    if (el(`${prefix}NextTime`)) el(`${prefix}NextTime`).textContent = nextTime;
 
-  const nextBox = el("widgetPreviewNextBox");
-  if (nextBox) {
-    nextBox.onclick = () => {
-      if (nextEv && nextEv._id && nextEv.dateKey) {
-        openEditModal({ id: nextEv._id, dateKey: nextEv.dateKey });
-      } else {
-        openQuickAddFromWidget();
-      }
-    };
-  }
+    const nextBox = el(`${prefix}NextBox`);
+    if (nextBox) {
+      nextBox.onclick = () => {
+        if (nextEv && nextEv._id && nextEv.dateKey) {
+          openEditModal({ id: nextEv._id, dateKey: nextEv.dateKey });
+        } else {
+          openQuickAddFromWidget();
+        }
+      };
+    }
+  };
+
+  bindWidgetSet("widgetPreview");
+  bindWidgetSet("calWidget");
 
   const pushToAndroidWidget = () => {
     if (hasNativeAndroidBridge() && typeof window.AndroidBridge.updateWidgetData === "function") {
@@ -8694,9 +8785,11 @@ async function syncWidgetDataAndPreview(forceWeather = false) {
 
   const w = await fetchWidgetWeatherIfNeeded(forceWeather);
   if (w) {
-    if (el("widgetPreviewWeatherEmoji")) el("widgetPreviewWeatherEmoji").textContent = w.emoji;
-    if (el("widgetPreviewTemp")) el("widgetPreviewTemp").textContent = w.temp;
-    if (el("widgetPreviewWeatherDesc")) el("widgetPreviewWeatherDesc").textContent = w.label;
+    ["widgetPreview", "calWidget"].forEach((prefix) => {
+      if (el(`${prefix}WeatherEmoji`)) el(`${prefix}WeatherEmoji`).textContent = w.emoji;
+      if (el(`${prefix}Temp`)) el(`${prefix}Temp`).textContent = w.temp;
+      if (el(`${prefix}WeatherDesc`)) el(`${prefix}WeatherDesc`).textContent = w.label;
+    });
     pushToAndroidWidget();
   }
 }

@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=blue25" />
-  <link rel="stylesheet" href="theme.css?v=blue25" />
+  <link rel="stylesheet" href="styles.css?v=blue26" />
+  <link rel="stylesheet" href="theme.css?v=blue26" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -31,7 +31,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue25"></script>
+  <script defer src="app.js?v=blue26"></script>
 </head>
 
 <body>
@@ -89,6 +89,34 @@
 
     <main>
       <section id="calendarSection" class="screen active">
+        <!-- ווידג'ט יוקרתי מובנה בראש היומן (מתעדכן אוטומטית ללא צורך בעדכון חיצוני) -->
+        <div class="bnapp-luxury-widget calendar-top-luxury-widget" id="topCalendarLuxuryWidget">
+          <div class="lux-widget-top">
+            <div class="lux-widget-date-col">
+              <div class="lux-widget-day" id="calWidgetDay">יום רביעי</div>
+              <div class="lux-widget-date" id="calWidgetDate">11 בנובמבר</div>
+              <div class="lux-widget-loc" id="calWidgetLocation">📍 ירושלים</div>
+            </div>
+            <div class="lux-widget-weather-col">
+              <div class="lux-widget-temp-row">
+                <span class="lux-widget-emoji" id="calWidgetWeatherEmoji">☀️</span>
+                <span class="lux-widget-temp" id="calWidgetTemp">22°</span>
+              </div>
+              <div class="lux-widget-wdesc" id="calWidgetWeatherDesc">נעים ובהיר</div>
+            </div>
+          </div>
+          <div class="lux-widget-bottom">
+            <div class="lux-widget-next-card" id="calWidgetNextBox" title="לחץ לפתיחת המשימה/אירוע הקרוב">
+              <span class="lux-widget-next-ico" id="calWidgetNextIcon">📌</span>
+              <div class="lux-widget-next-text">
+                <div class="lux-widget-next-title" id="calWidgetNextTitle">טוען משימה קרובה...</div>
+                <div class="lux-widget-next-time" id="calWidgetNextTime">הבא בתור ביומן</div>
+              </div>
+            </div>
+            <button type="button" id="btnCalWidgetQuickAdd" class="lux-widget-add-btn" title="הוסף משימה חדשה">+</button>
+          </div>
+        </div>
+
         <div class="calendar-top-strips">
           <div id="specialCountdownsBar" class="special-countdowns-bar"></div>
           <div id="calendarOwnerFilter" class="owner-quick-filter">
@@ -322,13 +350,16 @@
             </div>
 
             <div class="widget-install-actions">
-              <button type="button" id="btnInstallHomeWidget" class="primary-pill full-width">📲 הוסף ווידג'ט למסך הבית</button>
-              <a href="./BNAPP.apk" download="BNAPP.apk" class="ghost-pill full-width widget-apk-link">📦 הורד/עדכן אפליקציית BNAPP (כולל ווידג'ט והתראות נעילה)</a>
+              <button type="button" id="btnToggleTopCalWidget" class="primary-pill full-width">✨ ווידג'ט יוקרתי בראש היומן: פעיל ✅ (לחץ להסתרה/הצגה)</button>
+              <button type="button" id="btnInstallHomeWidget" class="ghost-pill full-width">📲 הצמד ווידג'ט למסך הבית של הטלפון</button>
+              <button type="button" id="btnLiveAutoUpdate" class="ghost-pill full-width">⚡ סנכרן ועדכן שינויים אוטומטית עכשיו (ללא התקנה)</button>
+              <a id="btnDownloadApkExternal" href="https://raw.githubusercontent.com/binyamin543210-sys/ABCZ/main/BNAPP.apk" target="_blank" rel="noopener" class="ghost-pill full-width widget-apk-link">📥 הורד עדכון APK (לווידג'ט מסך הבית והתראות מסך כבוי)</a>
             </div>
             <div id="widgetInstallHelpBox" class="widget-install-help hidden">
-              💡 <strong>איך מוסיפים את הווידג'ט למסך הבית בטלפון:</strong><br>
-              1. ודא שהתקנת את הגרסה העדכנית מהכפתור <strong>"הורד/עדכן אפליקציית BNAPP"</strong> למעלה.<br>
-              2. לחץ על <strong>"📲 הוסף ווידג'ט למסך הבית"</strong> (או לחץ לחיצה ארוכה על מקום פנוי במסך הבית של הטלפון ⬅️ <strong>ווידג'טים / Widgets</strong> ⬅️ בחר <strong>BNAPP יומן</strong>).
+              💡 <strong>הווידג'ט כבר פועל אוטומטית בראש היומן שלך!</strong><br>
+              אם תרצה להוסיף אותו גם כווידג'ט חיצוני על מסך הבית של הטלפון:<br>
+              1. לחץ על <strong>"📥 הורד עדכון APK"</strong> למעלה ופתח את הקובץ שירד לעדכון מהיר.<br>
+              2. לאחר מכן לחץ על <strong>"📲 הצמד ווידג'ט למסך הבית"</strong> (או לחיצה ארוכה על מסך הבית ⬅️ <strong>ווידג'טים</strong> ⬅️ <strong>BNAPP יומן</strong>).
             </div>
           </div>
 
