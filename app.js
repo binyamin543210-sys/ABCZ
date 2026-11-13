@@ -7852,12 +7852,147 @@ function checkMotzeiShabbatGoalsPrompt() {
 
     playReminderSound();
     showSystemNotification(
-      "🎯 שבוע טוב! זמן לקבוע מטרות לשבוע החדש",
-      "עברו שעתיים מצאת שבת – בואו נשבץ עכשיו זמן ביומן לעמידה במטרות השבועיות!",
+      "🕯️ מוצאי שבת – שבת בבית?",
+      "ענו האם עושים את השבת הקרובה בבית ונכניס אוטומטית את משימות ההכנה!",
       `motzash-goals-${satKey}`
     );
-    openGoalsModal({ showMotzashBanner: true });
+    openShabbatHomePrompt(() => openGoalsModal({ showMotzashBanner: true }));
   }
+}
+
+// =========================
+// תכנון שבוע (מוצ"ש): האם עושים שבת בבית? -> משימות הכנה אוטומטיות ליום שישי
+// =========================
+function getUpcomingFridayDate() {
+  const now = new Date();
+  const d = new Date(now);
+  d.setHours(12, 0, 0, 0);
+  const day = now.getDay();
+  const diff = day === 5 ? 0 : (5 - day + 7) % 7;
+  d.setDate(now.getDate() + diff);
+  return d;
+}
+
+async function createShabbatAtHomeTasks(fridayDate) {
+  const fridayKey = dateKeyFromDate(fridayDate);
+  let candle = null;
+  try {
+    const info = await ensureShabbatForWeek(fridayDate);
+    candle = info?.candle || null;
+  } catch {}
+
+  // משימה לבנימין: חצי שעה, שעה לפני כניסת שבת (ברירת מחדל 17:30 אם אין זמני שבת)
+  let candleMins = candle ? candle.getHours() * 60 + candle.getMinutes() : 17 * 60 + 30;
+  const binStart = Math.max(0, candleMins - 60);
+  const binEnd = binStart + 30;
+
+  const specs = [
+    {
+      owner: "nana",
+      title: "הכנת אוכל לשבת",
+      startTime: "13:30",
+      endTime: "15:30",
+      duration: 120
+    },
+    {
+      owner: "binyamin",
+      title: "הכנות לכניסת שבת",
+      startTime: minutesToTime(binStart),
+      endTime: minutesToTime(binEnd),
+      duration: 30
+    }
+  ];
+
+  let created = 0;
+  for (const spec of specs) {
+    const dayObj = state.cache.events?.[fridayKey] || {};
+    const exists = Object.values(dayObj).some(
+      (e) => e && (e.title || "").trim() === spec.title && e.owner === spec.owner
+    );
+    if (exists) continue;
+
+    const newRef = push(ref(db, `events/${fridayKey}`));
+    const newId = newRef.key || String(Date.now() + created);
+    const obj = {
+      type: "task",
+      owner: spec.owner,
+      title: spec.title,
+      description: "נוצר אוטומטית בתכנון שבוע (שבת בבית)",
+      dateKey: fridayKey,
+      startTime: spec.startTime,
+      endTime: spec.endTime,
+      duration: spec.duration,
+      address: "",
+      reminderMinutes: 0,
+      reminderDate: null,
+      reminderTime: null,
+      reminderCustomTs: null,
+      remindedAt: null,
+      remindedAt_binyamin: null,
+      remindedAt_nana: null,
+      remindedAt_shared: null,
+      recurring: "none",
+      goalTitle: null,
+      urgency: "none",
+      _id: newId
+    };
+    if (!state.cache.events[fridayKey]) state.cache.events[fridayKey] = {};
+    state.cache.events[fridayKey][newId] = obj;
+    try { await set(newRef, obj); } catch (e) { console.warn("shabbat task save failed", e); }
+
+    const rTs = getEventReminderTimestamp(obj, fridayKey);
+    if (rTs && rTs > Date.now() && shouldRemindCurrentUser(obj)) {
+      scheduleDirectReminder({ id: newId, dateKey: fridayKey, ev: obj, targetTs: rTs });
+    }
+    created++;
+  }
+
+  renderCalendar();
+  renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+  try { updateStats(); } catch {}
+  return { created, binStart, usedFallback: !candle };
+}
+
+async function openShabbatHomePrompt(onDone) {
+  const modal = el("shabbatHomeModal");
+  if (!modal) { if (onDone) onDone(); return; }
+
+  const friday = getUpcomingFridayDate();
+  const fridayKey = dateKeyFromDate(friday);
+  let candle = null;
+  try { candle = (await ensureShabbatForWeek(friday))?.candle || null; } catch {}
+
+  const candleTxt = candle ? formatTimeHM(candle) : "לא ידוע (יוגדר 17:30)";
+  const binStartTxt = candle
+    ? minutesToTime(Math.max(0, candle.getHours() * 60 + candle.getMinutes() - 60))
+    : "16:30";
+  const preview = el("shabbatHomePreview");
+  if (preview) {
+    preview.innerHTML =
+      `📅 יום שישי ${formatShortDateHe(fridayKey)} • כניסת שבת: <strong>${candleTxt}</strong><br>` +
+      `💖 ננה: הכנת אוכל לשבת 13:30–15:30<br>` +
+      `💙 בנימין: הכנות לכניסת שבת ${binStartTxt} (חצי שעה)`;
+  }
+
+  const finish = () => {
+    modal.classList.add("hidden");
+    if (typeof onDone === "function") onDone();
+  };
+
+  el("btnShabbatHomeYes").onclick = async () => {
+    el("btnShabbatHomeYes").disabled = true;
+    const res = await createShabbatAtHomeTasks(friday);
+    el("btnShabbatHomeYes").disabled = false;
+    showToast(res.created ? `🕯️ נוספו ${res.created} משימות ליום שישי!` : "המשימות כבר קיימות ביום שישי", 3500);
+    finish();
+  };
+  el("btnShabbatHomeNo").onclick = () => {
+    showToast("בסדר, שבת לא בבית 🙂");
+    finish();
+  };
+  qsa("[data-close-shabbat-home]", modal).forEach((b) => (b.onclick = finish));
+
+  modal.classList.remove("hidden");
 }
 
 function openDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
@@ -8512,6 +8647,7 @@ if (userSel) {
   window.moveDailySummaryItemToTomorrow = moveDailySummaryItemToTomorrow;
   window.rolloverAllTodayToTomorrow = rolloverAllTodayToTomorrow;
   window.openQuickAddFromWidget = openQuickAddFromWidget;
+  window.openShabbatHomePrompt = openShabbatHomePrompt;
 }
 
 // ===================================================

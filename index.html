@@ -904,6 +904,22 @@
   </div>
 </div>
 
+<!-- SHABBAT AT HOME PROMPT (every motzash) -->
+<div id="shabbatHomeModal" class="modal hidden">
+  <div class="modal-backdrop" data-close-shabbat-home></div>
+  <div class="modal-content confirm-modal">
+    <div class="confirm-title" style="font-size:1.25rem;">🕯️ שבת בבית?</div>
+    <div id="shabbatHomeText" class="confirm-text" style="margin:8px 0;">
+      האם עושים את השבת הקרובה בבית?
+    </div>
+    <div id="shabbatHomePreview" class="task-meta" style="margin-bottom:10px; line-height:1.6;"></div>
+    <div class="confirm-actions" style="flex-direction:column; gap:8px;">
+      <button id="btnShabbatHomeYes" type="button" class="primary-pill full-width">✅ כן, שבת בבית – הוסף משימות אוטומטית</button>
+      <button id="btnShabbatHomeNo" type="button" class="ghost-pill full-width">❌ לא, לא בבית</button>
+    </div>
+  </div>
+</div>
+
 <!-- SPECIAL COUNTDOWN EVENTS MODAL -->
 <div id="specialEventsModal" class="modal hidden">
   <div class="modal-backdrop" data-close-special></div>
