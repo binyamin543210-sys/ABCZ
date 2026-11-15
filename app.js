@@ -13,7 +13,7 @@ function isUpdatedNativeApk() {
 }
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue26").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue27").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
@@ -759,14 +759,190 @@ function formatTimeHM(date) {
 }
 
 function ensureYearHolidays(year) {
-  if (state.cache.holidaysLoadedYear === year) return;
-  state.cache.holidaysLoadedYear = year;
+  const apiData = state.cache.hebYears?.[year];
+  const marker = apiData ? `api-${year}` : `local-${year}`;
+  if (state.cache.holidaysLoadedYear === marker) return;
+  state.cache.holidaysLoadedYear = marker;
   state.cache.holidays = {}; // reset for year
+
+  if (apiData) {
+    Object.entries(apiData.byDate).forEach(([key, info]) => {
+      if (info.names && info.names.length) {
+        state.cache.holidays[key] = {
+          name: info.displayName || info.names[0],
+          names: info.names,
+          yomtov: !!info.yomtov
+        };
+      }
+    });
+    return;
+  }
+
+  // גיבוי מקומי עד שנתוני החגים המלאים נטענים
   for (let d = new Date(year, 0, 1); d.getFullYear() === year; d.setDate(d.getDate() + 1)) {
     const key = dateKeyFromDate(d);
     const name = hebrewHolidayForDate(new Date(d));
     if (name) state.cache.holidays[key] = { name };
   }
+  ensureHolidayYearData(year).then((ok) => {
+    if (ok) {
+      state.cache.holidaysLoadedYear = null;
+      try { renderCalendar(); } catch {}
+      try { scheduleDailySummaryAlarm(); } catch {}
+    }
+  });
+}
+
+// ===============================
+// כל החגים והמועדים + כניסת/יציאת שבת וחג (Hebcal, ישראל)
+// ===============================
+function pickHolidayDisplayName(items) {
+  const rank = (it) => {
+    if (it.yomtov) return 0;
+    if (it.category === "holiday" && it.subcat !== "fast") return 1;
+    if (it.subcat === "fast") return 2;
+    return 3;
+  };
+  const sorted = [...items].sort((a, b) => rank(a) - rank(b));
+  return sorted[0]?.hebrew || sorted[0]?.title || "";
+}
+
+function parseHebcalItemsToYear(items) {
+  const byDate = {};
+  const ensure = (dk) => (byDate[dk] = byDate[dk] || { names: [], yomtov: false, candle: null, havdalah: null, _items: [] });
+  (items || []).forEach((it) => {
+    if (!it || !it.date) return;
+    const dk = String(it.date).slice(0, 10);
+    if (it.category === "candles") {
+      ensure(dk).candle = new Date(it.date);
+    } else if (it.category === "havdalah") {
+      ensure(dk).havdalah = new Date(it.date);
+    } else if (it.category === "holiday" || it.category === "roshchodesh") {
+      const obj = ensure(dk);
+      const name = it.hebrew || it.title;
+      if (name && !obj.names.includes(name)) obj.names.push(name);
+      if (it.yomtov) obj.yomtov = true;
+      obj._items.push(it);
+    }
+  });
+  Object.values(byDate).forEach((obj) => {
+    obj.displayName = pickHolidayDisplayName(obj._items) || obj.names[0] || "";
+    delete obj._items;
+  });
+  return { byDate };
+}
+
+async function ensureHolidayYearData(year) {
+  if (!state.cache.hebYears) state.cache.hebYears = {};
+  if (!state.cache.hebYearsLoading) state.cache.hebYearsLoading = {};
+  if (state.cache.hebYears[year]) return true;
+  if (state.cache.hebYearsLoading[year]) return state.cache.hebYearsLoading[year];
+
+  const lat = state.settings.cityLat;
+  const lon = state.settings.cityLon;
+  const tz = state.settings.cityTz;
+  const geoKey = lat && lon ? `${lat},${lon}` : "nogeo";
+  const lsKey = `bnapp_hebyear_v2_${year}_${geoKey}`;
+
+  const p = (async () => {
+    let items = null;
+    try {
+      const raw = localStorage.getItem(lsKey);
+      if (raw) items = JSON.parse(raw);
+    } catch {}
+
+    if (!items) {
+      let url =
+        `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}` +
+        `&maj=on&min=on&mod=on&nx=on&mf=on&i=on&lg=he-x-NoNikud`;
+      if (lat && lon && tz) {
+        url +=
+          `&c=on&M=on&latitude=${encodeURIComponent(lat)}` +
+          `&longitude=${encodeURIComponent(lon)}&tzid=${encodeURIComponent(tz)}`;
+      }
+      try {
+        const resp = await fetch(url);
+        const data = await resp.json();
+        items = Array.isArray(data.items) ? data.items : null;
+        if (items) {
+          try { localStorage.setItem(lsKey, JSON.stringify(items)); } catch {}
+        }
+      } catch (e) {
+        console.warn("Hebcal year load failed", e);
+      }
+    }
+
+    if (!items || !items.length) return false;
+    state.cache.hebYears[year] = parseHebcalItemsToYear(items);
+    return true;
+  })();
+
+  state.cache.hebYearsLoading[year] = p;
+  const ok = await p;
+  delete state.cache.hebYearsLoading[year];
+  return ok;
+}
+
+function getHolidayInfo(dk) {
+  const y = Number(String(dk).slice(0, 4));
+  return state.cache.hebYears?.[y]?.byDate?.[dk] || null;
+}
+
+function addDaysToDate(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+// יום קדוש = שבת או יום טוב (חג שבו אסור במלאכה)
+function isSacredDay(date) {
+  if (date.getDay() === 6) return true;
+  return !!getHolidayInfo(dateKeyFromDate(date))?.yomtov;
+}
+
+function getCandleTimeForDate(date) {
+  const dk = dateKeyFromDate(date);
+  const info = getHolidayInfo(dk);
+  if (info?.candle) return info.candle;
+  if (date.getDay() === 5) return state.cache.shabbat?.[dk]?.candle || null;
+  return null;
+}
+
+function getHavdalahForDate(date) {
+  const dk = dateKeyFromDate(date);
+  const info = getHolidayInfo(dk);
+  if (info?.havdalah) return info.havdalah;
+  if (date.getDay() === 6) {
+    const fri = addDaysToDate(date, -1);
+    return state.cache.shabbat?.[dateKeyFromDate(fri)]?.havdalah || null;
+  }
+  return null;
+}
+
+// מתי קופץ הסיכום היומי ביום מסוים?
+//  - יום רגיל: לפי השעה שהוגדרה
+//  - ערב שבת/חג: שעה לפני כניסת השבת/החג
+//  - שבת/יום טוב אחרון בבלוק: 21:30 (או 10 דקות אחרי צאת השבת אם מאוחר יותר)
+//  - שבת/חג באמצע בלוק: אין סיכום
+function getSummaryTimingForDate(date) {
+  const sacred = isSacredDay(date);
+  const tomorrowSacred = isSacredDay(addDaysToDate(date, 1));
+
+  if (sacred) {
+    if (tomorrowSacred) return { mode: "none", time: null };
+    let mins = 21 * 60 + 30;
+    const hav = getHavdalahForDate(date);
+    if (hav) mins = Math.max(mins, hav.getHours() * 60 + hav.getMinutes() + 10);
+    return { mode: "motzash", time: minutesToTime(Math.min(mins, 23 * 60 + 30)) };
+  }
+
+  if (tomorrowSacred) {
+    const candle = getCandleTimeForDate(date);
+    const base = candle ? candle.getHours() * 60 + candle.getMinutes() : 17 * 60 + 30;
+    return { mode: "erev", time: minutesToTime(Math.max(12 * 60, base - 60)), candle };
+  }
+
+  return { mode: "normal", time: getDailySummaryTime() };
 }
 // ---------- דיבור + הומור של ג'יחרי (קול עמוק, כריזמטי ומגניב) ----------
 let gihariVoice = null;
@@ -783,6 +959,52 @@ function loadVoices() {
 }
 if ("speechSynthesis" in window) window.speechSynthesis.onvoiceschanged = loadVoices;
 
+// ---------- סגנונות קול לג'יחרי (נבחרים בהגדרות) ----------
+// pitch/rate = למנוע הדיבור של הדפדפן; playback = מהירות ניגון (משנה גם את גובה הצליל) לקריינות מהענן.
+const GIHARI_VOICE_PRESETS = {
+  classic: { label: "🎙️ ג'יחרי קלאסי", pitch: 0.82, rate: 1.08, playback: 0.92, flavor: "none" },
+  zohar: { label: "🎤 זוהר – עמוק ונוסטלגי", pitch: 0.6, rate: 0.9, playback: 0.82, flavor: "yemenite" },
+  margalit: { label: "💃 מרגלית – גבוה ורך", pitch: 1.4, rate: 0.98, playback: 1.14, flavor: "yemenite" },
+  ahuva: { label: "🌹 אהובה – חם ומתנגן", pitch: 1.15, rate: 0.9, playback: 1.05, flavor: "yemenite" },
+  teimani: { label: "😂 תימני מצחיק", pitch: 0.95, rate: 1.2, playback: 1.0, flavor: "yemenite-heavy" },
+  grandpa: { label: "👴 סבא עמוק", pitch: 0.4, rate: 0.85, playback: 0.74, flavor: "none" },
+  chipmunk: { label: "🐿️ סנאי מהיר", pitch: 1.9, rate: 1.25, playback: 1.35, flavor: "none" },
+  announcer: { label: "📻 קריין חדשות", pitch: 0.7, rate: 1.0, playback: 0.88, flavor: "none" }
+};
+
+function getGihariVoiceKey() {
+  try {
+    const k = state?.settings?.gihariVoice || localStorage.getItem("bnapp_gihari_voice");
+    if (k && GIHARI_VOICE_PRESETS[k]) return k;
+  } catch {}
+  return "classic";
+}
+
+function getGihariVoicePreset() {
+  return GIHARI_VOICE_PRESETS[getGihariVoiceKey()] || GIHARI_VOICE_PRESETS.classic;
+}
+
+// נוסח תימני: ג' תימנית (ג'ימל), פתיחות וסיומות בטעם תימני
+function applyGihariFlavor(text, flavor) {
+  if (!text || !flavor || flavor === "none") return text;
+  let out = String(text).replace(/ג(?!['׳])/g, "ג'");
+  const intros = ["יא חביבי,", "וואלה יא אחי,", "אהלן ואהלן,", "בכבוד גדול,"];
+  const outros = ["ח'לאס, יאללה!", "בשעה טובה!", "יא סלאם!", "ברוך השם!"];
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  if (flavor === "yemenite-heavy") {
+    return `${pick(intros)} ${out} ${pick(outros)} ${pick(outros)}`;
+  }
+  return `${pick(intros)} ${out}`;
+}
+
+function pushGihariVoiceToNative() {
+  if (!hasNativeAndroidBridge() || typeof window.AndroidBridge.setVoiceStyle !== "function") return;
+  const p = getGihariVoicePreset();
+  try {
+    window.AndroidBridge.setVoiceStyle(p.playback, p.rate, p.flavor !== "none");
+  } catch {}
+}
+
 function getCoolGihariAlertLine(titleText) {
   const clean = (titleText || "אירוע ביומן").trim();
   const lines = [
@@ -790,7 +1012,8 @@ function getCoolGihariAlertLine(titleText) {
     `היי אחי, כאן ג'יחרי. תזכורת אש בשבילך: ${clean}`,
     `ג'יחרי מדווח מהשטח: הגיע הזמן ל${clean}`
   ];
-  return lines[Math.floor(Math.random() * lines.length)];
+  const line = lines[Math.floor(Math.random() * lines.length)];
+  return applyGihariFlavor(line, getGihariVoicePreset().flavor);
 }
 
 function gihariSpeak(text) {
@@ -798,14 +1021,64 @@ function gihariSpeak(text) {
   if (typeof getEffectiveSoundMode === "function" && getEffectiveSoundMode() !== "ring") return;
   try {
     speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
+    const preset = getGihariVoicePreset();
+    const utter = new SpeechSynthesisUtterance(applyGihariFlavor(text, preset.flavor));
     utter.lang = "he-IL";
-    utter.rate = 1.08;
-    utter.pitch = 0.82;
+    utter.rate = preset.rate;
+    utter.pitch = preset.pitch;
     utter.volume = 1.0;
     if (gihariVoice) utter.voice = gihariVoice;
     speechSynthesis.speak(utter);
   } catch {}
+}
+
+// שמיעת דוגמה של הקול שנבחר (בענן עם גובה צליל לפי הסגנון, ואם נכשל – מנוע הדיבור של המכשיר)
+function previewGihariVoice(key) {
+  const preset = GIHARI_VOICE_PRESETS[key] || getGihariVoicePreset();
+  const text = applyGihariFlavor("שלום, אני ג'יחרי. כך אני נשמע בתזכורות שלך", preset.flavor);
+  try {
+    const url = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=he&q=${encodeURIComponent(text)}`;
+    const a = new Audio(url);
+    a.preservesPitch = false;
+    a.mozPreservesPitch = false;
+    a.webkitPreservesPitch = false;
+    a.playbackRate = preset.playback;
+    a.volume = 1;
+    a.play().catch(() => {
+      if ("speechSynthesis" in window) {
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "he-IL";
+        u.rate = preset.rate;
+        u.pitch = preset.pitch;
+        if (gihariVoice) u.voice = gihariVoice;
+        speechSynthesis.speak(u);
+      }
+    });
+  } catch {}
+}
+
+function renderGihariVoiceSelector() {
+  const box = el("gihariVoiceSelector");
+  if (!box) return;
+  const current = getGihariVoiceKey();
+  box.innerHTML = Object.entries(GIHARI_VOICE_PRESETS)
+    .map(([k, p]) => `<button type="button" class="ghost-pill${k === current ? " active" : ""}" data-voice="${k}">${p.label}</button>`)
+    .join("");
+  box.querySelectorAll("[data-voice]").forEach((btn) => {
+    btn.onclick = async () => {
+      const key = btn.dataset.voice;
+      state.settings.gihariVoice = key;
+      try { localStorage.setItem("bnapp_gihari_voice", key); } catch {}
+      renderGihariVoiceSelector();
+      pushGihariVoiceToNative();
+      previewGihariVoice(key);
+      try { await update(ref(db, "settings"), { gihariVoice: key }); } catch {}
+      showToast(`🎙️ הקול הוחלף: ${GIHARI_VOICE_PRESETS[key].label}`);
+    };
+  });
+  const prev = el("btnGihariVoicePreview");
+  if (prev) prev.onclick = () => previewGihariVoice(getGihariVoiceKey());
 }
 
 function wrapGihariHumor(html) {
@@ -1259,14 +1532,10 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
     header.appendChild(hebEl);
     cell.appendChild(header);
 
-    if (holiday) {
-      const holidayEl = document.createElement("div");
-      holidayEl.className = "day-holiday";
-      holidayEl.textContent = holiday.name;
-      cell.appendChild(holidayEl);
-    }
+    // כניסת/יציאת שבת וחג – שורה קומפקטית שתמיד נכנסת בתוך התא (לפני שם החג)
+    const sacredDay = isSacredDay(cellDate);
+    if (sacredDay) cell.classList.add("day-sacred");
 
-    // ערב שבת ושבת – עם זמני הדלקה/צאת שבת
     let shabbatLabel = null;
     let fridayForTimes = null;
     if (isFriday(cellDate)) {
@@ -1278,34 +1547,47 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
       fridayForTimes.setDate(fridayForTimes.getDate() - 1);
     }
 
-    if (shabbatLabel && fridayForTimes) {
-      const shabbatWrap = document.createElement("div");
-      shabbatWrap.className = "day-shabbat-block";
+    const timesStack = document.createElement("div");
+    timesStack.className = "day-times-stack";
+    const refreshTimesStack = () => {
+      timesStack.innerHTML = "";
+      const candleT = getCandleTimeForDate(cellDate);
+      const havT = getHavdalahForDate(cellDate);
+      if (candleT) {
+        const p = document.createElement("div");
+        p.className = "day-time-pill entry";
+        p.textContent = `🕯️ ${formatTimeHM(candleT)}`;
+        p.title = "כניסת שבת/חג";
+        timesStack.appendChild(p);
+      }
+      if (havT) {
+        const p = document.createElement("div");
+        p.className = "day-time-pill exit";
+        p.textContent = `✨ ${formatTimeHM(havT)}`;
+        p.title = "יציאת שבת/חג";
+        timesStack.appendChild(p);
+      }
+      timesStack.style.display = timesStack.childElementCount ? "flex" : "none";
+    };
+    refreshTimesStack();
+    cell.appendChild(timesStack);
 
-      const line1 = document.createElement("div");
-      line1.className = "day-shabbat-title";
-      line1.textContent = shabbatLabel;
-      shabbatWrap.appendChild(line1);
+    if (fridayForTimes && !timesStack.childElementCount) {
+      ensureShabbatForWeek(fridayForTimes).then(() => refreshTimesStack());
+    }
 
-      const line2 = document.createElement("div");
-      line2.className = "day-shabbat-time";
-      line2.textContent = "טוען זמני שבת...";
-      shabbatWrap.appendChild(line2);
-
-      cell.appendChild(shabbatWrap);
-
-      ensureShabbatForWeek(fridayForTimes).then((info) => {
-        if (!info) { line2.textContent = ""; return; }
-        if (isFriday(cellDate) && info.candle) line2.textContent = `כניסת שבת: ${formatTimeHM(info.candle)}`;
-        else if (isShabbat(cellDate) && info.havdalah) line2.textContent = `צאת שבת: ${formatTimeHM(info.havdalah)}`;
-        else line2.textContent = "";
-      });
+    if (holiday) {
+      const holidayEl = document.createElement("div");
+      holidayEl.className = "day-holiday" + (holiday.yomtov ? " yomtov" : "");
+      holidayEl.textContent = holiday.name;
+      cell.title = holiday.names ? holiday.names.join(" • ") : holiday.name;
+      cell.appendChild(holidayEl);
     }
 
     const pointsRow = document.createElement("div");
     pointsRow.className = "day-points";
 
-    const maxVisibleIcons = shabbatLabel ? 2 : 3;
+    const maxVisibleIcons = (shabbatLabel || sacredDay || holiday) ? 2 : 3;
     realEvents.slice(0, maxVisibleIcons).forEach((ev) => {
       const badge = document.createElement("div");
       badge.className = "cal-smart-icon-badge";
@@ -3994,7 +4276,10 @@ function initFirebaseListeners() {
     state.settings.cityTz = settings.cityTz || null;
     if (coordsChanged) {
       state.cache.shabbat = {};
+      state.cache.hebYears = {};
+      state.cache.holidaysLoadedYear = null;
       try { renderCalendar(); } catch {}
+      try { ensureHolidayYearData(new Date().getFullYear()).then(() => scheduleDailySummaryAlarm()); } catch {}
     }
     if (settings.dailySummaryTime) {
       state.settings.dailySummaryTime = settings.dailySummaryTime;
@@ -4038,6 +4323,12 @@ function initFirebaseListeners() {
       try { syncSnoozeUI(); } catch {}
     }
 
+    if (settings.gihariVoice && GIHARI_VOICE_PRESETS[settings.gihariVoice]) {
+      state.settings.gihariVoice = settings.gihariVoice;
+      try { localStorage.setItem("bnapp_gihari_voice", settings.gihariVoice); } catch {}
+      try { renderGihariVoiceSelector(); pushGihariVoiceToNative(); } catch {}
+    }
+
     state.targets = settings.targets || state.targets;
 
     el("cityLabel").textContent = state.settings.city || "לא נבחרה";
@@ -4061,7 +4352,9 @@ async function persistCitySettings(city, coords) {
   state.settings.cityLat = coords ? coords.lat : null;
   state.settings.cityLon = coords ? coords.lon : null;
   state.settings.cityTz = coords ? coords.tz : null;
-  state.cache.shabbat = {}; // זמני שבת יחושבו מחדש לפי המיקום החדש
+    state.cache.shabbat = {}; // זמני שבת יחושבו מחדש לפי המיקום החדש
+  state.cache.hebYears = {};
+  state.cache.holidaysLoadedYear = null;
   el("cityLabel").textContent = city || "לא נבחרה";
   if (el("settingsCityInput")) el("settingsCityInput").value = city || "";
   // כתיבה אטומית אחת – כדי שהמאזין לא יחזיר את העיר הישנה באמצע
@@ -4582,9 +4875,10 @@ function speakGihariLoud(text) {
       speechSynthesis.resume();
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = "he-IL";
-      // קול גברי עמוק, חלק ומגניב לג'יחרי
-      utter.rate = 1.08;
-      utter.pitch = 0.82;
+      // הקול נבחר בהגדרות (עמוק/גבוה/תימני וכו')
+      const _vp = getGihariVoicePreset();
+      utter.rate = _vp.rate;
+      utter.pitch = _vp.pitch;
       utter.volume = 1.0;
       if (gihariVoice) utter.voice = gihariVoice;
       speechSynthesis.speak(utter);
@@ -4799,7 +5093,7 @@ function startAlarmLoop(titleText = "אירוע ביומן") {
       audio.preservesPitch = false;
       audio.mozPreservesPitch = false;
       audio.webkitPreservesPitch = false;
-      audio.playbackRate = 0.92;
+      audio.playbackRate = getGihariVoicePreset().playback;
     } catch {}
     audio.src = ttsUrl;
     audio.volume = 1.0;
@@ -7708,23 +8002,26 @@ async function saveDailySummaryTime() {
 }
 
 function scheduleDailySummaryAlarm() {
-  const timeStr = getDailySummaryTime();
-  const [hh, mm] = timeStr.split(":").map(Number);
-  if (isNaN(hh) || isNaN(mm)) return;
-
   const now = new Date();
-  const target = new Date();
-  target.setHours(hh, mm, 0, 0);
-  if (target.getTime() <= now.getTime()) {
-    target.setDate(target.getDate() + 1);
+  let target = null;
+  for (let off = 0; off <= 10 && !target; off++) {
+    const day = addDaysToDate(now, off);
+    const timing = getSummaryTimingForDate(day);
+    if (!timing.time) continue;
+    const [hh, mm] = timing.time.split(":").map(Number);
+    if (isNaN(hh) || isNaN(mm)) continue;
+    const cand = new Date(day);
+    cand.setHours(hh, mm, 0, 0);
+    if (cand.getTime() > now.getTime()) target = cand;
   }
+  if (!target) return;
 
   if (hasNativeAndroidBridge()) {
     try {
       window.AndroidBridge.scheduleAlarm(
         "daily_summary_alarm",
         "📊 הסיכום היומי שלכם מוכן!",
-        "לחצו לצפייה בסטטיסטיקה היומית ולהעברת משימות שלא בוצעו למחר",
+        "לחצו לצפייה בסטטיסטיקה היומית ולטיפול במשימות שלא בוצעו",
         Math.round(target.getTime())
       );
     } catch (e) {
@@ -7734,130 +8031,74 @@ function scheduleDailySummaryAlarm() {
 }
 
 function checkDailySummaryDue() {
-  try {
-    checkMotzeiShabbatGoalsPrompt();
-  } catch (e) {
-    console.warn("checkMotzeiShabbatGoalsPrompt error:", e);
-  }
-
-  const timeStr = getDailySummaryTime();
-  const [hh, mm] = timeStr.split(":").map(Number);
-  if (isNaN(hh) || isNaN(mm)) return;
-
   const now = new Date();
   const todayKey = dateKeyFromDate(now);
+  const timing = getSummaryTimingForDate(now);
+  // שבת/חג באמצע בלוק – אין סיכום
+  if (!timing.time) return;
+
+  const [hh, mm] = timing.time.split(":").map(Number);
+  if (isNaN(hh) || isNaN(mm)) return;
+
   const firedKey = `bnapp_daily_summary_fired_${todayKey}`;
   if (localStorage.getItem(firedKey) === "1") return;
 
   const target = new Date(now);
   target.setHours(hh, mm, 0, 0);
   const diffMs = now.getTime() - target.getTime();
+  let maxWindowMs = 2 * 60 * 60 * 1000;
 
-  // אם הגיעה שעת הסיכום היומי (ועד שעתיים אחריה אם פתחו את האפליקציה קצת אחרי)
-  if (diffMs >= 0 && diffMs <= 2 * 60 * 60 * 1000) {
+  // ערב שבת/חג: לעולם לא קופץ אחרי כניסת השבת/החג
+  if (timing.mode === "erev") {
+    if (timing.candle) {
+      if (now.getTime() >= timing.candle.getTime()) return;
+      maxWindowMs = Math.min(maxWindowMs, timing.candle.getTime() - target.getTime());
+    } else if (now.getHours() * 60 + now.getMinutes() >= 17 * 60 + 30) {
+      return;
+    }
+  }
+
+  // אם הגיעה שעת הסיכום היומי (ועד חלון קצר אחריה אם פתחו את האפליקציה קצת אחרי)
+  if (diffMs >= 0 && diffMs <= maxWindowMs) {
     try {
       localStorage.setItem(firedKey, "1");
     } catch {}
 
+    // במוצאי שבת: אחרי הסיכום היומי קופץ תכנון השבוע
+    if (timing.mode === "motzash" && now.getDay() === 6) {
+      const planKey = `bnapp_weekly_planning_fired_${todayKey}`;
+      if (localStorage.getItem(planKey) !== "1") {
+        try { localStorage.setItem(planKey, "1"); } catch {}
+        state.ui.pendingPlanning = true;
+      }
+    }
+
     playReminderSound();
     showSystemNotification(
-      `📊 סיכום יומי (${timeStr}) – בנימין & נוי`,
-      "בואו לראות את הסטטיסטיקה של היום ולהעביר משימות שלא בוצעו למחר בלחיצה אחת!",
+      `📊 סיכום יומי (${timing.time}) – בנימין & נוי`,
+      timing.mode === "motzash" && now.getDay() === 6
+        ? "בואו לסכם את היום ואז לתכנן את השבוע החדש!"
+        : "בואו לראות את הסטטיסטיקה של היום ולטפל במשימות שלא בוצעו!",
       `daily-summary-${todayKey}`
     );
     openDailySummaryModal(todayKey);
-    // קובעים מראש את ההתראה למחר
+    // קובעים מראש את ההתראה הבאה
     setTimeout(scheduleDailySummaryAlarm, 2000);
   }
 }
 
 // =========================
-// התראת תחילת שבוע (שעתיים אחרי צאת שבת / מוצ"ש) לקביעת זמן לעמידה במטרות
+// תכנון שבוע במוצאי שבת: קורה מיד אחרי הסיכום היומי של 21:30 (ראה checkDailySummaryDue)
 // =========================
-function getThisWeeksFridayAndSaturday() {
-  const now = new Date();
-  const day = now.getDay(); // 0=ראשון .. 6=שבת
-  // אם היום שבת (6) -> שישי היה אתמול (-1); אם היום ראשון (0) -> שישי היה לפני יומיים (-2)
-  const friday = new Date(now);
-  if (day === 6) {
-    friday.setDate(now.getDate() - 1);
-  } else {
-    friday.setDate(now.getDate() + (5 - day));
-  }
-  friday.setHours(12, 0, 0, 0);
-  const saturday = new Date(friday);
-  saturday.setDate(friday.getDate() + 1);
-  return { friday, saturday };
-}
-
 async function scheduleMotzeiShabbatGoalsAlarm() {
-  try {
-    const { friday, saturday } = getThisWeeksFridayAndSaturday();
-    const info = await ensureShabbatForWeek(friday);
-    let targetTs;
-    if (info && info.havdalah) {
-      targetTs = info.havdalah.getTime() + 2 * 60 * 60 * 1000; // שעתיים אחרי צאת שבת
-    } else {
-      const fallbackSat = new Date(saturday);
-      fallbackSat.setHours(20, 30, 0, 0);
-      targetTs = fallbackSat.getTime();
-    }
-
-    if (targetTs > Date.now() && hasNativeAndroidBridge()) {
-      window.AndroidBridge.scheduleAlarm(
-        "weekly_goals_motzash",
-        "🎯 שבוע טוב! זמן לתכנן את המטרות השבועיות",
-        "עברו שעתיים מצאת שבת – לחצו לקביעת זמן ביומן לעמידה במטרות השבוע!",
-        Math.round(targetTs)
-      );
-    }
-  } catch (e) {
-    console.warn("scheduleMotzeiShabbatGoalsAlarm error:", e);
+  // ההתראה הנפרדת בוטלה: תכנון השבוע נפתח אחרי הסיכום היומי של מוצאי שבת
+  if (hasNativeAndroidBridge()) {
+    try { window.AndroidBridge.cancelAlarm("weekly_goals_motzash"); } catch {}
   }
 }
 
 function checkMotzeiShabbatGoalsPrompt() {
-  const now = new Date();
-  const day = now.getDay();
-  // פועל במוצ"ש (שבת בערב, שעתיים אחרי צאת שבת)
-  if (day !== 6) return;
-
-  const friday = new Date(now);
-  friday.setDate(now.getDate() - 1);
-  friday.setHours(12, 0, 0, 0);
-  const fridayKey = dateKeyFromDate(friday);
-  const satKey = dateKeyFromDate(now);
-  const firedKey = `bnapp_motzash_goals_fired_${satKey}`;
-  if (localStorage.getItem(firedKey) === "1") return;
-
-  const shabbatInfo = state.cache.shabbat?.[fridayKey];
-  if (!shabbatInfo) {
-    ensureShabbatForWeek(friday).then(() => scheduleMotzeiShabbatGoalsAlarm()).catch(() => {});
-  }
-
-  let targetTs;
-  if (shabbatInfo && shabbatInfo.havdalah) {
-    targetTs = shabbatInfo.havdalah.getTime() + 2 * 60 * 60 * 1000; // שעתיים אחרי צאת שבת
-  } else {
-    const fallback = new Date(now);
-    fallback.setHours(20, 30, 0, 0);
-    targetTs = fallback.getTime();
-  }
-
-  const diffMs = now.getTime() - targetTs;
-  if (diffMs >= 0 && diffMs <= 3.5 * 60 * 60 * 1000) {
-    try {
-      localStorage.setItem(firedKey, "1");
-    } catch {}
-
-    playReminderSound();
-    showSystemNotification(
-      "🕯️ מוצאי שבת – שבת בבית?",
-      "ענו האם עושים את השבת הקרובה בבית ונכניס אוטומטית את משימות ההכנה!",
-      `motzash-goals-${satKey}`
-    );
-    openShabbatHomePrompt(() => openGoalsModal({ showMotzashBanner: true }));
-  }
+  // נשאר ריק בכוונה – תכנון השבוע מופעל מתוך checkDailySummaryDue
 }
 
 // =========================
@@ -7975,6 +8216,8 @@ async function openShabbatHomePrompt(onDone) {
   }
 
   const finish = () => {
+    if (finish._done) return;
+    finish._done = true;
     modal.classList.add("hidden");
     if (typeof onDone === "function") onDone();
   };
@@ -8007,6 +8250,17 @@ function openDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
   if (backdrop) backdrop.onclick = closeSummary;
 
   modal.classList.remove("hidden");
+
+  // כשהסיכום היומי נסגר במוצאי שבת – מתחיל תכנון השבוע
+  if (!state.ui._summaryObserver && typeof MutationObserver !== "undefined") {
+    state.ui._summaryObserver = new MutationObserver(() => {
+      if (modal.classList.contains("hidden") && state.ui.pendingPlanning) {
+        state.ui.pendingPlanning = false;
+        setTimeout(() => startWeeklyPlanningFlow(), 350);
+      }
+    });
+    state.ui._summaryObserver.observe(modal, { attributes: true, attributeFilter: ["class"] });
+  }
   try {
     renderDailySummaryModal(dateKey);
   } catch (e) {
@@ -8045,6 +8299,28 @@ function renderDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
       uncompletedToday.push(item);
     }
   });
+
+  // משימות ללא תאריך שבוצעו ביום הזה נספרות ליום שבו בוצעו
+  Object.entries(state.cache.events?.["undated"] || {}).forEach(([id, ev]) => {
+    if (!ev || !ev.completedAt) return;
+    if (!isEventRelevantForUser(ev, user)) return;
+    if (dateKeyFromDate(new Date(ev.completedAt)) === dateKey) {
+      completedToday.push({ ...ev, _id: ev._id || id, dateKey: "undated" });
+    }
+  });
+
+  state.ui.summaryDayKey = dateKey;
+
+  // משימות שלא בוצעו אתמול – שואלים מה לעשות איתן
+  const yesterdayKey = dateKeyFromDate(addDaysToDate(dayDate, -1));
+  const yesterdayItems = getUnfinishedTasksForReview([yesterdayKey]);
+  const yesterdayHtml = yesterdayItems.length
+    ? `
+      <div class="summary-unfinished-box" id="summaryYesterdayBox">
+        <div class="daily-summary-sec-title">⚠️ משימות שלא בוצעו אתמול (${formatShortDateHe(yesterdayKey)}) – מה לעשות איתן?</div>
+        ${yesterdayItems.map((it) => buildUnfinishedRowHtml(it, getNextDayKey(dateKey))).join("")}
+      </div>`
+    : "";
 
   const totalActionable = completedToday.length + uncompletedToday.length;
   const scorePct = totalActionable > 0
@@ -8087,6 +8363,8 @@ function renderDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
       <div class="daily-summary-score-badge">${scorePct}%</div>
     </div>
 
+    ${yesterdayHtml}
+
     <div class="daily-summary-24h-box">
       <div class="daily-summary-sec-title">🕒 פילוח 24 שעות היממה (${userName}):</div>
       <div class="summary-stat-pills">
@@ -8115,6 +8393,11 @@ function renderDailySummaryModal(dateKey = dateKeyFromDate(new Date())) {
       <div class="daily-summary-list">${completedHtml}</div>
     </div>
   `;
+
+  const yBox = el("summaryYesterdayBox");
+  if (yBox) {
+    bindUnfinishedActions(yBox, () => renderDailySummaryModal(dateKey));
+  }
 }
 
 async function completeDailySummaryItem(dateKey, id) {
@@ -8560,6 +8843,24 @@ if (userSel) {
   scheduleDailySummaryAlarm();
   scheduleMotzeiShabbatGoalsAlarm();
 
+  // קול ג'יחרי (בחירה בהגדרות) + תכנון שבוע ידני
+  renderGihariVoiceSelector();
+  pushGihariVoiceToNative();
+  if (el("btnStartWeeklyPlanning")) {
+    el("btnStartWeeklyPlanning").onclick = () => startWeeklyPlanningFlow();
+  }
+
+  // טעינת כל החגים וזמני כניסת/יציאת שבת וחג לשנה הנוכחית והבאה (ואז חישוב מחדש של הסיכום היומי)
+  (async () => {
+    const y = new Date().getFullYear();
+    const a = await ensureHolidayYearData(y);
+    const b = await ensureHolidayYearData(y + 1);
+    if (a || b) {
+      state.cache.holidaysLoadedYear = null;
+      try { renderCalendar(); } catch {}
+      try { scheduleDailySummaryAlarm(); } catch {}
+    }
+  })();
   // מאזין גלובלי לסגירת כל מודאל בלחיצה על כפתור ה-X או על הרקע הכהה
   document.addEventListener("click", (e) => {
     const closeTrigger = e.target.closest(
@@ -8927,6 +9228,374 @@ async function syncWidgetDataAndPreview(forceWeather = false) {
       if (el(`${prefix}WeatherDesc`)) el(`${prefix}WeatherDesc`).textContent = w.label;
     });
     pushToAndroidWidget();
+  }
+}
+
+// ===================================================
+// בדיקת משימות שלא בוצעו: בוצע / העבר לתאריך אחר / התעלם
+// ===================================================
+function escHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// משימות (לא אירועים) שלא בוצעו בימים הנתונים ושעוד לא טופלו/הוזנחו
+function getUnfinishedTasksForReview(dateKeys) {
+  const res = [];
+  (dateKeys || []).forEach((dk) => {
+    const dayObj = state.cache.events?.[dk] || {};
+    Object.entries(dayObj).forEach(([id, ev]) => {
+      if (!ev || ev.type !== "task") return;
+      if (isDefaultEvent(ev) || isRoutineStatEvent(ev)) return;
+      if (ev.completed || ev.completedAt || ev.reviewIgnored) return;
+      // משימות חוזרות לא נשאלות (הן מופיעות מחדש מעצמן)
+      if (ev.isRecurringParent || ev.isRecurringInstance || ev.parentId) return;
+      if (ev.recurring && ev.recurring !== "none") return;
+      if (!isEventRelevantForUser(ev, state.currentUser)) return;
+      res.push({ ...ev, _id: ev._id || id, dateKey: dk });
+    });
+  });
+  res.sort((a, b) => (a.dateKey || "").localeCompare(b.dateKey || "") || (a.startTime || "").localeCompare(b.startTime || ""));
+  return res;
+}
+
+function buildUnfinishedRowHtml(it, defaultMoveKey) {
+  const ownerTxt = it.owner === "shared" ? "משותף" : it.owner === "nana" ? "ננה" : "בנימין";
+  const icon = (typeof getSmartFunnyEventIcon === "function" && getSmartFunnyEventIcon(it)) || "📝";
+  const timeTxt = it.startTime ? `🕒 ${it.startTime}${it.endTime ? "–" + it.endTime : ""}` : "ללא שעה";
+  return `
+    <div class="unf-row" data-dk="${escHtml(it.dateKey)}" data-id="${escHtml(it._id)}">
+      <div class="unf-title">${icon} ${escHtml(it.title || "(ללא כותרת)")}</div>
+      <div class="unf-meta">📅 ${formatShortDateHe(it.dateKey)} • ${timeTxt} • ${ownerTxt}</div>
+      <div class="unf-actions">
+        <button type="button" class="ghost-pill small" data-unf="done">✔ בוצע</button>
+        <input type="date" class="unf-date" value="${escHtml(defaultMoveKey || getTomorrowKey())}" />
+        <button type="button" class="ghost-pill small" data-unf="move">📅 העבר</button>
+        <button type="button" class="ghost-pill small" data-unf="ignore">🙈 התעלם</button>
+      </div>
+    </div>`;
+}
+
+async function reviewMarkDone(dk, id) {
+  const ev = state.cache.events?.[dk]?.[id];
+  if (!ev) return;
+  const nowTs = Date.now();
+  ev.completed = true;
+  ev.completedAt = nowTs;
+  try { await update(ref(db, `events/${dk}/${id}`), { completed: true, completedAt: nowTs }); } catch {}
+}
+
+async function reviewMarkIgnored(dk, id) {
+  const ev = state.cache.events?.[dk]?.[id];
+  if (!ev) return;
+  ev.reviewIgnored = true;
+  try { await update(ref(db, `events/${dk}/${id}`), { reviewIgnored: true }); } catch {}
+}
+
+function refreshAfterReviewChange() {
+  try { renderCalendar(); } catch {}
+  try { renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated"); } catch {}
+  try { updateStats(); } catch {}
+  try { syncWidgetDataAndPreview(false); } catch {}
+}
+
+function bindUnfinishedActions(container, onChange) {
+  if (!container) return;
+  container.onclick = async (e) => {
+    const btn = e.target.closest("[data-unf]");
+    if (!btn) return;
+    const row = btn.closest(".unf-row");
+    if (!row) return;
+    const dk = row.dataset.dk;
+    const id = row.dataset.id;
+    const act = btn.dataset.unf;
+    const item = findCachedItem(id, dk);
+    if (!item) {
+      row.remove();
+      if (onChange) onChange();
+      return;
+    }
+    btn.disabled = true;
+    if (act === "done") {
+      await reviewMarkDone(dk, id);
+      showToast("✔ סומן כבוצע");
+    } else if (act === "ignore") {
+      await reviewMarkIgnored(dk, id);
+      showToast("🙈 בסדר, מתעלמים");
+    } else if (act === "move") {
+      const target = row.querySelector(".unf-date")?.value;
+      if (!target) {
+        showToast("בחר תאריך להעברה");
+        btn.disabled = false;
+        return;
+      }
+      await moveItemsToDate([item], target);
+      showToast(`📅 הועבר ל-${formatShortDateHe(target)}`);
+    }
+    refreshAfterReviewChange();
+    row.remove();
+    if (onChange) onChange();
+  };
+}
+
+function openUnfinishedReviewModal({ title, subtitle, dateKeys, defaultMoveKey, onClose }) {
+  const modal = el("unfinishedReviewModal");
+  const items = getUnfinishedTasksForReview(dateKeys);
+  if (!modal || !items.length) {
+    if (typeof onClose === "function") onClose();
+    return;
+  }
+
+  const listEl = el("unfReviewList");
+  const subEl = el("unfReviewSub");
+  const moveKey = defaultMoveKey || getTomorrowKey();
+  if (el("unfReviewTitle")) el("unfReviewTitle").textContent = title || "⚠️ משימות שלא בוצעו";
+  if (el("unfAllMoveDate")) el("unfAllMoveDate").value = moveKey;
+
+  let closed = false;
+  const closeAll = () => {
+    if (closed) return;
+    closed = true;
+    modal.classList.add("hidden");
+    if (typeof onClose === "function") onClose();
+  };
+
+  const render = () => {
+    const remaining = getUnfinishedTasksForReview(dateKeys);
+    if (subEl) subEl.textContent = `${subtitle || ""} (${remaining.length} משימות)`;
+    if (listEl) {
+      listEl.innerHTML = remaining.length
+        ? remaining.map((it) => buildUnfinishedRowHtml(it, moveKey)).join("")
+        : `<div class="goal-mini-empty">🎉 הכל טופל!</div>`;
+      bindUnfinishedActions(listEl, () => {
+        if (!getUnfinishedTasksForReview(dateKeys).length) render();
+      });
+    }
+  };
+
+  const runBulk = async (kind) => {
+    const remaining = getUnfinishedTasksForReview(dateKeys);
+    if (!remaining.length) return;
+    if (kind === "done") {
+      for (const it of remaining) await reviewMarkDone(it.dateKey, it._id);
+      showToast(`✔ ${remaining.length} משימות סומנו כבוצעו`);
+    } else if (kind === "ignore") {
+      for (const it of remaining) await reviewMarkIgnored(it.dateKey, it._id);
+      showToast("🙈 מתעלמים מכל המשימות");
+    } else if (kind === "move") {
+      const target = el("unfAllMoveDate")?.value;
+      if (!target) { showToast("בחר תאריך להעברה"); return; }
+      await moveItemsToDate(remaining, target);
+      showToast(`📅 ${remaining.length} משימות הועברו ל-${formatShortDateHe(target)}`);
+    }
+    refreshAfterReviewChange();
+    render();
+  };
+
+  if (el("btnUnfAllDone")) el("btnUnfAllDone").onclick = () => runBulk("done");
+  if (el("btnUnfAllIgnore")) el("btnUnfAllIgnore").onclick = () => runBulk("ignore");
+  if (el("btnUnfAllMove")) el("btnUnfAllMove").onclick = () => runBulk("move");
+  if (el("btnUnfReviewFinish")) el("btnUnfReviewFinish").onclick = closeAll;
+  qsa("[data-close-unfinished]", modal).forEach((b) => (b.onclick = closeAll));
+
+  render();
+  modal.classList.remove("hidden");
+}
+
+// ===================================================
+// הצעות לניצול זמן פנוי (תכנון שבוע): שילוב משימות לא מתוארכות בימים פנויים
+// ===================================================
+function getPlanningTimeline(date, user) {
+  const busy = new Array(1440).fill(false);
+  const day = date.getDay();
+  const dk = dateKeyFromDate(date);
+  const fill = (s, e) => {
+    for (let m = Math.max(0, s); m < Math.min(1440, e); m++) busy[m] = true;
+  };
+
+  if (user === "nana" && day === 2) {
+    fill(0, 420);
+  } else {
+    getDailyRoutineSpecsForDay(day).forEach((spec) => {
+      if (spec.owner === "binyamin" && user !== "binyamin") return;
+      fill(timeToMinutes(spec.startTime), timeToMinutes(spec.endTime));
+    });
+  }
+
+  const dayObj = state.cache.events?.[dk] || {};
+  Object.entries(dayObj).forEach(([id, ev]) => {
+    if (!ev || isDefaultEvent(ev) || isRoutineStatEvent(ev)) return;
+    if (shouldHideRecurringParentOnDate(ev, id, dk, dayObj)) return;
+    if (!isEventRelevantForUser(ev, user)) return;
+    if (!ev.startTime) return;
+    const s = timeToMinutes(ev.startTime);
+    fill(s, s + getEffectiveDurationMinutes(ev));
+  });
+  return busy;
+}
+
+function getPlanningWindows(date, user) {
+  const day = date.getDay();
+  if (day === 5) {
+    const candle = getCandleTimeForDate(date);
+    const candleMins = candle ? candle.getHours() * 60 + candle.getMinutes() : 16 * 60 + 30;
+    return [[9 * 60, Math.max(10 * 60, candleMins - 120)]];
+  }
+  if (user === "nana" && day === 2) return [[9 * 60, 21 * 60 + 30]];
+  return [[18 * 60 + 45, 22 * 60 + 30]];
+}
+
+function computeWeekFreeInfo(startDate, user) {
+  const days = [];
+  let freeTotal = 0;
+  for (let i = 0; i < 7; i++) {
+    const date = addDaysToDate(startDate, i);
+    const busy = getPlanningTimeline(date, user);
+    const free = busy.filter((b) => !b).length;
+    freeTotal += free;
+    days.push({ date, dk: dateKeyFromDate(date), busy, free, sacred: isSacredDay(date) });
+  }
+  return { days, avgPct: Math.round((freeTotal / (7 * 1440)) * 100) };
+}
+
+function findSlotInWindows(busy, windows, dur) {
+  for (const [ws, we] of windows) {
+    for (let m = ws; m + dur <= we; m += 15) {
+      let ok = true;
+      for (let k = m; k < m + dur + 10 && k < 1440; k++) {
+        if (busy[k]) { ok = false; break; }
+      }
+      if (ok) return m;
+    }
+  }
+  return null;
+}
+
+function buildFreeTimeSuggestions(startDate) {
+  const user = state.currentUser;
+  const info = computeWeekFreeInfo(startDate, user);
+  if (info.avgPct <= 30) return { info, suggestions: [] };
+
+  const urgencyRank = { today: 0, week: 1, month: 2, none: 3 };
+  const tasks = Object.entries(state.cache.events?.["undated"] || {})
+    .filter(([, ev]) => ev && (ev.type || "task") === "task" && !ev.completed && !ev.completedAt && !ev.reviewIgnored && isEventRelevantForUser(ev, user))
+    .map(([id, ev]) => ({ ...ev, _id: ev._id || id, dateKey: "undated" }))
+    .sort((a, b) => (urgencyRank[a.urgency || "none"] ?? 3) - (urgencyRank[b.urgency || "none"] ?? 3))
+    .slice(0, 8);
+
+  const suggestions = [];
+  const usedPerDay = {};
+  tasks.forEach((task) => {
+    const dur = Math.max(20, Math.min(90, Number(task.duration) || 45));
+    let best = null;
+    info.days.forEach((d) => {
+      if (d.sacred) return;
+      const windows = getPlanningWindows(d.date, user);
+      const start = findSlotInWindows(d.busy, windows, dur);
+      if (start == null) return;
+      const load = usedPerDay[d.dk] || 0;
+      const score = d.free - load * 120;
+      if (!best || score > best.score) best = { d, start, score };
+    });
+    if (best) {
+      for (let m = best.start; m < best.start + dur; m++) best.d.busy[m] = true;
+      best.d.free -= dur;
+      usedPerDay[best.d.dk] = (usedPerDay[best.d.dk] || 0) + 1;
+      suggestions.push({ task, dk: best.d.dk, date: best.d.date, startTime: minutesToTime(best.start), endTime: minutesToTime(best.start + dur), dur });
+    }
+  });
+  return { info, suggestions };
+}
+
+function openFreeTimeSuggestionsModal(onDone) {
+  const modal = el("freeTimeSuggestModal");
+  const start = addDaysToDate(new Date(), 1);
+  let result;
+  try {
+    result = buildFreeTimeSuggestions(start);
+  } catch (e) {
+    console.warn("free time suggestions error", e);
+    result = { suggestions: [] };
+  }
+  if (!modal || !result.suggestions.length) {
+    if (typeof onDone === "function") onDone();
+    return;
+  }
+
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    modal.classList.add("hidden");
+    if (typeof onDone === "function") onDone();
+  };
+
+  const dayNames = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+  if (el("freeTimeSuggestSub")) {
+    el("freeTimeSuggestSub").textContent = `בשבוע הקרוב צפוי זמן פנוי של ${result.info.avgPct}%. הנה הצעה לשלב משימות שעוד אין להן תאריך:`;
+  }
+  const listEl = el("freeTimeSuggestList");
+  listEl.innerHTML = result.suggestions
+    .map(
+      (s, i) => `
+      <label class="ft-row">
+        <input type="checkbox" data-ft-idx="${i}" checked />
+        <div class="ft-info">
+          <div class="ft-title">📝 ${escHtml(s.task.title || "משימה")}</div>
+          <div class="ft-meta">יום ${dayNames[s.date.getDay()]} ${formatShortDateHe(s.dk)} • 🕒 ${s.startTime}–${s.endTime}</div>
+        </div>
+      </label>`
+    )
+    .join("");
+
+  el("btnFreeTimeApply").onclick = async () => {
+    const chosen = qsa("[data-ft-idx]", listEl).filter((c) => c.checked).map((c) => result.suggestions[Number(c.dataset.ftIdx)]);
+    let n = 0;
+    for (const s of chosen) {
+      const item = findCachedItem(s.task._id, "undated");
+      if (!item) continue;
+      if (state.cache.events?.undated?.[s.task._id]) {
+        state.cache.events.undated[s.task._id].duration = s.dur;
+      }
+      await moveItemsToDate([item], s.dk, s.startTime);
+      n++;
+    }
+    showToast(n ? `🧩 ${n} משימות שובצו ביומן!` : "לא נבחרו משימות");
+    close();
+  };
+  el("btnFreeTimeSkip").onclick = close;
+  qsa("[data-close-freetime]", modal).forEach((b) => (b.onclick = close));
+  modal.classList.remove("hidden");
+}
+
+// ===================================================
+// תכנון שבוע (מוצאי שבת, אחרי הסיכום היומי):
+// 1) משימות שלא בוצעו בשבוע  2) שבת בבית?  3) ניצול זמן פנוי  4) מטרות
+// ===================================================
+async function startWeeklyPlanningFlow() {
+  if (state.ui._planningRunning) return;
+  state.ui._planningRunning = true;
+  try {
+    const today = new Date();
+    const weekKeys = [];
+    for (let i = today.getDay(); i >= 0; i--) {
+      weekKeys.push(dateKeyFromDate(addDaysToDate(today, -i)));
+    }
+    await new Promise((resolve) =>
+      openUnfinishedReviewModal({
+        title: "📋 סיכום שבועי – משימות שלא בוצעו",
+        subtitle: "מה לעשות עם המשימות שלא בוצעו השבוע? סמן כבוצע, העבר לתאריך אחר או התעלם",
+        dateKeys: weekKeys,
+        defaultMoveKey: getTomorrowKey(),
+        onClose: resolve
+      })
+    );
+    await new Promise((resolve) => openShabbatHomePrompt(resolve));
+    await new Promise((resolve) => openFreeTimeSuggestionsModal(resolve));
+    openGoalsModal({ showMotzashBanner: true });
+  } catch (e) {
+    console.warn("weekly planning flow error", e);
+  } finally {
+    state.ui._planningRunning = false;
   }
 }
 
