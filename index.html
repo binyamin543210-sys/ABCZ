@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=blue31" />
-  <link rel="stylesheet" href="theme.css?v=blue31" />
+  <link rel="stylesheet" href="styles.css?v=blue32" />
+  <link rel="stylesheet" href="theme.css?v=blue32" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -31,8 +31,8 @@
 
   
   <!-- Singers Profiles + App -->
-  <script defer src="singersProfiles.js?v=blue31"></script>
-  <script defer src="app.js?v=blue31"></script>
+  <script defer src="singersProfiles.js?v=blue32"></script>
+  <script defer src="app.js?v=blue32"></script>
 </head>
 
 <body>
@@ -455,8 +455,10 @@
         <div id="dayWeatherExtra" class="weather-extra"></div>
       </div>
 
-      <div class="task-actions">
+      <div class="task-actions day-modal-actions">
         <button id="btnAddFromDay" class="primary-pill">+ הוסף</button>
+        <button id="btnDayStatusVacation" type="button" class="ghost-pill small day-status-toggle-btn" title="הגדר/בטל יום חופש">🏖️ חופש</button>
+        <button id="btnDayStatusSick" type="button" class="ghost-pill small day-status-toggle-btn" title="הגדר/בטל יום מחלה">🤒 מחלה</button>
         <button id="btnDayRollover" type="button" class="ghost-pill small rollover-btn hidden">⏭️ העבר שלא בוצעו</button>
         <button id="btnToggleDayWeather" class="ghost-pill small">מזג אוויר</button>
       </div>

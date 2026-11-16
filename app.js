@@ -13,7 +13,7 @@ function isUpdatedNativeApk() {
 }
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js?v=blue27").then((reg) => {
+  navigator.serviceWorker.register("./sw.js?v=blue32").then((reg) => {
     try { reg.update(); } catch (e) {}
   }).catch(() => {});
 
@@ -109,6 +109,7 @@ const state = {
     cityLon: null,
     cityTz: null,
     specialEvents: {},
+    dayStatuses: {},
     shoppingFavorites: null
   },
 
@@ -1108,7 +1109,83 @@ function addDaysToDate(date, n) {
   return d;
 }
 
-// סיווג מדויק של כל תאריך: יום שישי, שבת, ערב חג, חג (שכמו שבת), חול המועד + צבע הרקע שלו
+// ===================================================
+// ניהול ימי חופש וימי מחלה (🏖️ חופש / 🤒 מחלה) לפי תאריך
+// ===================================================
+function getSavedDayStatuses() {
+  let local = {};
+  try {
+    const raw = localStorage.getItem("bnapp_day_statuses");
+    if (raw) local = JSON.parse(raw) || {};
+  } catch {}
+  return {
+    ...local,
+    ...(state.settings.dayStatuses || {})
+  };
+}
+
+function getDayStatus(dateOrKey) {
+  if (!dateOrKey || dateOrKey === "undated") return null;
+  const dk = dateOrKey instanceof Date ? dateKeyFromDate(dateOrKey) : String(dateOrKey).slice(0, 10);
+  const all = getSavedDayStatuses();
+  const entry = all[dk];
+  if (!entry) return null;
+  const val = typeof entry === "object" ? entry.status : entry;
+  if (val === "vacation" || val === "sick") return val;
+  return null;
+}
+
+async function setDayStatus(dateKey, statusType) {
+  if (!dateKey || dateKey === "undated") return;
+  const current = getDayStatus(dateKey);
+  const nextStatus = current === statusType ? null : statusType;
+  const all = getSavedDayStatuses();
+
+  if (nextStatus) {
+    all[dateKey] = {
+      status: nextStatus,
+      updatedAt: Date.now()
+    };
+  } else {
+    delete all[dateKey];
+  }
+
+  state.settings.dayStatuses = all;
+  try {
+    localStorage.setItem("bnapp_day_statuses", JSON.stringify(all));
+  } catch {}
+
+  const dObj = parseDateKey(dateKey);
+  await ensureDefaultDayEvents(dObj);
+
+  renderCalendar();
+  renderTasks(qs("#tasksTypeSegmented .segmented-btn.active")?.dataset.filter || "undated");
+  if (!el("dayModal")?.classList.contains("hidden") && state.ui.openDayKey === dateKey) {
+    refreshDayModalStatusUI(dObj);
+    renderDayEvents(dateKey);
+    updateDayRolloverButton(dateKey);
+  }
+  try { updateStats(); } catch {}
+  try { syncWidgetDataAndPreview(false); } catch {}
+
+  if (nextStatus === "vacation") {
+    showToast("🏖️ היום הוגדר כיום חופש – משימות עבודה ו'לצאת' בוטלו להיום (נשארו אירועים מיוחדים ו'להניח')", 3800);
+  } else if (nextStatus === "sick") {
+    showToast("🤒 היום הוגדר כיום מחלה – רפואה שלמה! משימות עבודה ו'לצאת' בוטלו להיום", 3800);
+  } else {
+    showToast("📅 היום חזר למצב רגיל – סדר היום והמשימות הקבועות חזרו", 2800);
+  }
+
+  try {
+    await update(ref(db, "settings/dayStatuses"), {
+      [dateKey]: nextStatus ? all[dateKey] : null
+    });
+  } catch (e) {
+    console.warn("Failed saving dayStatus to Firebase", e);
+  }
+}
+
+// סיווג מדויק של כל תאריך: יום שישי, שבת, ערב חג, חג (שכמו שבת), חול המועד, חופש או מחלה + צבע הרקע שלו
 function getDaySacredClassification(dateOrKey) {
   if (!dateOrKey || dateOrKey === "undated") {
     return {
@@ -1117,6 +1194,9 @@ function getDaySacredClassification(dateOrKey) {
       isErevChag: false,
       isChag: false,
       isCholHamoed: false,
+      dayStatus: null,
+      isVacationDay: false,
+      isSickDay: false,
       isNoWorkDay: false,
       isNoTefillinDay: false,
       bgClass: ""
@@ -1135,9 +1215,13 @@ function getDaySacredClassification(dateOrKey) {
   const isFridayDay = day === 5;
   const isShabbatDay = day === 6;
 
-  // לא עובדים בערב חג, בחג עצמו, ביום שישי ובשבת
-  const isNoWorkDay = Boolean(isFridayDay || isShabbatDay || isErevChag || isChag);
-  // לא מניחים תפילין בשבת, בחג (יום טוב) ובחול המועד
+  const dayStatus = getDayStatus(dk);
+  const isVacationDay = dayStatus === "vacation";
+  const isSickDay = dayStatus === "sick";
+
+  // לא עובדים בערב חג, בחג עצמו, ביום שישי, בשבת, ביום חופש וביום מחלה
+  const isNoWorkDay = Boolean(isFridayDay || isShabbatDay || isErevChag || isChag || isVacationDay || isSickDay);
+  // לא מניחים תפילין בשבת, בחג (יום טוב) ובחול המועד (ביום חופש/מחלה כן מניחים תפילין!)
   const isNoTefillinDay = Boolean(isShabbatDay || isChag || isCholHamoed);
 
   let bgClass = "";
@@ -1146,6 +1230,8 @@ function getDaySacredClassification(dateOrKey) {
   else if (isErevChag) bgClass = "day-bg-erev-chag";
   else if (isShabbatDay) bgClass = "day-bg-shabbat";
   else if (isFridayDay) bgClass = "day-bg-friday";
+  else if (isVacationDay) bgClass = "day-bg-vacation";
+  else if (isSickDay) bgClass = "day-bg-sick";
 
   return {
     isFriday: isFridayDay,
@@ -1153,21 +1239,23 @@ function getDaySacredClassification(dateOrKey) {
     isErevChag,
     isChag,
     isCholHamoed,
+    dayStatus,
+    isVacationDay,
+    isSickDay,
+    holidayInfo: info,
     isNoWorkDay,
     isNoTefillinDay,
     bgClass
   };
 }
 
-// בדיקה האם משימה או אירוע אינם רלוונטיים ביום זה (למשל "לצאת" בערב חג/חג/שבת, או "להניח" בחג/חול המועד/שבת)
-function shouldSuppressEventOnDate(ev, dateKey) {
+// בדיקה קבועה לפי לוח השנה העברי בלבד (שבת/חג/חול המועד) – עבור יצירת/ניקוי מופעים ב-DB
+function shouldSuppressEventBySacredCalendar(ev, dateKey) {
   if (!ev || !dateKey || dateKey === "undated") return false;
   const cls = getDaySacredClassification(dateKey);
   const title = String(ev.title || "").trim();
   if (!title) return false;
 
-  // בערב חג, בחג עצמו ובשבת לא עובדים:
-  // משימות כמו "לצאת" (למשל "לצאת", "לצאת לעבודה", "לצאת לאוטו") ואירועי עבודה קבועים לא רלוונטיים
   if (cls.isErevChag || cls.isChag || cls.isShabbat) {
     if (isDefaultEvent(ev) && ev.statCategory !== "שינה") return true;
     if (/(^|\s)לצאת(\s|$)|^לצאת|לצאת ל|יציאה לעבודה|נסיעה לעבודה|נסיעה לבית|^עבודה$/i.test(title)) {
@@ -1175,10 +1263,45 @@ function shouldSuppressEventOnDate(ev, dateKey) {
     }
   }
 
-  // ביום חג עצמו (שכמו שבת), בחול המועד ובשבת לא מניחים תפילין:
-  // משימות כמו "להניח" / "להניח תפילין" לא רלוונטיות
   if (cls.isNoTefillinDay) {
     if (/(^|\s)להניח(\s|$)|^להניח|תפילין/i.test(title)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// בדיקה האם משימה או אירוע אינם רלוונטיים ביום זה (כולל ימי חופש / מחלה, ערב חג, חג, שבת וחול המועד)
+function shouldSuppressEventOnDate(ev, dateKey) {
+  if (!ev || !dateKey || dateKey === "undated") return false;
+  if (shouldSuppressEventBySacredCalendar(ev, dateKey)) return true;
+
+  const cls = getDaySacredClassification(dateKey);
+  const title = String(ev.title || "").trim();
+  if (!title) return false;
+
+  // ביום חופש או מחלה:
+  // מתבטלות המשימות הקבועות של לצאת/לעבוד וכו', ונשארות רק משימות ואירועים מיוחדים שנקבעו לאותו יום + "להניח" (תפילין)
+  if (cls.isVacationDay || cls.isSickDay) {
+    if (isDefaultEvent(ev) && ev.statCategory !== "שינה") return true;
+
+    const isTefillinTask = /(^|\s)להניח(\s|$)|^להניח|תפילין/i.test(title);
+    if (isTefillinTask) {
+      return false; // "להניח" נשארת ביום חופש/מחלה (אלא אם זה שבת/חג/חוה"מ שכבר טופל למעלה)
+    }
+
+    // ביטול משימות קבועות/חוזרות או משימות עבודה ויציאה לעבודה באותו יום
+    const isWorkOrCommuteTitle =
+      /(^|\s)לצאת(\s|$)|^לצאת|לצאת ל|יציאה לעבודה|נסיעה לעבודה|נסיעה לבית|^עבודה$|לעבוד|משמרת|התארגנות/i.test(title);
+    const isRecurringFixed = Boolean(
+      ev.isRecurringInstance ||
+      ev.isRecurringParent ||
+      ev.parentId ||
+      (ev.recurring && ev.recurring !== "none")
+    );
+
+    if (isWorkOrCommuteTitle || isRecurringFixed) {
       return true;
     }
   }
@@ -1413,8 +1536,35 @@ function getCoolGihariAlertLine(titleText, voiceKeyOverride = null) {
 }
 
 let _isVoicePlaying = false;
+let _voiceFallbackTimer = null;
 
-// מנוע הקראה מבוסס אך ורק על window.speechSynthesis (Web Speech API) עם שפה he-IL
+function playAudioTtsFallback(spokenText, preset, finishPlayback) {
+  try {
+    const audio = typeof getBgAudioPlayer === "function" ? getBgAudioPlayer() : new Audio();
+    const cleanQ = String(spokenText || "").slice(0, 190);
+    const ttsUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=iw&client=tw-ob&q=${encodeURIComponent(cleanQ)}`;
+    audio.onended = () => finishPlayback();
+    audio.onerror = () => finishPlayback();
+    audio.src = ttsUrl;
+    try {
+      audio.preservesPitch = false;
+      audio.mozPreservesPitch = false;
+      audio.webkitPreservesPitch = false;
+      const rate = Math.max(0.7, Math.min(1.4, Number(preset?.rate) || 1.0));
+      audio.defaultPlaybackRate = rate;
+      audio.playbackRate = rate;
+    } catch {}
+    audio.volume = 1.0;
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => finishPlayback());
+    }
+  } catch {
+    finishPlayback();
+  }
+}
+
+// מנוע הקראה: מנסה תחילה את window.speechSynthesis (he-IL), ואם המכשיר/WebView חוסם או חסר קול עברי – עובר אוטומטית להקראת אודיו חיה
 function playGihariVoiceWithPreset(rawText, presetKey = null, opts = {}) {
   const effectiveKey = presetKey ? resolveSingerId(presetKey) : getGihariVoiceKey();
   const preset = getGihariVoicePreset(effectiveKey);
@@ -1437,44 +1587,110 @@ function playGihariVoiceWithPreset(rawText, presetKey = null, opts = {}) {
     return;
   }
 
+  if (_voiceFallbackTimer) {
+    clearTimeout(_voiceFallbackTimer);
+    _voiceFallbackTimer = null;
+  }
+
   _isVoicePlaying = true;
+  let finished = false;
   const finishPlayback = () => {
+    if (finished) return;
+    finished = true;
+    if (_voiceFallbackTimer) {
+      clearTimeout(_voiceFallbackTimer);
+      _voiceFallbackTimer = null;
+    }
     _isVoicePlaying = false;
     if (onEnded) onEnded();
   };
 
+  // אם קיים גשר אנדרואיד עם פונקציית TTS מובנית
+  if (hasNativeAndroidBridge() && typeof window.AndroidBridge.speakHebrew === "function") {
+    try {
+      window.AndroidBridge.speakHebrew(spokenText, Number(preset.pitch) || 1.0, Number(preset.rate) || 1.0);
+      setTimeout(finishPlayback, 4500);
+      return null;
+    } catch {}
+  }
+
   try {
     if ("speechSynthesis" in window) {
       loadVoices();
-      window.speechSynthesis.cancel();
-      if (typeof window.speechSynthesis.resume === "function") {
-        window.speechSynthesis.resume();
+      const startSpeechNow = () => {
+        if (finished || !_isVoicePlaying) return;
+        try {
+          if (typeof window.speechSynthesis.resume === "function") {
+            window.speechSynthesis.resume();
+          }
+          const utter = new SpeechSynthesisUtterance(spokenText);
+          utter.lang = "he-IL";
+          utter.pitch = Number(preset.pitch) || 1.0;
+          utter.rate = Number(preset.rate) || 1.0;
+          utter.volume = 1.0;
+          if (gihariVoice) {
+            utter.voice = gihariVoice;
+          }
+          let startedSpeaking = false;
+          utter.onstart = () => {
+            startedSpeaking = true;
+            if (_voiceFallbackTimer) {
+              clearTimeout(_voiceFallbackTimer);
+              _voiceFallbackTimer = null;
+            }
+          };
+          utter.onend = () => finishPlayback();
+          utter.onerror = () => {
+            if (!startedSpeaking && _isVoicePlaying && !finished) {
+              playAudioTtsFallback(spokenText, preset, finishPlayback);
+            } else {
+              finishPlayback();
+            }
+          };
+
+          // אם תוך 850ms מנוע ה-TTS של המכשיר לא התחיל לדבר (נפוץ ב-Samsung TTS ללא עברית או ב-WebView אחרי טיימר) – עוברים אוטומטית לנגן האודיו!
+          _voiceFallbackTimer = setTimeout(() => {
+            if (!startedSpeaking && !window.speechSynthesis.speaking && _isVoicePlaying && !finished) {
+              try { window.speechSynthesis.cancel(); } catch {}
+              playAudioTtsFallback(spokenText, preset, finishPlayback);
+            }
+          }, 850);
+
+          window.speechSynthesis.speak(utter);
+        } catch {
+          playAudioTtsFallback(spokenText, preset, finishPlayback);
+        }
+      };
+
+      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        window.speechSynthesis.cancel();
+        setTimeout(startSpeechNow, 60);
+      } else {
+        startSpeechNow();
       }
-      const utter = new SpeechSynthesisUtterance(spokenText);
-      utter.lang = "he-IL";
-      utter.pitch = Number(preset.pitch) || 1.0;
-      utter.rate = Number(preset.rate) || 1.0;
-      utter.volume = 1.0;
-      if (gihariVoice) {
-        utter.voice = gihariVoice;
-      }
-      utter.onend = finishPlayback;
-      utter.onerror = finishPlayback;
-      window.speechSynthesis.speak(utter);
-      return utter;
+      return true;
     }
   } catch (e) {
     console.warn("speechSynthesis error:", e);
   }
 
-  finishPlayback();
+  playAudioTtsFallback(spokenText, preset, finishPlayback);
   return null;
 }
 
 function stopGihariVoicePreview() {
   _isVoicePlaying = false;
+  if (_voiceFallbackTimer) {
+    clearTimeout(_voiceFallbackTimer);
+    _voiceFallbackTimer = null;
+  }
   try {
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  } catch {}
+  try {
+    if (_bgAudioEl && !_isAlarmRinging) {
+      _bgAudioEl.pause();
+    }
   } catch {}
 }
 
@@ -2073,6 +2289,13 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
       holidayEl.textContent = hName;
       cell.title = holiday?.names ? holiday.names.join(" • ") : hName;
       cell.appendChild(holidayEl);
+    }
+
+    if (dayCls.isVacationDay || dayCls.isSickDay) {
+      const statusEl = document.createElement("div");
+      statusEl.className = "day-holiday " + (dayCls.isVacationDay ? "day-status-pill-vacation" : "day-status-pill-sick");
+      statusEl.textContent = dayCls.isVacationDay ? "🏖️ חופש" : "🤒 מחלה";
+      cell.appendChild(statusEl);
     }
 
     const pointsRow = document.createElement("div");
@@ -3085,6 +3308,55 @@ function hasEventsOnDate(dateKey) {
   return Object.values(events).some(ev => !isDefaultEvent(ev));
 }
 
+function refreshDayModalStatusUI(date) {
+  const dateKey = dateKeyFromDate(date);
+  const cls = getDaySacredClassification(date);
+  const hName = cls.holidayInfo?.name || "";
+
+  const btnVac = el("btnDayStatusVacation");
+  const btnSick = el("btnDayStatusSick");
+  if (btnVac) {
+    btnVac.classList.toggle("active", cls.isVacationDay);
+    btnVac.textContent = cls.isVacationDay ? "🏖️ חופש ✓" : "🏖️ חופש";
+    btnVac.onclick = () => setDayStatus(dateKey, "vacation");
+  }
+  if (btnSick) {
+    btnSick.classList.toggle("active", cls.isSickDay);
+    btnSick.textContent = cls.isSickDay ? "🤒 מחלה ✓" : "🤒 מחלה";
+    btnSick.onclick = () => setDayStatus(dateKey, "sick");
+  }
+
+  const badgeEl = el("dayModalHolidayBadge");
+  if (badgeEl) {
+    badgeEl.className = "day-modal-holiday-badge hidden";
+    if (cls.isVacationDay) {
+      badgeEl.textContent = `🏖️ יום חופש${hName ? " • " + hName : ""} • משימות עבודה ו"לצאת" מבוטלות (נשארו משימות מיוחדות ו"להניח")`;
+      badgeEl.className = "day-modal-holiday-badge badge-vacation";
+    } else if (cls.isSickDay) {
+      badgeEl.textContent = `🤒 יום מחלה${hName ? " • " + hName : ""} • משימות עבודה ו"לצאת" מבוטלות (נשארו משימות מיוחדות ו"להניח")`;
+      badgeEl.className = "day-modal-holiday-badge badge-sick";
+    } else if (cls.isChag) {
+      badgeEl.textContent = `🍷 ${hName || "חג (יום טוב)"} • כמו שבת (ללא עבודה, ללא לצאת וללא להניח תפילין)`;
+      badgeEl.className = "day-modal-holiday-badge badge-chag";
+    } else if (cls.isErevChag) {
+      badgeEl.textContent = `🌅 ${hName || "ערב חג"} • לא עובדים (ללא משימת לצאת)`;
+      badgeEl.className = "day-modal-holiday-badge badge-erev-chag";
+    } else if (cls.isCholHamoed) {
+      badgeEl.textContent = `🌿 ${hName || "חול המועד"} • מותר במלאכה (ללא זמני כניסה/יציאה וללא תפילין)`;
+      badgeEl.className = "day-modal-holiday-badge badge-chol-hamoed";
+    } else if (cls.isShabbat) {
+      badgeEl.textContent = `✨ שבת קודש${hName ? " • " + hName : ""}`;
+      badgeEl.className = "day-modal-holiday-badge badge-shabbat";
+    } else if (cls.isFriday) {
+      badgeEl.textContent = `🕯️ יום שישי – ערב שבת${hName ? " • " + hName : ""}`;
+      badgeEl.className = "day-modal-holiday-badge badge-friday";
+    } else if (hName) {
+      badgeEl.textContent = `🎉 ${hName}`;
+      badgeEl.className = "day-modal-holiday-badge";
+    }
+  }
+}
+
 function openDayModal(date) {
   const modal = el("dayModal");
   if (!modal) return;
@@ -3119,31 +3391,7 @@ try {
   const dateKey = dateKeyFromDate(date);
   state.ui.openDayKey = dateKey;
 
-  const badgeEl = el("dayModalHolidayBadge");
-  if (badgeEl) {
-    const cls = getDaySacredClassification(date);
-    const hName = cls.holidayInfo?.name || "";
-    badgeEl.className = "day-modal-holiday-badge hidden";
-    if (cls.isChag) {
-      badgeEl.textContent = `🍷 ${hName || "חג (יום טוב)"} • כמו שבת (ללא עבודה, ללא לצאת וללא להניח תפילין)`;
-      badgeEl.className = "day-modal-holiday-badge badge-chag";
-    } else if (cls.isErevChag) {
-      badgeEl.textContent = `🌅 ${hName || "ערב חג"} • לא עובדים (ללא משימת לצאת)`;
-      badgeEl.className = "day-modal-holiday-badge badge-erev-chag";
-    } else if (cls.isCholHamoed) {
-      badgeEl.textContent = `🌿 ${hName || "חול המועד"} • מותר במלאכה (ללא זמני כניסה/יציאה וללא תפילין)`;
-      badgeEl.className = "day-modal-holiday-badge badge-chol-hamoed";
-    } else if (cls.isShabbat) {
-      badgeEl.textContent = `✨ שבת קודש${hName ? " • " + hName : ""}`;
-      badgeEl.className = "day-modal-holiday-badge badge-shabbat";
-    } else if (cls.isFriday) {
-      badgeEl.textContent = `🕯️ יום שישי – ערב שבת${hName ? " • " + hName : ""}`;
-      badgeEl.className = "day-modal-holiday-badge badge-friday";
-    } else if (hName) {
-      badgeEl.textContent = `🎉 ${hName}`;
-      badgeEl.className = "day-modal-holiday-badge";
-    }
-  }
+  refreshDayModalStatusUI(date);
 
   ensureDefaultDayEvents(date).then(() => {
     renderDayEvents(dateKey);
@@ -4729,7 +4977,7 @@ async function migrateDefaultsOnce() {
         continue;
       }
       // ניקוי אוטומטי של מופעים חוזרים ("לצאת" בערב חג/חג/שבת, "להניח" בחג/חול המועד/שבת) שנוצרו בעבר
-      if ((ev.isRecurringInstance || ev.parentId) && shouldSuppressEventOnDate(ev, dk)) {
+      if ((ev.isRecurringInstance || ev.parentId) && shouldSuppressEventBySacredCalendar(ev, dk)) {
         delete items[id];
         if (shouldWriteDb) {
           dbUpdates[`${dk}/${id}`] = null;
@@ -4840,6 +5088,19 @@ function initFirebaseListeners() {
         localStorage.setItem("bnapp_special_events", JSON.stringify(settings.specialEvents));
       } catch {}
       renderSpecialCountdownsBar();
+    }
+    if (settings.dayStatuses && typeof settings.dayStatuses === "object") {
+      state.settings.dayStatuses = settings.dayStatuses;
+      try {
+        localStorage.setItem("bnapp_day_statuses", JSON.stringify(settings.dayStatuses));
+      } catch {}
+      try { renderCalendar(); } catch {}
+      if (!el("dayModal")?.classList.contains("hidden") && state.ui.openDayKey) {
+        try {
+          refreshDayModalStatusUI(parseDateKey(state.ui.openDayKey));
+          renderDayEvents(state.ui.openDayKey);
+        } catch {}
+      }
     }
     if (Array.isArray(settings.shoppingFavorites)) {
       state.settings.shoppingFavorites = settings.shoppingFavorites;
@@ -8218,7 +8479,7 @@ async function materializeRecurringTask(task) {
 
   for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
     const dk = dateKeyFromDate(d);
-    if (shouldSuppressEventOnDate(cleanTask, dk)) continue;
+    if (shouldSuppressEventBySacredCalendar(cleanTask, dk)) continue;
 
     // daily = כל יום, ללא סינון
     if (cleanTask.recurring === "weekly" && d.getDay() !== start.getDay()) continue;
