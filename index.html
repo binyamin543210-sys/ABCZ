@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=blue30" />
-  <link rel="stylesheet" href="theme.css?v=blue30" />
+  <link rel="stylesheet" href="styles.css?v=blue31" />
+  <link rel="stylesheet" href="theme.css?v=blue31" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -30,8 +30,9 @@
 
 
   
-  <!-- App -->
-  <script defer src="app.js?v=blue30"></script>
+  <!-- Singers Profiles + App -->
+  <script defer src="singersProfiles.js?v=blue31"></script>
+  <script defer src="app.js?v=blue31"></script>
 </head>
 
 <body>
@@ -349,13 +350,17 @@
           </div>
 
           <div class="setting-row notif-card gihari-voice-card">
-            <div class="notif-title"><span class="setting-icon">🎙️</span><span class="setting-label">קול ג'יחרי (חיקוי זמרים וסגנונות)</span></div>
+            <div class="notif-title"><span class="setting-icon">🎙️</span><span class="setting-label">בחירת זמר להקראת התראות (10 זמרי מזרחית קלאסיים)</span></div>
+            <div class="field" style="margin:6px 0;">
+              <select id="gihariSingerSelect" class="singer-select-dropdown" aria-label="רשימת בחירת זמר"></select>
+            </div>
             <div class="gihari-voice-grid" id="gihariVoiceSelector"></div>
+            <div id="gihariSingerIntroPreview" class="widget-showcase-sub" style="margin-top:6px; font-weight:700;"></div>
             <div class="notif-grid" style="margin-top:6px; grid-template-columns: 1fr 1fr;">
-              <button id="btnGihariVoicePreview" type="button" class="primary-pill">▶️ בדיקת סאונד גיחרי</button>
+              <button id="btnGihariVoicePreview" type="button" class="primary-pill">🔊 השמע דוגמה</button>
               <button id="btnGihariVoiceStop" type="button" class="ghost-pill">⏹️ עצור</button>
             </div>
-            <div class="widget-showcase-sub">לחץ על שם של כל זמר/סאונד כדי לשמוע טעימה חיה ("בדיקת סאונד גיחרי אחת שתיים אחת שתיים") בליווי המנגינה והסגנון שלו, והקול ישתנה בהתאם גם בהתראות האמת!</div>
+            <div class="widget-showcase-sub">מופעל באמצעות מנוע הדיבור המובנה בדפדפן (<code>window.speechSynthesis</code> • <code>he-IL</code>). בהגעת זמן משימה יוקרא בקול: <strong>[משפט הפתיח של הזמר] + [שם המשימה]</strong>.</div>
           </div>
 
           <div class="setting-row widget-showcase-card" id="settingsWidgetCard">

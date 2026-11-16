@@ -11,7 +11,7 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-const CACHE_NAME = 'bnapp-v4-5-1-live';
+const CACHE_NAME = 'bnapp-v4-6-0-live';
 const swTimers = new Map();
 const firedKeys = new Set();
 let swSnoozeMinutes = 10;
@@ -22,6 +22,7 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME).then((cache) =>
       cache.addAll([
         './manifest.webmanifest',
+        './singersProfiles.js',
         './favicon.ico',
         './icon-192.png',
         './icon-512.png'
@@ -47,6 +48,7 @@ self.addEventListener('fetch', (event) => {
   const isCoreCode =
     event.request.mode === 'navigate' ||
     url.includes('index.html') ||
+    url.includes('singersProfiles.js') ||
     url.includes('app.js') ||
     url.includes('styles.css') ||
     url.includes('theme.css') ||

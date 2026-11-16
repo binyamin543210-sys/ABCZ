@@ -1242,138 +1242,152 @@ function getSummaryTimingForDate(date) {
 
   return { mode: "normal", time: getDailySummaryTime() };
 }
-// ---------- דיבור + הומור של ג'יחרי (חיקוי זמרים, מבטא תימני וצלצולים) ----------
+// ---------- דיבור של ג'יחרי באמצעות Web Speech API (window.speechSynthesis • he-IL) ----------
+// 10 זמרי מזרחית קלאסיים מתוך singersProfiles.js
+const DEFAULT_SINGERS_PROFILES = [
+  {
+    id: "zohar_argov",
+    name: "זוהר ארגוב",
+    pitch: 0.80,
+    rate: 0.90,
+    introPhrase: "יא חביבי, הפרח בגני פורח והגיע הזמן למשימה שלך:"
+  },
+  {
+    id: "margalit_tzanani",
+    name: "מרגלית צנעני",
+    pitch: 1.15,
+    rate: 1.12,
+    introPhrase: "מלעונה, תעזבי הכל ותני בראש! הגיע הזמן ל:"
+  },
+  {
+    id: "haim_moshe",
+    name: "חיים משה",
+    pitch: 0.92,
+    rate: 0.95,
+    introPhrase: "כל נדריי וכל מילותיי, נשמה, הגיעה השעה ל:"
+  },
+  {
+    id: "jacky_mekaiten",
+    name: "ג'קי מקייטן",
+    pitch: 0.85,
+    rate: 1.08,
+    introPhrase: "היידה כולם למחוא כפיים! המענטזת מזכירה שהגיע הזמן ל:"
+  },
+  {
+    id: "ahuva_ozeri",
+    name: "אהובה עוזרי",
+    pitch: 1.28,
+    rate: 0.88,
+    introPhrase: "צלצולי פעמונים בתוך הלב, נשמה טהורה, הגיע הזמן ל:"
+  },
+  {
+    id: "ishay_levi",
+    name: "ישי לוי",
+    pitch: 0.78,
+    rate: 0.92,
+    introPhrase: "ריקדי אחותי, האחת שלי, הגיע בדיוק הזמן ל:"
+  },
+  {
+    id: "eyal_golan",
+    name: "אייל גולן",
+    pitch: 1.05,
+    rate: 1.04,
+    introPhrase: "צליל מיתר שמתנגן, חברים, הגיע הזמן למשימה:"
+  },
+  {
+    id: "shlomi_shabat",
+    name: "שלומי שבת",
+    pitch: 0.72,
+    rate: 0.86,
+    introPhrase: "בגלל הרוח ובאהבה גדולה נשמה שלי, הגיע הזמן ל:"
+  },
+  {
+    id: "zion_golan",
+    name: "ציון גולן",
+    pitch: 0.96,
+    rate: 1.10,
+    introPhrase: "אהלן וסהלן יא חביבי, אבא שמעון אומר שהגיע הזמן ל:"
+  },
+  {
+    id: "sarit_hadad",
+    name: "שרית חדד",
+    pitch: 1.24,
+    rate: 1.15,
+    introPhrase: "יאללה לך הביתה מוטי, חגיגה ביומן! הגיע הזמן ל:"
+  }
+];
+
+function getSingersProfilesList() {
+  return (typeof window !== "undefined" && Array.isArray(window.SINGERS_PROFILES) && window.SINGERS_PROFILES.length)
+    ? window.SINGERS_PROFILES
+    : DEFAULT_SINGERS_PROFILES;
+}
+
+const GIHARI_VOICE_PRESETS = {};
+getSingersProfilesList().forEach((s) => {
+  GIHARI_VOICE_PRESETS[s.id] = {
+    ...s,
+    label: `🎤 ${s.name}`,
+    artist: s.name
+  };
+});
+
+// תאימות לאחור למפתחות קודמים אם נשמרו ב-localStorage
+const LEGACY_SINGER_ID_MAP = {
+  zohar: "zohar_argov",
+  margalit: "margalit_tzanani",
+  ahuva: "ahuva_ozeri",
+  daklon: "haim_moshe",
+  teimani: "zion_golan",
+  classic: "eyal_golan",
+  grandpa: "shlomi_shabat",
+  chipmunk: "sarit_hadad"
+};
+
 let gihariVoice = null;
 function loadVoices() {
   if (!("speechSynthesis" in window)) return;
-  const voices = speechSynthesis.getVoices();
+  const voices = speechSynthesis.getVoices() || [];
   const heVoices = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith("he"));
   gihariVoice =
     heVoices.find((v) => /avri|male|natural|wavenet|neural|carmit|asaf/i.test(v.name)) ||
     heVoices.find((v) => /google|microsoft|enhanced/i.test(v.name)) ||
     heVoices[0] ||
-    voices[0] ||
     null;
 }
 if ("speechSynthesis" in window) window.speechSynthesis.onvoiceschanged = loadVoices;
 
-// המשפט המדויק לבדיקת הסאונד בעת לחיצה על שם של אחד הקולות בהגדרות
 const GIHARI_VOICE_PREVIEW_TEXT = "בדיקת סאונד גיחרי אחת שתיים אחת שתיים";
 
-// ---------- סגנונות קול לג'יחרי (מייצגים זמרים וסגנונות ייחודיים) ----------
-const GIHARI_VOICE_PRESETS = {
-  zohar: {
-    label: "🎤 זוהר ארגוב (המלך)",
-    artist: "זוהר ארגוב",
-    pitch: 0.56,
-    rate: 0.86,
-    playback: 0.76,
-    flavor: "zohar",
-    motif: "zohar"
-  },
-  margalit: {
-    label: "💃 מרגלית צנעני (מרגול)",
-    artist: "מרגלית צנעני",
-    pitch: 1.42,
-    rate: 1.08,
-    playback: 1.20,
-    flavor: "margalit",
-    motif: "margalit"
-  },
-  ahuva: {
-    label: "🌹 אהובה עוזרי",
-    artist: "אהובה עוזרי",
-    pitch: 1.56,
-    rate: 0.90,
-    playback: 1.28,
-    flavor: "ahuva",
-    motif: "ahuva"
-  },
-  daklon: {
-    label: "🎸 דקלון (כרם התימנים)",
-    artist: "דקלון",
-    pitch: 0.72,
-    rate: 0.95,
-    playback: 0.85,
-    flavor: "daklon",
-    motif: "daklon"
-  },
-  teimani: {
-    label: "🌶️ תימני אסלי (ח׳ ו-ע׳)",
-    artist: "תימני אסלי",
-    pitch: 0.88,
-    rate: 1.15,
-    playback: 0.96,
-    flavor: "yemenite-heavy",
-    motif: "teimani"
-  },
-  classic: {
-    label: "🎙️ ג'יחרי קלאסי",
-    artist: "ג'יחרי קלאסי",
-    pitch: 0.82,
-    rate: 1.05,
-    playback: 0.91,
-    flavor: "none",
-    motif: "classic"
-  },
-  grandpa: {
-    label: "👴 סבא תימני עמוק",
-    artist: "סבא תימני",
-    pitch: 0.40,
-    rate: 0.80,
-    playback: 0.68,
-    flavor: "yemenite",
-    motif: "grandpa"
-  },
-  chipmunk: {
-    label: "🐿️ סנאי על טורבו",
-    artist: "סנאי",
-    pitch: 1.90,
-    rate: 1.32,
-    playback: 1.46,
-    flavor: "none",
-    motif: "chipmunk"
-  }
-};
+function resolveSingerId(rawKey) {
+  if (!rawKey) return "zohar_argov";
+  const mapped = LEGACY_SINGER_ID_MAP[rawKey] || rawKey;
+  return GIHARI_VOICE_PRESETS[mapped] ? mapped : "zohar_argov";
+}
 
 function getGihariVoiceKey() {
   try {
-    const k = state?.settings?.gihariVoice || localStorage.getItem("bnapp_gihari_voice");
-    if (k && GIHARI_VOICE_PRESETS[k]) return k;
+    const raw = state?.settings?.gihariVoice || localStorage.getItem("bnapp_gihari_voice");
+    return resolveSingerId(raw);
   } catch {}
-  return "zohar";
+  return "zohar_argov";
 }
 
 function getGihariVoicePreset(overrideKey = null) {
-  const key = overrideKey && GIHARI_VOICE_PRESETS[overrideKey] ? overrideKey : getGihariVoiceKey();
-  return GIHARI_VOICE_PRESETS[key] || GIHARI_VOICE_PRESETS.zohar;
+  const key = overrideKey ? resolveSingerId(overrideKey) : getGihariVoiceKey();
+  return GIHARI_VOICE_PRESETS[key] || GIHARI_VOICE_PRESETS.zohar_argov;
 }
 
-// נוסח תימני וזמרים: ג' תימנית, ח' ו-ע' מודגשות, ופתיחות אופייניות לזמר בהתראות אמת
 function applyGihariFlavor(text, flavor, isPreview = false) {
   if (!text) return "";
   if (isPreview) return String(text);
   if (!flavor || flavor === "none") return String(text);
-  let out = String(text).replace(/ג(?!['׳])/g, "ג'");
-  if (flavor === "zohar") {
-    return `יא חביבי, כאן המלך זוהר: ${out}, בדד אלך ובשעה טובה!`;
+  const out = String(text).replace(/ג(?!['׳])/g, "ג'");
+  const singer = getGihariVoicePreset(flavor);
+  if (singer && singer.introPhrase && !out.startsWith(singer.introPhrase)) {
+    return `${singer.introPhrase} ${out}`;
   }
-  if (flavor === "margalit") {
-    return `וואלה נערי שובה אליי, מרגול על הקו: ${out}, חבל על הזמן!`;
-  }
-  if (flavor === "ahuva") {
-    return `צלצולי פעמונים בלב, אהובה מזכירה באהבה: ${out}, בשעה טובה!`;
-  }
-  if (flavor === "daklon") {
-    return `אהלן מכרם התימנים, דקלון מדווח: ${out}, יא סלאם!`;
-  }
-  const intros = ["יא חביבי,", "וואלה יא אחי,", "אהלן ואהלן,", "בכבוד גדול,"];
-  const outros = ["ח'לאס, יאללה!", "בשעה טובה!", "יא סלאם!", "ברוך השם!"];
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  if (flavor === "yemenite-heavy") {
-    return `${pick(intros)} ${out} ${pick(outros)}`;
-  }
-  return `${pick(intros)} ${out}`;
+  return out;
 }
 
 function pushGihariVoiceToNative() {
@@ -1385,205 +1399,159 @@ function pushGihariVoiceToNative() {
       window.AndroidBridge.setVoicePresetKey(key);
     }
     if (typeof window.AndroidBridge.setVoiceStyle === "function") {
-      window.AndroidBridge.setVoiceStyle(p.pitch, p.rate, p.flavor !== "none");
+      window.AndroidBridge.setVoiceStyle(p.pitch, p.rate, true);
     }
   } catch {}
 }
 
+// מרכיב את משפט ההתראה המדויק: [introPhrase] + [שם המשימה]
 function getCoolGihariAlertLine(titleText, voiceKeyOverride = null) {
   const clean = (titleText || "אירוע ביומן").trim();
   const preset = getGihariVoicePreset(voiceKeyOverride);
-  const lines = [
-    `ג'יחרי על הקו – הגיע הזמן ל${clean}`,
-    `כאן ג'יחרי, תזכורת בשבילך: ${clean}`,
-    `ג'יחרי מדווח מהשטח: הגיע הזמן ל${clean}`
-  ];
-  const line = lines[Math.floor(Math.random() * lines.length)];
-  return applyGihariFlavor(line, preset.flavor, false);
+  if (clean.startsWith(preset.introPhrase)) return clean;
+  return `${preset.introPhrase} ${clean}`;
 }
 
 let _isVoicePlaying = false;
-let _activeVoiceBufferSource = null;
-const _decodedVoiceBufferCache = {};
 
-async function playStudioWavViaWebAudio(wavUrl, onEnded) {
-  try {
-    const ctx = getSharedAudioCtx();
-    if (!ctx) return false;
-    if (ctx.state === "suspended") {
-      try { await ctx.resume(); } catch {}
-    }
-    let audioBuf = _decodedVoiceBufferCache[wavUrl];
-    if (!audioBuf) {
-      const resp = await fetch(wavUrl);
-      if (!resp.ok) return false;
-      const arr = await resp.arrayBuffer();
-      audioBuf = await new Promise((resolve, reject) => {
-        ctx.decodeAudioData(arr, resolve, reject);
-      });
-      _decodedVoiceBufferCache[wavUrl] = audioBuf;
-    }
-    if (_activeVoiceBufferSource) {
-      try { _activeVoiceBufferSource.stop(); } catch {}
-      _activeVoiceBufferSource = null;
-    }
-    const src = ctx.createBufferSource();
-    src.buffer = audioBuf;
-    const gain = ctx.createGain();
-    gain.gain.value = 1.0;
-    src.connect(gain);
-    gain.connect(ctx.destination);
-    _activeVoiceBufferSource = src;
-    src.onended = () => {
-      if (_activeVoiceBufferSource === src) _activeVoiceBufferSource = null;
-      _isVoicePlaying = false;
-      if (onEnded) onEnded();
-    };
-    src.start(0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// מנוע השמעת קול ג'יחרי המאוחד – דיבור אנושי אמיתי מוקלט ומעובד באולפן לכל זמר (ללא מוזיקה סינתטית במקום דיבור!)
+// מנוע הקראה מבוסס אך ורק על window.speechSynthesis (Web Speech API) עם שפה he-IL
 function playGihariVoiceWithPreset(rawText, presetKey = null, opts = {}) {
-  const effectiveKey = presetKey && GIHARI_VOICE_PRESETS[presetKey] ? presetKey : getGihariVoiceKey();
+  const effectiveKey = presetKey ? resolveSingerId(presetKey) : getGihariVoiceKey();
   const preset = getGihariVoicePreset(effectiveKey);
   const isPreview = Boolean(opts.isPreview);
   const onEnded = typeof opts.onEnded === "function" ? opts.onEnded : null;
-  const spokenText = isPreview ? GIHARI_VOICE_PREVIEW_TEXT : applyGihariFlavor(rawText, preset.flavor, false);
+
+  let spokenText;
+  if (isPreview) {
+    const sampleTask = rawText && rawText !== GIHARI_VOICE_PREVIEW_TEXT ? rawText : GIHARI_VOICE_PREVIEW_TEXT;
+    spokenText = `${preset.introPhrase} ${sampleTask}`;
+  } else {
+    const cleanTask = String(opts.taskTitle || rawText || "משימה ביומן").trim();
+    spokenText = cleanTask.startsWith(preset.introPhrase)
+      ? cleanTask
+      : `${preset.introPhrase} ${cleanTask}`;
+  }
 
   if (!isPreview && typeof getEffectiveSoundMode === "function" && getEffectiveSoundMode() !== "ring") {
     if (onEnded) onEnded();
     return;
   }
 
-  // קובץ דיבור אמיתי מעובד באולפן עבור הזמר הנבחר (עם גוון הקול, הסלסול התימני והאפקט המובנים בתוך ה-WAV!)
-  const studioWavUrl = isPreview
-    ? `./voices/preview_${effectiveKey}.wav?v=blue30`
-    : `./voices/alarm_${effectiveKey}.wav?v=blue30`;
-
   _isVoicePlaying = true;
-  if (_activeVoiceBufferSource) {
-    try { _activeVoiceBufferSource.stop(); } catch {}
-    _activeVoiceBufferSource = null;
-  }
-  try {
-    if ("speechSynthesis" in window) speechSynthesis.cancel();
-  } catch {}
-
   const finishPlayback = () => {
     _isVoicePlaying = false;
     if (onEnded) onEnded();
   };
 
-  const speakFallback = async () => {
-    const okWebAudio = await playStudioWavViaWebAudio(studioWavUrl, finishPlayback);
-    if (okWebAudio) return;
-    try {
-      if ("speechSynthesis" in window) {
-        speechSynthesis.cancel();
-        speechSynthesis.resume();
-        const utter = new SpeechSynthesisUtterance(spokenText);
-        utter.lang = "he-IL";
-        utter.rate = preset.rate;
-        utter.pitch = preset.pitch;
-        utter.volume = 1.0;
-        if (gihariVoice) utter.voice = gihariVoice;
-        utter.onend = finishPlayback;
-        utter.onerror = finishPlayback;
-        speechSynthesis.speak(utter);
-        return;
-      }
-    } catch {}
-    finishPlayback();
-  };
-
   try {
-    const audio = getBgAudioPlayer();
-    audio.onended = null;
-    audio.onerror = null;
-    audio.pause();
-    audio.src = studioWavUrl;
-    audio.volume = 1.0;
-    try {
-      audio.preservesPitch = true;
-      audio.defaultPlaybackRate = 1.0;
-      audio.playbackRate = 1.0;
-    } catch {}
-    audio.onended = () => {
-      finishPlayback();
-    };
-    audio.onerror = () => {
-      speakFallback();
-    };
-    const playPromise = audio.play();
-    if (playPromise && typeof playPromise.then === "function") {
-      playPromise.catch(() => {
-        speakFallback();
-      });
+    if ("speechSynthesis" in window) {
+      loadVoices();
+      window.speechSynthesis.cancel();
+      if (typeof window.speechSynthesis.resume === "function") {
+        window.speechSynthesis.resume();
+      }
+      const utter = new SpeechSynthesisUtterance(spokenText);
+      utter.lang = "he-IL";
+      utter.pitch = Number(preset.pitch) || 1.0;
+      utter.rate = Number(preset.rate) || 1.0;
+      utter.volume = 1.0;
+      if (gihariVoice) {
+        utter.voice = gihariVoice;
+      }
+      utter.onend = finishPlayback;
+      utter.onerror = finishPlayback;
+      window.speechSynthesis.speak(utter);
+      return utter;
     }
-  } catch {
-    speakFallback();
+  } catch (e) {
+    console.warn("speechSynthesis error:", e);
   }
+
+  finishPlayback();
+  return null;
 }
 
 function stopGihariVoicePreview() {
   _isVoicePlaying = false;
-  if (_activeVoiceBufferSource) {
-    try { _activeVoiceBufferSource.stop(); } catch {}
-    _activeVoiceBufferSource = null;
-  }
   try {
-    if ("speechSynthesis" in window) speechSynthesis.cancel();
-  } catch {}
-  try {
-    if (_bgAudioEl && !_isAlarmRinging) {
-      _bgAudioEl.onended = null;
-      _bgAudioEl.onerror = null;
-      _bgAudioEl.pause();
-      _bgAudioEl.removeAttribute("src");
-      try { _bgAudioEl.load(); } catch {}
-    }
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   } catch {}
 }
 
 function gihariSpeak(text) {
   if (!text) return;
   if (typeof getEffectiveSoundMode === "function" && getEffectiveSoundMode() !== "ring") return;
-  playGihariVoiceWithPreset(text, getGihariVoiceKey(), { isPreview: false });
+  playGihariVoiceWithPreset(text, getGihariVoiceKey(), { isPreview: false, taskTitle: text });
 }
 
-// שמיעת דוגמה של הקול שנבחר: אומר בדיוק "בדיקת סאונד גיחרי אחת שתיים אחת שתיים" בקול הזמר הנבחר!
+// כפתור "השמע דוגמה" – מקריא משפט לדוגמה עם הפרופיל שנבחר באמצעות window.speechSynthesis (he-IL)
 function previewGihariVoice(key) {
-  const effectiveKey = key && GIHARI_VOICE_PRESETS[key] ? key : getGihariVoiceKey();
+  const effectiveKey = key ? resolveSingerId(key) : getGihariVoiceKey();
+  const preset = getGihariVoicePreset(effectiveKey);
   playGihariVoiceWithPreset(GIHARI_VOICE_PREVIEW_TEXT, effectiveKey, { isPreview: true });
+  showToast(`🎙️ ${preset.name}: "${preset.introPhrase} ${GIHARI_VOICE_PREVIEW_TEXT}"`, 3500);
+}
+
+async function selectSingerProfile(rawKey, playSample = false) {
+  const key = resolveSingerId(rawKey);
+  state.settings.gihariVoice = key;
+  try { localStorage.setItem("bnapp_gihari_voice", key); } catch {}
+  renderGihariVoiceSelector();
+  pushGihariVoiceToNative();
+  if (playSample) {
+    previewGihariVoice(key);
+  }
+  try { await update(ref(db, "settings"), { gihariVoice: key }); } catch {}
 }
 
 function renderGihariVoiceSelector() {
-  const box = el("gihariVoiceSelector");
-  if (!box) return;
   const current = getGihariVoiceKey();
-  box.innerHTML = Object.entries(GIHARI_VOICE_PRESETS)
-    .map(([k, p]) => `<button type="button" class="ghost-pill${k === current ? " active" : ""}" data-voice="${k}">${p.label}</button>`)
-    .join("");
-  box.querySelectorAll("[data-voice]").forEach((btn) => {
-    btn.onclick = async () => {
-      const key = btn.dataset.voice;
-      state.settings.gihariVoice = key;
-      try { localStorage.setItem("bnapp_gihari_voice", key); } catch {}
-      renderGihariVoiceSelector();
-      pushGihariVoiceToNative();
-      previewGihariVoice(key);
-      try { await update(ref(db, "settings"), { gihariVoice: key }); } catch {}
-      showToast(`🎙️ נבחר קול: ${GIHARI_VOICE_PRESETS[key].label} – משמיע טעימה!`);
+  const currentPreset = getGihariVoicePreset(current);
+  const profiles = getSingersProfilesList();
+
+  const selectEl = el("gihariSingerSelect");
+  if (selectEl) {
+    selectEl.innerHTML = profiles
+      .map(
+        (s) =>
+          `<option value="${s.id}"${s.id === current ? " selected" : ""}>🎤 ${s.name} (pitch: ${s.pitch}, rate: ${s.rate})</option>`
+      )
+      .join("");
+    selectEl.value = current;
+    selectEl.onchange = () => {
+      selectSingerProfile(selectEl.value, true);
     };
-  });
+  }
+
+  const introPreviewEl = el("gihariSingerIntroPreview");
+  if (introPreviewEl && currentPreset) {
+    introPreviewEl.textContent = `💬 משפט פתיח (${currentPreset.name}): "${currentPreset.introPhrase} [שם המשימה]"`;
+  }
+
+  const box = el("gihariVoiceSelector");
+  if (box) {
+    box.innerHTML = profiles
+      .map(
+        (s) =>
+          `<button type="button" class="ghost-pill${s.id === current ? " active" : ""}" data-voice="${s.id}">🎤 ${s.name}</button>`
+      )
+      .join("");
+    box.querySelectorAll("[data-voice]").forEach((btn) => {
+      btn.onclick = () => {
+        selectSingerProfile(btn.dataset.voice, true);
+      };
+    });
+  }
+
   const prev = el("btnGihariVoicePreview");
   if (prev) prev.onclick = () => previewGihariVoice(getGihariVoiceKey());
   const stopBtn = el("btnGihariVoiceStop");
-  if (stopBtn) stopBtn.onclick = () => stopAlarmLoop();
+  if (stopBtn) {
+    stopBtn.onclick = () => {
+      stopGihariVoicePreview();
+      stopAlarmLoop();
+    };
+  }
 }
 
 function wrapGihariHumor(html) {
@@ -4888,9 +4856,10 @@ function initFirebaseListeners() {
       try { syncSnoozeUI(); } catch {}
     }
 
-    if (settings.gihariVoice && GIHARI_VOICE_PRESETS[settings.gihariVoice]) {
-      state.settings.gihariVoice = settings.gihariVoice;
-      try { localStorage.setItem("bnapp_gihari_voice", settings.gihariVoice); } catch {}
+    if (settings.gihariVoice) {
+      const resolvedSinger = resolveSingerId(settings.gihariVoice);
+      state.settings.gihariVoice = resolvedSinger;
+      try { localStorage.setItem("bnapp_gihari_voice", resolvedSinger); } catch {}
       try { renderGihariVoiceSelector(); pushGihariVoiceToNative(); } catch {}
     }
 
@@ -5851,14 +5820,16 @@ function startAlarmLoop(titleText = "אירוע ביומן") {
 
   const startGihariVoicePhase = () => {
     if (!_isAlarmRinging || _alarmMuted || getEffectiveSoundMode() !== "ring") return;
+    try { audio.pause(); } catch {}
     const activeVoiceKey = getGihariVoiceKey();
     const activeVoicePreset = getGihariVoicePreset(activeVoiceKey);
-    const activeSpeechText = getCoolGihariAlertLine(titleText);
-    updateReminderStageBadge(`🎙️ ג'יחרי מדבר (${activeVoicePreset.label})... לחץ על השתק להפסקה`);
+    const activeSpeechText = getCoolGihariAlertLine(titleText, activeVoiceKey);
+    updateReminderStageBadge(`🎙️ ${activeVoicePreset.name} מקריא: "${activeSpeechText}"`);
 
-    // מפעיל את הקול שנבחר בהגדרות (עם שימור pitch/playbackRate גם לאחר טעינת ה-src!)
-    playGihariVoiceWithPreset(activeSpeechText, activeVoiceKey, {
+    // מפעיל הקראה ב-window.speechSynthesis (he-IL): [introPhrase] + [שם המשימה]
+    playGihariVoiceWithPreset(titleText, activeVoiceKey, {
       isPreview: false,
+      taskTitle: titleText,
       onEnded: () => {
         if (!_isAlarmRinging || _alarmMuted) return;
         window._alarmStepTimer = setTimeout(() => startCalm8SecChimePhase(), 1500);
@@ -5873,10 +5844,6 @@ function stopAlarmLoop() {
   _isAlarmRinging = false;
   _isVoicePlaying = false;
   _alarmMuted = true;
-  if (_activeVoiceBufferSource) {
-    try { _activeVoiceBufferSource.stop(); } catch {}
-    _activeVoiceBufferSource = null;
-  }
   if (hasNativeAndroidBridge()) {
     try { window.AndroidBridge.stopAlarm(); } catch (e) {}
   }

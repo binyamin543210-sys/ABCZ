@@ -2068,6 +2068,23 @@ body.dark .day-cell.day-bg-chol-hamoed {
   background: linear-gradient(145deg, rgba(14, 165, 233, 0.14), rgba(99, 102, 241, 0.12)) !important;
 }
 
+.singer-select-dropdown {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(14, 165, 233, 0.55);
+  background: rgba(15, 23, 42, 0.08);
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+body.dark .singer-select-dropdown {
+  background: rgba(15, 23, 42, 0.65);
+  color: #f8fafc;
+}
+
 .day-modal-holiday-badge {
   margin-top: 5px;
   display: inline-block;
