@@ -1377,10 +1377,16 @@ function applyGihariFlavor(text, flavor, isPreview = false) {
 }
 
 function pushGihariVoiceToNative() {
-  if (!hasNativeAndroidBridge() || typeof window.AndroidBridge.setVoiceStyle !== "function") return;
-  const p = getGihariVoicePreset();
+  if (!hasNativeAndroidBridge()) return;
+  const key = getGihariVoiceKey();
+  const p = getGihariVoicePreset(key);
   try {
-    window.AndroidBridge.setVoiceStyle(p.pitch, p.rate, p.flavor !== "none");
+    if (typeof window.AndroidBridge.setVoicePresetKey === "function") {
+      window.AndroidBridge.setVoicePresetKey(key);
+    }
+    if (typeof window.AndroidBridge.setVoiceStyle === "function") {
+      window.AndroidBridge.setVoiceStyle(p.pitch, p.rate, p.flavor !== "none");
+    }
   } catch {}
 }
 
@@ -1396,70 +1402,85 @@ function getCoolGihariAlertLine(titleText, voiceKeyOverride = null) {
   return applyGihariFlavor(line, preset.flavor, false);
 }
 
-// ליווי ופתיח מוזיקלי אופייני לכל זמר (עוד מזרחי לזוהר, בולבול טרנג לאהובה, גרוב למרגלית, בוזוקי לדקלון)
-function playSingerSignatureMotif(presetKey) {
+let _isVoicePlaying = false;
+let _activeVoiceBufferSource = null;
+const _decodedVoiceBufferCache = {};
+
+async function playStudioWavViaWebAudio(wavUrl, onEnded) {
   try {
     const ctx = getSharedAudioCtx();
-    if (!ctx) return;
-    const now = ctx.currentTime;
-    const motifs = {
-      // זוהר ארגוב: סולם מינורי מזרחי ("הפרח בגני") עם ויברטו עמוק
-      zohar: { wave: "sawtooth", filterFreq: 950, notes: [[220, 0.16], [261.63, 0.16], [293.66, 0.16], [329.63, 0.22], [349.23, 0.18], [329.63, 0.35]], gain: 0.11 },
-      // מרגלית צנעני: קצב שמח ואנרגטי ("נערי שובה אליי")
-      margalit: { wave: "triangle", filterFreq: 1600, notes: [[392, 0.12], [440, 0.12], [523.25, 0.14], [587.33, 0.14], [659.25, 0.24], [587.33, 0.22]], gain: 0.13 },
-      // אהובה עוזרי: צליל בולבול טרנג מתכתי ומרגש ("צלצולי פעמונים")
-      ahuva: { wave: "sine", filterFreq: 2400, notes: [[659.25, 0.11], [698.46, 0.11], [830.61, 0.14], [880, 0.14], [830.61, 0.14], [698.46, 0.14], [659.25, 0.30]], gain: 0.13 },
-      // דקלון: בוזוקי כרם התימנים (סולם חיג'אז)
-      daklon: { wave: "triangle", filterFreq: 1200, notes: [[293.66, 0.13], [311.13, 0.13], [369.99, 0.15], [392.00, 0.18], [369.99, 0.15], [311.13, 0.15], [293.66, 0.28]], gain: 0.12 },
-      // תימני אסלי: פח תימני ועוּד
-      teimani: { wave: "sawtooth", filterFreq: 1100, notes: [[196, 0.12], [293.66, 0.12], [196, 0.12], [329.63, 0.16], [293.66, 0.24]], gain: 0.11 },
-      // סבא תימני: בס נמוך וחם
-      grandpa: { wave: "sine", filterFreq: 600, notes: [[130.81, 0.22], [146.83, 0.22], [164.81, 0.32]], gain: 0.14 },
-      // סנאי: ארפג'יו מהיר וגבוה
-      chipmunk: { wave: "square", filterFreq: 2800, notes: [[783.99, 0.08], [987.77, 0.08], [1174.66, 0.08], [1567.98, 0.16]], gain: 0.08 },
-      // קלאסי
-      classic: { wave: "sine", filterFreq: 1400, notes: [[329.63, 0.14], [392.00, 0.14], [523.25, 0.24]], gain: 0.10 }
+    if (!ctx) return false;
+    if (ctx.state === "suspended") {
+      try { await ctx.resume(); } catch {}
+    }
+    let audioBuf = _decodedVoiceBufferCache[wavUrl];
+    if (!audioBuf) {
+      const resp = await fetch(wavUrl);
+      if (!resp.ok) return false;
+      const arr = await resp.arrayBuffer();
+      audioBuf = await new Promise((resolve, reject) => {
+        ctx.decodeAudioData(arr, resolve, reject);
+      });
+      _decodedVoiceBufferCache[wavUrl] = audioBuf;
+    }
+    if (_activeVoiceBufferSource) {
+      try { _activeVoiceBufferSource.stop(); } catch {}
+      _activeVoiceBufferSource = null;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = audioBuf;
+    const gain = ctx.createGain();
+    gain.gain.value = 1.0;
+    src.connect(gain);
+    gain.connect(ctx.destination);
+    _activeVoiceBufferSource = src;
+    src.onended = () => {
+      if (_activeVoiceBufferSource === src) _activeVoiceBufferSource = null;
+      _isVoicePlaying = false;
+      if (onEnded) onEnded();
     };
-    const cfg = motifs[presetKey] || motifs.classic;
-    let offset = 0;
-    cfg.notes.forEach(([freq, dur]) => {
-      const osc = ctx.createOscillator();
-      const flt = ctx.createBiquadFilter();
-      const g = ctx.createGain();
-      osc.type = cfg.wave;
-      osc.frequency.setValueAtTime(freq, now + offset);
-      flt.type = "lowpass";
-      flt.frequency.setValueAtTime(cfg.filterFreq, now + offset);
-      g.gain.setValueAtTime(0.001, now + offset);
-      g.gain.linearRampToValueAtTime(cfg.gain, now + offset + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.001, now + offset + dur);
-      osc.connect(flt);
-      flt.connect(g);
-      g.connect(ctx.destination);
-      osc.start(now + offset);
-      osc.stop(now + offset + dur + 0.02);
-      offset += dur * 0.85;
-    });
-  } catch {}
+    src.start(0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-// מנוע השמעת קול ג'יחרי המאוחד – פועל באופן זהה גם בבדיקת הסאונד בהגדרות וגם בהתראות אמת!
+// מנוע השמעת קול ג'יחרי המאוחד – דיבור אנושי אמיתי מוקלט ומעובד באולפן לכל זמר (ללא מוזיקה סינתטית במקום דיבור!)
 function playGihariVoiceWithPreset(rawText, presetKey = null, opts = {}) {
   const effectiveKey = presetKey && GIHARI_VOICE_PRESETS[presetKey] ? presetKey : getGihariVoiceKey();
   const preset = getGihariVoicePreset(effectiveKey);
   const isPreview = Boolean(opts.isPreview);
   const onEnded = typeof opts.onEnded === "function" ? opts.onEnded : null;
-  const spokenText = isPreview ? String(rawText) : applyGihariFlavor(rawText, preset.flavor, false);
+  const spokenText = isPreview ? GIHARI_VOICE_PREVIEW_TEXT : applyGihariFlavor(rawText, preset.flavor, false);
 
   if (!isPreview && typeof getEffectiveSoundMode === "function" && getEffectiveSoundMode() !== "ring") {
     if (onEnded) onEnded();
     return;
   }
 
-  // ניגון פתיח מוזיקלי קצר בסגנון הזמר הנבחר
-  playSingerSignatureMotif(effectiveKey);
+  // קובץ דיבור אמיתי מעובד באולפן עבור הזמר הנבחר (עם גוון הקול, הסלסול התימני והאפקט המובנים בתוך ה-WAV!)
+  const studioWavUrl = isPreview
+    ? `./voices/preview_${effectiveKey}.wav?v=blue30`
+    : `./voices/alarm_${effectiveKey}.wav?v=blue30`;
 
-  const speakFallback = () => {
+  _isVoicePlaying = true;
+  if (_activeVoiceBufferSource) {
+    try { _activeVoiceBufferSource.stop(); } catch {}
+    _activeVoiceBufferSource = null;
+  }
+  try {
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+  } catch {}
+
+  const finishPlayback = () => {
+    _isVoicePlaying = false;
+    if (onEnded) onEnded();
+  };
+
+  const speakFallback = async () => {
+    const okWebAudio = await playStudioWavViaWebAudio(studioWavUrl, finishPlayback);
+    if (okWebAudio) return;
     try {
       if ("speechSynthesis" in window) {
         speechSynthesis.cancel();
@@ -1470,51 +1491,36 @@ function playGihariVoiceWithPreset(rawText, presetKey = null, opts = {}) {
         utter.pitch = preset.pitch;
         utter.volume = 1.0;
         if (gihariVoice) utter.voice = gihariVoice;
-        utter.onend = () => { if (onEnded) onEnded(); };
-        utter.onerror = () => { if (onEnded) onEnded(); };
+        utter.onend = finishPlayback;
+        utter.onerror = finishPlayback;
         speechSynthesis.speak(utter);
         return;
       }
     } catch {}
-    if (onEnded) setTimeout(onEnded, 3000);
+    finishPlayback();
   };
 
   try {
-    if ("speechSynthesis" in window) speechSynthesis.cancel();
-  } catch {}
-
-  try {
     const audio = getBgAudioPlayer();
+    audio.onended = null;
+    audio.onerror = null;
     audio.pause();
-    audio.referrerPolicy = "no-referrer";
-    const ttsUrl = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=he&q=${encodeURIComponent(spokenText)}`;
-
-    // חשוב: הגדרת playbackRate ו-preservesPitch=false חייבת להתבצע *אחרי* השמת audio.src וגם ב-onloadedmetadata/onplay!
-    const applyVoiceTransform = () => {
-      try {
-        audio.preservesPitch = false;
-        audio.mozPreservesPitch = false;
-        audio.webkitPreservesPitch = false;
-        audio.defaultPlaybackRate = preset.playback;
-        audio.playbackRate = preset.playback;
-      } catch {}
-    };
-
+    audio.src = studioWavUrl;
+    audio.volume = 1.0;
+    try {
+      audio.preservesPitch = true;
+      audio.defaultPlaybackRate = 1.0;
+      audio.playbackRate = 1.0;
+    } catch {}
     audio.onended = () => {
-      if (onEnded) onEnded();
+      finishPlayback();
     };
     audio.onerror = () => {
       speakFallback();
     };
-    audio.src = ttsUrl;
-    audio.volume = 1.0;
-    applyVoiceTransform();
-    audio.onloadedmetadata = applyVoiceTransform;
-    audio.onplay = applyVoiceTransform;
-
     const playPromise = audio.play();
     if (playPromise && typeof playPromise.then === "function") {
-      playPromise.then(applyVoiceTransform).catch(() => {
+      playPromise.catch(() => {
         speakFallback();
       });
     }
@@ -1524,6 +1530,11 @@ function playGihariVoiceWithPreset(rawText, presetKey = null, opts = {}) {
 }
 
 function stopGihariVoicePreview() {
+  _isVoicePlaying = false;
+  if (_activeVoiceBufferSource) {
+    try { _activeVoiceBufferSource.stop(); } catch {}
+    _activeVoiceBufferSource = null;
+  }
   try {
     if ("speechSynthesis" in window) speechSynthesis.cancel();
   } catch {}
@@ -5466,7 +5477,7 @@ function hasActivePendingReminders() {
 // שחרור מלא של ערוץ השמע (Audio Focus) כאשר לא מושמעת התראה פעילה,
 // כדי שעוצמת המוזיקה בטלפון (Spotify / YouTube / Apple Music) תישאר רגילה ב-100%!
 function releaseAudioFocusIfIdle() {
-  if (_isAlarmRinging) return;
+  if (_isAlarmRinging || _isVoicePlaying) return;
   try {
     if (_bgAudioEl) {
       _bgAudioEl.onended = null;
@@ -5860,7 +5871,12 @@ function startAlarmLoop(titleText = "אירוע ביומן") {
 
 function stopAlarmLoop() {
   _isAlarmRinging = false;
+  _isVoicePlaying = false;
   _alarmMuted = true;
+  if (_activeVoiceBufferSource) {
+    try { _activeVoiceBufferSource.stop(); } catch {}
+    _activeVoiceBufferSource = null;
+  }
   if (hasNativeAndroidBridge()) {
     try { window.AndroidBridge.stopAlarm(); } catch (e) {}
   }

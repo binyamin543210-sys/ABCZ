@@ -11,7 +11,7 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-const CACHE_NAME = 'bnapp-v4-4-6-live';
+const CACHE_NAME = 'bnapp-v4-5-1-live';
 const swTimers = new Map();
 const firedKeys = new Set();
 let swSnoozeMinutes = 10;
@@ -42,6 +42,8 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = event.request.url || '';
+  if (!url.startsWith(self.location.origin)) return;
+
   const isCoreCode =
     event.request.mode === 'navigate' ||
     url.includes('index.html') ||
