@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Amatic+SC:wght@400;700&family=Assistant:wght@400;600;700;800&family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Heebo:wght@400;500;700;800&family=Miriam+Libre:wght@400;700&family=Rubik:wght@400;500;700;800&family=Secular+One&family=Suez+One&family=Varela+Round&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=blue27" />
-  <link rel="stylesheet" href="theme.css?v=blue27" />
+  <link rel="stylesheet" href="styles.css?v=blue29" />
+  <link rel="stylesheet" href="theme.css?v=blue29" />
   <link rel="icon" href="favicon.ico" />
 
   <!-- Chart.js -->
@@ -31,7 +31,7 @@
 
   
   <!-- App -->
-  <script defer src="app.js?v=blue27"></script>
+  <script defer src="app.js?v=blue29"></script>
 </head>
 
 <body>
@@ -124,6 +124,13 @@
             <button type="button" data-owner-filter="mine" class="owner-filter-btn">רק שלי</button>
             <button type="button" data-owner-filter="shared" class="owner-filter-btn">משותף 👥</button>
           </div>
+        </div>
+        <div id="calendarColorsLegend" class="calendar-colors-legend" aria-label="מקרא צבעי ימים מיוחדים">
+          <span class="cal-legend-chip leg-friday"><i></i>שישי</span>
+          <span class="cal-legend-chip leg-shabbat"><i></i>שבת</span>
+          <span class="cal-legend-chip leg-erev-chag"><i></i>ערב חג</span>
+          <span class="cal-legend-chip leg-chag"><i></i>חג</span>
+          <span class="cal-legend-chip leg-chol-hamoed"><i></i>חול המועד</span>
         </div>
         <div class="weekday-row">
           <div>א'</div><div>ב'</div><div>ג'</div><div>ד'</div><div>ה'</div><div>ו'</div><div>ש'</div>
@@ -250,6 +257,20 @@
       <section id="settingsSection" class="screen">
         <div class="settings-list">
 
+          <div class="setting-row notif-card settings-update-card" id="settingsUpdateCard">
+            <div class="notif-title">
+              <span class="setting-icon">🚀</span>
+              <span class="setting-label">עדכון גרסה וסנכרון שינויים (v4.5)</span>
+            </div>
+            <div class="widget-showcase-sub">
+              לחץ על הכפתור למטה כדי למשוך מיד את כל העדכונים החדשים (צבעי שישי/שבת/חגים/חול המועד, חוקי משימות חג, קולות הזמרים של ג'יחרי ו-12 צלצולי הפתיחה) ולנקות מטמון ישן:
+            </div>
+            <div class="notif-grid" style="margin-top:6px; grid-template-columns: 1fr;">
+              <button type="button" id="btnSettingsForceUpdate" class="primary-pill full-width">🔄 עדכן עכשיו לגרסה החדשה (סנכרון מיידי)</button>
+              <a id="btnSettingsDownloadApk" href="https://raw.githubusercontent.com/binyamin543210-sys/ABCZ/main/BNAPP.apk" target="_blank" rel="noopener" class="ghost-pill full-width widget-apk-link" style="text-align:center;">📥 הורד עדכון אפליקציית אנדרואיד (BNAPP.apk)</a>
+            </div>
+          </div>
+
           <div class="setting-row">
             <span class="setting-icon">🎨</span>
             <span class="setting-label">רקע וצבעים</span>
@@ -317,13 +338,24 @@
             </div>
           </div>
 
-          <div class="setting-row notif-card gihari-voice-card">
-            <div class="notif-title"><span class="setting-icon">🎙️</span><span class="setting-label">קול ג'יחרי</span></div>
-            <div class="gihari-voice-grid" id="gihariVoiceSelector"></div>
-            <div class="notif-grid" style="margin-top:6px;">
-              <button id="btnGihariVoicePreview" type="button" class="primary-pill">▶️ שמע דוגמה</button>
+          <div class="setting-row notif-card gihari-chime-card" id="gihariChimeCard">
+            <div class="notif-title"><span class="setting-icon">🎶</span><span class="setting-label">צלצול פתיחה (8 שניות לפני שג'יחרי מדבר)</span></div>
+            <div class="gihari-voice-grid" id="gihariChimeSelector"></div>
+            <div class="notif-grid" style="margin-top:6px; grid-template-columns: 1fr 1fr;">
+              <button id="btnGihariChimePreview" type="button" class="primary-pill">▶️ שמע צלצול נבחר</button>
+              <button id="btnGihariChimeStop" type="button" class="ghost-pill">⏹️ עצור</button>
             </div>
-            <div class="widget-showcase-sub">הקולות משתנים בגובה הצליל, במהירות ובסגנון הדיבור (כולל נוסח תימני). מנוע הדיבור של הטלפון לא יודע לחקות זמרים אמיתיים או מבטא אמיתי.</div>
+            <div class="widget-showcase-sub">לחץ על כל אחד מ-12 הצלצולים כדי לשמוע דוגמה חיה ולבחור אותו כצלצול שיתנגן במשך 8 השניות הראשונות של כל התראה.</div>
+          </div>
+
+          <div class="setting-row notif-card gihari-voice-card">
+            <div class="notif-title"><span class="setting-icon">🎙️</span><span class="setting-label">קול ג'יחרי (חיקוי זמרים וסגנונות)</span></div>
+            <div class="gihari-voice-grid" id="gihariVoiceSelector"></div>
+            <div class="notif-grid" style="margin-top:6px; grid-template-columns: 1fr 1fr;">
+              <button id="btnGihariVoicePreview" type="button" class="primary-pill">▶️ בדיקת סאונד גיחרי</button>
+              <button id="btnGihariVoiceStop" type="button" class="ghost-pill">⏹️ עצור</button>
+            </div>
+            <div class="widget-showcase-sub">לחץ על שם של כל זמר/סאונד כדי לשמוע טעימה חיה ("בדיקת סאונד גיחרי אחת שתיים אחת שתיים") בליווי המנגינה והסגנון שלו, והקול ישתנה בהתאם גם בהתראות האמת!</div>
           </div>
 
           <div class="setting-row widget-showcase-card" id="settingsWidgetCard">
@@ -402,6 +434,7 @@
         <div>
           <div class="modal-title">יום <span id="dayModalGreg"></span></div>
           <div class="modal-subtitle"><span id="dayModalHeb"></span></div>
+          <div id="dayModalHolidayBadge" class="day-modal-holiday-badge hidden"></div>
         </div>
         <button class="icon-btn" data-close-modal>✕</button>
       </div>

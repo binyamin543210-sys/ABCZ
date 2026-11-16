@@ -576,7 +576,32 @@ function isSameDay(d1, d2) {
 const isShabbat = (date) => date.getDay() === 6;
 const isFriday  = (date) => date.getDay() === 5;
 
-function getDailyRoutineSpecsForDay(day) {
+function getDailyRoutineSpecsForDay(dayOrDate, maybeDateOrKey) {
+  let day = typeof dayOrDate === "number" ? dayOrDate : 0;
+  let dk = null;
+  if (dayOrDate instanceof Date) {
+    day = dayOrDate.getDay();
+    dk = dateKeyFromDate(dayOrDate);
+  } else if (typeof dayOrDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dayOrDate)) {
+    dk = dayOrDate;
+    day = parseDateKey(dayOrDate).getDay();
+  }
+  if (maybeDateOrKey instanceof Date) {
+    dk = dateKeyFromDate(maybeDateOrKey);
+  } else if (typeof maybeDateOrKey === "string" && /^\d{4}-\d{2}-\d{2}$/.test(maybeDateOrKey)) {
+    dk = maybeDateOrKey;
+  }
+
+  // בערב חג, בחג עצמו (שכמו שבת), ביום שישי ובשבת לא עובדים!
+  if (dk && typeof getDaySacredClassification === "function") {
+    const cls = getDaySacredClassification(dk);
+    if (cls.isNoWorkDay) {
+      return [
+        { key: "def_sleep", title: "שינה", startTime: "00:00", endTime: "07:00", owner: "shared", statCategory: "שינה" }
+      ];
+    }
+  }
+
   // בימים ב, ה (Monday = 1, Thursday = 4)
   if (day === 1 || day === 4) {
     return [
@@ -619,7 +644,7 @@ function getDailyRoutineSpecsForDay(day) {
 async function ensureDefaultDayEvents(date) {
   const dateKey = dateKeyFromDate(date);
   const day = date.getDay();
-  const specs = getDailyRoutineSpecsForDay(day);
+  const specs = getDailyRoutineSpecsForDay(day, dateKey);
 
   if (!state.cache.events[dateKey]) state.cache.events[dateKey] = {};
   const existing = state.cache.events[dateKey];
@@ -758,6 +783,123 @@ function formatTimeHM(date) {
   return `${h}:${m}`;
 }
 
+// מילון חגים ומועדים בישראל (2025-2027) לגיבוי מיידי ומדויק גם ללא רשת
+const STATIC_ISRAEL_HOLIDAYS = {
+  // 2025
+  "2025-03-14": { name: "פורים", names: ["פורים"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2025-04-12": { name: "ערב פסח", names: ["ערב פסח"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2025-04-13": { name: "פסח א׳", names: ["פסח א׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2025-04-14": { name: "חול המועד פסח", names: ["פסח ב׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2025-04-15": { name: "חול המועד פסח", names: ["פסח ג׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2025-04-16": { name: "חול המועד פסח", names: ["פסח ד׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2025-04-17": { name: "חול המועד פסח", names: ["פסח ה׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2025-04-18": { name: "חוה״מ פסח (ערב שביעי של פסח)", names: ["פסח ו׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: true },
+  "2025-04-19": { name: "שביעי של פסח", names: ["שביעי של פסח"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2025-05-01": { name: "יום העצמאות", names: ["יום העצמאות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2025-06-01": { name: "ערב שבועות", names: ["ערב שבועות"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2025-06-02": { name: "שבועות", names: ["שבועות"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2025-09-22": { name: "ערב ראש השנה", names: ["ערב ראש השנה"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2025-09-23": { name: "ראש השנה א׳", names: ["ראש השנה א׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2025-09-24": { name: "ראש השנה ב׳", names: ["ראש השנה ב׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2025-10-01": { name: "ערב יום כיפור", names: ["ערב יום כיפור"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2025-10-02": { name: "יום כיפור", names: ["יום כיפור"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2025-10-06": { name: "ערב סוכות", names: ["ערב סוכות"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2025-10-07": { name: "סוכות א׳", names: ["סוכות א׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2025-10-08": { name: "חול המועד סוכות", names: ["סוכות ב׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2025-10-09": { name: "חול המועד סוכות", names: ["סוכות ג׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2025-10-10": { name: "חול המועד סוכות", names: ["סוכות ד׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2025-10-11": { name: "חול המועד סוכות", names: ["סוכות ה׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2025-10-12": { name: "חול המועד סוכות", names: ["סוכות ו׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2025-10-13": { name: "הושענא רבה (חוה״מ / ערב חג)", names: ["הושענא רבה"], yomtov: false, cholhamoed: true, erevChag: true },
+  "2025-10-14": { name: "שמיני עצרת / שמחת תורה", names: ["שמיני עצרת", "שמחת תורה"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2025-12-15": { name: "חנוכה (נר א׳)", names: ["חנוכה: א׳ נר"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2025-12-16": { name: "חנוכה (נר ב׳)", names: ["חנוכה: ב׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2025-12-17": { name: "חנוכה (נר ג׳)", names: ["חנוכה: ג׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2025-12-18": { name: "חנוכה (נר ד׳)", names: ["חנוכה: ד׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2025-12-19": { name: "חנוכה (נר ה׳)", names: ["חנוכה: ה׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2025-12-20": { name: "חנוכה (נר ו׳)", names: ["חנוכה: ו׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2025-12-21": { name: "חנוכה (נר ז׳)", names: ["חנוכה: ז׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2025-12-22": { name: "חנוכה (נר ח׳)", names: ["חנוכה: ח׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  // 2026
+  "2026-03-03": { name: "פורים", names: ["פורים"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-03-04": { name: "שושן פורים", names: ["שושן פורים"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-04-01": { name: "ערב פסח", names: ["ערב פסח"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2026-04-02": { name: "פסח א׳", names: ["פסח א׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2026-04-03": { name: "חול המועד פסח", names: ["פסח ב׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2026-04-04": { name: "חול המועד פסח", names: ["פסח ג׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2026-04-05": { name: "חול המועד פסח", names: ["פסח ד׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2026-04-06": { name: "חול המועד פסח", names: ["פסח ה׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2026-04-07": { name: "חוה״מ פסח (ערב שביעי של פסח)", names: ["פסח ו׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: true },
+  "2026-04-08": { name: "שביעי של פסח", names: ["שביעי של פסח"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2026-04-14": { name: "יום השואה", names: ["יום השואה"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-04-21": { name: "יום הזיכרון", names: ["יום הזיכרון"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-04-22": { name: "יום העצמאות", names: ["יום העצמאות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-05-05": { name: "ל״ג בעומר", names: ["ל״ג בעומר"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-05-15": { name: "יום ירושלים", names: ["יום ירושלים"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-05-21": { name: "ערב שבועות", names: ["ערב שבועות"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2026-05-22": { name: "שבועות", names: ["שבועות"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2026-07-23": { name: "תשעה באב", names: ["תשעה באב"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-07-29": { name: "ט״ו באב", names: ["ט״ו באב"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-09-11": { name: "ערב ראש השנה", names: ["ערב ראש השנה"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2026-09-12": { name: "ראש השנה א׳", names: ["ראש השנה א׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2026-09-13": { name: "ראש השנה ב׳", names: ["ראש השנה ב׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2026-09-20": { name: "ערב יום כיפור", names: ["ערב יום כיפור"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2026-09-21": { name: "יום כיפור", names: ["יום כיפור"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2026-09-25": { name: "ערב סוכות", names: ["ערב סוכות"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2026-09-26": { name: "סוכות א׳", names: ["סוכות א׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2026-09-27": { name: "חול המועד סוכות", names: ["סוכות ב׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2026-09-28": { name: "חול המועד סוכות", names: ["סוכות ג׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2026-09-29": { name: "חול המועד סוכות", names: ["סוכות ד׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2026-09-30": { name: "חול המועד סוכות", names: ["סוכות ה׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2026-10-01": { name: "חול המועד סוכות", names: ["סוכות ו׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2026-10-02": { name: "הושענא רבה (חוה״מ / ערב חג)", names: ["הושענא רבה"], yomtov: false, cholhamoed: true, erevChag: true },
+  "2026-10-03": { name: "שמיני עצרת / שמחת תורה", names: ["שמיני עצרת", "שמחת תורה"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2026-12-05": { name: "חנוכה (נר א׳)", names: ["חנוכה: א׳ נר"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-12-06": { name: "חנוכה (נר ב׳)", names: ["חנוכה: ב׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-12-07": { name: "חנוכה (נר ג׳)", names: ["חנוכה: ג׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-12-08": { name: "חנוכה (נר ד׳)", names: ["חנוכה: ד׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-12-09": { name: "חנוכה (נר ה׳)", names: ["חנוכה: ה׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-12-10": { name: "חנוכה (נר ו׳)", names: ["חנוכה: ו׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-12-11": { name: "חנוכה (נר ז׳)", names: ["חנוכה: ז׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2026-12-12": { name: "חנוכה (נר ח׳)", names: ["חנוכה: ח׳ נרות"], yomtov: false, cholhamoed: false, erevChag: false },
+  // 2027
+  "2027-03-23": { name: "פורים", names: ["פורים"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2027-04-21": { name: "ערב פסח", names: ["ערב פסח"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2027-04-22": { name: "פסח א׳", names: ["פסח א׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2027-04-23": { name: "חול המועד פסח", names: ["פסח ב׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2027-04-24": { name: "חול המועד פסח", names: ["פסח ג׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2027-04-25": { name: "חול המועד פסח", names: ["פסח ד׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2027-04-26": { name: "חול המועד פסח", names: ["פסח ה׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2027-04-27": { name: "חוה״מ פסח (ערב שביעי של פסח)", names: ["פסח ו׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: true },
+  "2027-04-28": { name: "שביעי של פסח", names: ["שביעי של פסח"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2027-05-12": { name: "יום העצמאות", names: ["יום העצמאות"], yomtov: false, cholhamoed: false, erevChag: false },
+  "2027-06-10": { name: "ערב שבועות", names: ["ערב שבועות"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2027-06-11": { name: "שבועות", names: ["שבועות"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2027-10-01": { name: "ערב ראש השנה", names: ["ערב ראש השנה"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2027-10-02": { name: "ראש השנה א׳", names: ["ראש השנה א׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2027-10-03": { name: "ראש השנה ב׳", names: ["ראש השנה ב׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2027-10-10": { name: "ערב יום כיפור", names: ["ערב יום כיפור"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2027-10-11": { name: "יום כיפור", names: ["יום כיפור"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2027-10-15": { name: "ערב סוכות", names: ["ערב סוכות"], yomtov: false, cholhamoed: false, erevChag: true },
+  "2027-10-16": { name: "סוכות א׳", names: ["סוכות א׳"], yomtov: true, cholhamoed: false, erevChag: false },
+  "2027-10-17": { name: "חול המועד סוכות", names: ["סוכות ב׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2027-10-18": { name: "חול המועד סוכות", names: ["סוכות ג׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2027-10-19": { name: "חול המועד סוכות", names: ["סוכות ד׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2027-10-20": { name: "חול המועד סוכות", names: ["סוכות ה׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2027-10-21": { name: "חול המועד סוכות", names: ["סוכות ו׳ (חול המועד)"], yomtov: false, cholhamoed: true, erevChag: false },
+  "2027-10-22": { name: "הושענא רבה (חוה״מ / ערב חג)", names: ["הושענא רבה"], yomtov: false, cholhamoed: true, erevChag: true },
+  "2027-10-23": { name: "שמיני עצרת / שמחת תורה", names: ["שמיני עצרת", "שמחת תורה"], yomtov: true, cholhamoed: false, erevChag: false }
+};
+
+function classifyHolidayFlagsFromText(nameStr) {
+  const txt = String(nameStr || "").trim();
+  if (!txt) return { yomtov: false, cholhamoed: false, erevChag: false };
+  const isErev = /^ערב\s+(ראש השנה|יום כיפור|סוכות|פסח|שבועות|שמחת תורה|שמיני עצרת)|הושענא רבה/i.test(txt);
+  const isChm = /חול המועד|חוה["״׳']?מ|CH''M|Chol ha-Moed|הושענא רבה/i.test(txt) || /^(סוכות|פסח)\s+[בגדהו]['׳]?(\s|$)/.test(txt);
+  const isYt = !isErev && !isChm && /(ראש השנה|יום כיפור|סוכות א|שמיני עצרת|שמחת תורה|פסח א|שביעי של פסח|שבועות)/i.test(txt);
+  return { yomtov: isYt, cholhamoed: isChm, erevChag: isErev };
+}
+
 function ensureYearHolidays(year) {
   const apiData = state.cache.hebYears?.[year];
   const marker = apiData ? `api-${year}` : `local-${year}`;
@@ -765,13 +907,29 @@ function ensureYearHolidays(year) {
   state.cache.holidaysLoadedYear = marker;
   state.cache.holidays = {}; // reset for year
 
+  // תחילה מזינים את מילון החגים המובנה לאותה שנה
+  Object.entries(STATIC_ISRAEL_HOLIDAYS).forEach(([dk, st]) => {
+    if (dk.startsWith(`${year}-`)) {
+      state.cache.holidays[dk] = {
+        name: st.name,
+        names: st.names || [st.name],
+        yomtov: !!st.yomtov,
+        cholhamoed: !!st.cholhamoed,
+        erevChag: !!st.erevChag
+      };
+    }
+  });
+
   if (apiData) {
     Object.entries(apiData.byDate).forEach(([key, info]) => {
       if (info.names && info.names.length) {
+        const st = STATIC_ISRAEL_HOLIDAYS[key];
         state.cache.holidays[key] = {
-          name: info.displayName || info.names[0],
+          name: info.displayName || st?.name || info.names[0],
           names: info.names,
-          yomtov: !!info.yomtov
+          yomtov: !!(info.yomtov || st?.yomtov),
+          cholhamoed: !!(info.cholhamoed || st?.cholhamoed),
+          erevChag: !!(info.erevChag || st?.erevChag)
         };
       }
     });
@@ -781,8 +939,12 @@ function ensureYearHolidays(year) {
   // גיבוי מקומי עד שנתוני החגים המלאים נטענים
   for (let d = new Date(year, 0, 1); d.getFullYear() === year; d.setDate(d.getDate() + 1)) {
     const key = dateKeyFromDate(d);
+    if (state.cache.holidays[key]) continue;
     const name = hebrewHolidayForDate(new Date(d));
-    if (name) state.cache.holidays[key] = { name };
+    if (name) {
+      const flags = classifyHolidayFlagsFromText(name);
+      state.cache.holidays[key] = { name, names: [name], ...flags };
+    }
   }
   ensureHolidayYearData(year).then((ok) => {
     if (ok) {
@@ -799,9 +961,10 @@ function ensureYearHolidays(year) {
 function pickHolidayDisplayName(items) {
   const rank = (it) => {
     if (it.yomtov) return 0;
-    if (it.category === "holiday" && it.subcat !== "fast") return 1;
-    if (it.subcat === "fast") return 2;
-    return 3;
+    if (it.subcat === "cholhamoed") return 1;
+    if (it.category === "holiday" && it.subcat !== "fast") return 2;
+    if (it.subcat === "fast") return 3;
+    return 4;
   };
   const sorted = [...items].sort((a, b) => rank(a) - rank(b));
   return sorted[0]?.hebrew || sorted[0]?.title || "";
@@ -809,7 +972,15 @@ function pickHolidayDisplayName(items) {
 
 function parseHebcalItemsToYear(items) {
   const byDate = {};
-  const ensure = (dk) => (byDate[dk] = byDate[dk] || { names: [], yomtov: false, candle: null, havdalah: null, _items: [] });
+  const ensure = (dk) => (byDate[dk] = byDate[dk] || {
+    names: [],
+    yomtov: false,
+    cholhamoed: false,
+    erevChag: false,
+    candle: null,
+    havdalah: null,
+    _items: []
+  });
   (items || []).forEach((it) => {
     if (!it || !it.date) return;
     const dk = String(it.date).slice(0, 10);
@@ -820,14 +991,43 @@ function parseHebcalItemsToYear(items) {
     } else if (it.category === "holiday" || it.category === "roshchodesh") {
       const obj = ensure(dk);
       const name = it.hebrew || it.title;
+      const fullStr = `${it.hebrew || ""} ${it.title || ""}`;
       if (name && !obj.names.includes(name)) obj.names.push(name);
       if (it.yomtov) obj.yomtov = true;
+      const flags = classifyHolidayFlagsFromText(fullStr);
+      if (it.subcat === "cholhamoed" || flags.cholhamoed) obj.cholhamoed = true;
+      if (flags.erevChag) obj.erevChag = true;
+      if (flags.yomtov) obj.yomtov = true;
       obj._items.push(it);
     }
   });
-  Object.values(byDate).forEach((obj) => {
-    obj.displayName = pickHolidayDisplayName(obj._items) || obj.names[0] || "";
-    delete obj._items;
+
+  // מיזוג עם מילון החגים המובנה + זיהוי אוטומטי של ערב חג (יום לפני יום טוב)
+  Object.entries(STATIC_ISRAEL_HOLIDAYS).forEach(([dk, st]) => {
+    if (byDate[dk]) {
+      if (st.yomtov) byDate[dk].yomtov = true;
+      if (st.cholhamoed) byDate[dk].cholhamoed = true;
+      if (st.erevChag) byDate[dk].erevChag = true;
+      if (st.name && !byDate[dk].names.length) byDate[dk].names.push(st.name);
+    }
+  });
+
+  Object.entries(byDate).forEach(([dk, obj]) => {
+    if (obj._items) {
+      obj.displayName = pickHolidayDisplayName(obj._items) || obj.names[0] || "";
+      delete obj._items;
+    }
+    const nextDk = dateKeyFromDate(addDaysToDate(parseDateKey(dk), 1));
+    if (!obj.yomtov && byDate[nextDk]?.yomtov) {
+      obj.erevChag = true;
+    }
+    // אם מדובר בחול המועד (שאינו ערב חג ואינו שישי/שבת) – אין לרשום זמני כניסת ויציאת חג
+    const dObj = parseDateKey(dk);
+    const dayOfWeek = dObj.getDay();
+    if (obj.cholhamoed && !obj.yomtov && dayOfWeek !== 5 && dayOfWeek !== 6) {
+      obj.candle = null;
+      obj.havdalah = null;
+    }
   });
   return { byDate };
 }
@@ -884,14 +1084,106 @@ async function ensureHolidayYearData(year) {
 }
 
 function getHolidayInfo(dk) {
-  const y = Number(String(dk).slice(0, 4));
-  return state.cache.hebYears?.[y]?.byDate?.[dk] || null;
+  const key = String(dk || "").slice(0, 10);
+  const y = Number(key.slice(0, 4));
+  const fromApi = state.cache.hebYears?.[y]?.byDate?.[key] || null;
+  const fromStatic = STATIC_ISRAEL_HOLIDAYS[key] || null;
+  const fromCache = state.cache.holidays?.[key] || null;
+  if (!fromApi && !fromStatic && !fromCache) return null;
+  return {
+    name: fromApi?.displayName || fromStatic?.name || fromCache?.name || fromApi?.names?.[0] || "",
+    displayName: fromApi?.displayName || fromStatic?.name || fromCache?.name || "",
+    names: fromApi?.names?.length ? fromApi.names : (fromStatic?.names || fromCache?.names || []),
+    yomtov: Boolean(fromApi?.yomtov || fromStatic?.yomtov || fromCache?.yomtov),
+    cholhamoed: Boolean(fromApi?.cholhamoed || fromStatic?.cholhamoed || fromCache?.cholhamoed),
+    erevChag: Boolean(fromApi?.erevChag || fromStatic?.erevChag || fromCache?.erevChag),
+    candle: fromApi?.candle || null,
+    havdalah: fromApi?.havdalah || null
+  };
 }
 
 function addDaysToDate(date, n) {
   const d = new Date(date);
   d.setDate(d.getDate() + n);
   return d;
+}
+
+// סיווג מדויק של כל תאריך: יום שישי, שבת, ערב חג, חג (שכמו שבת), חול המועד + צבע הרקע שלו
+function getDaySacredClassification(dateOrKey) {
+  if (!dateOrKey || dateOrKey === "undated") {
+    return {
+      isFriday: false,
+      isShabbat: false,
+      isErevChag: false,
+      isChag: false,
+      isCholHamoed: false,
+      isNoWorkDay: false,
+      isNoTefillinDay: false,
+      bgClass: ""
+    };
+  }
+  const d = dateOrKey instanceof Date ? dateOrKey : parseDateKey(String(dateOrKey));
+  const dk = dateOrKey instanceof Date ? dateKeyFromDate(d) : String(dateOrKey).slice(0, 10);
+  const day = d.getDay();
+  const info = getHolidayInfo(dk);
+  const nextDk = dateKeyFromDate(addDaysToDate(d, 1));
+  const nextInfo = getHolidayInfo(nextDk);
+
+  const isChag = Boolean(info?.yomtov);
+  const isCholHamoed = Boolean(!isChag && info?.cholhamoed);
+  const isErevChag = Boolean(!isChag && (info?.erevChag || nextInfo?.yomtov));
+  const isFridayDay = day === 5;
+  const isShabbatDay = day === 6;
+
+  // לא עובדים בערב חג, בחג עצמו, ביום שישי ובשבת
+  const isNoWorkDay = Boolean(isFridayDay || isShabbatDay || isErevChag || isChag);
+  // לא מניחים תפילין בשבת, בחג (יום טוב) ובחול המועד
+  const isNoTefillinDay = Boolean(isShabbatDay || isChag || isCholHamoed);
+
+  let bgClass = "";
+  if (isChag) bgClass = "day-bg-chag";
+  else if (isCholHamoed) bgClass = "day-bg-chol-hamoed";
+  else if (isErevChag) bgClass = "day-bg-erev-chag";
+  else if (isShabbatDay) bgClass = "day-bg-shabbat";
+  else if (isFridayDay) bgClass = "day-bg-friday";
+
+  return {
+    isFriday: isFridayDay,
+    isShabbat: isShabbatDay,
+    isErevChag,
+    isChag,
+    isCholHamoed,
+    isNoWorkDay,
+    isNoTefillinDay,
+    bgClass
+  };
+}
+
+// בדיקה האם משימה או אירוע אינם רלוונטיים ביום זה (למשל "לצאת" בערב חג/חג/שבת, או "להניח" בחג/חול המועד/שבת)
+function shouldSuppressEventOnDate(ev, dateKey) {
+  if (!ev || !dateKey || dateKey === "undated") return false;
+  const cls = getDaySacredClassification(dateKey);
+  const title = String(ev.title || "").trim();
+  if (!title) return false;
+
+  // בערב חג, בחג עצמו ובשבת לא עובדים:
+  // משימות כמו "לצאת" (למשל "לצאת", "לצאת לעבודה", "לצאת לאוטו") ואירועי עבודה קבועים לא רלוונטיים
+  if (cls.isErevChag || cls.isChag || cls.isShabbat) {
+    if (isDefaultEvent(ev) && ev.statCategory !== "שינה") return true;
+    if (/(^|\s)לצאת(\s|$)|^לצאת|לצאת ל|יציאה לעבודה|נסיעה לעבודה|נסיעה לבית|^עבודה$/i.test(title)) {
+      return true;
+    }
+  }
+
+  // ביום חג עצמו (שכמו שבת), בחול המועד ובשבת לא מניחים תפילין:
+  // משימות כמו "להניח" / "להניח תפילין" לא רלוונטיות
+  if (cls.isNoTefillinDay) {
+    if (/(^|\s)להניח(\s|$)|^להניח|תפילין/i.test(title)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // יום קדוש = שבת או יום טוב (חג שבו אסור במלאכה)
@@ -902,16 +1194,22 @@ function isSacredDay(date) {
 
 function getCandleTimeForDate(date) {
   const dk = dateKeyFromDate(date);
+  const cls = getDaySacredClassification(dk);
+  // בחול המועד (שאינו יום שישי) אין צורך לרשום זמני כניסת ויציאת חג כי מותר לבצע מלאכות
+  if (cls.isCholHamoed && !cls.isFriday) return null;
   const info = getHolidayInfo(dk);
-  if (info?.candle) return info.candle;
+  if (info?.candle && (cls.isFriday || cls.isErevChag)) return info.candle;
   if (date.getDay() === 5) return state.cache.shabbat?.[dk]?.candle || null;
   return null;
 }
 
 function getHavdalahForDate(date) {
   const dk = dateKeyFromDate(date);
+  const cls = getDaySacredClassification(dk);
+  // בחול המועד (שאינו שבת) אין צורך לרשום זמני כניסה ויציאה
+  if (cls.isCholHamoed && !cls.isShabbat) return null;
   const info = getHolidayInfo(dk);
-  if (info?.havdalah) return info.havdalah;
+  if (info?.havdalah && (cls.isShabbat || cls.isChag)) return info.havdalah;
   if (date.getDay() === 6) {
     const fri = addDaysToDate(date, -1);
     return state.cache.shabbat?.[dateKeyFromDate(fri)]?.havdalah || null;
@@ -944,7 +1242,7 @@ function getSummaryTimingForDate(date) {
 
   return { mode: "normal", time: getDailySummaryTime() };
 }
-// ---------- דיבור + הומור של ג'יחרי (קול עמוק, כריזמטי ומגניב) ----------
+// ---------- דיבור + הומור של ג'יחרי (חיקוי זמרים, מבטא תימני וצלצולים) ----------
 let gihariVoice = null;
 function loadVoices() {
   if (!("speechSynthesis" in window)) return;
@@ -959,17 +1257,83 @@ function loadVoices() {
 }
 if ("speechSynthesis" in window) window.speechSynthesis.onvoiceschanged = loadVoices;
 
-// ---------- סגנונות קול לג'יחרי (נבחרים בהגדרות) ----------
-// pitch/rate = למנוע הדיבור של הדפדפן; playback = מהירות ניגון (משנה גם את גובה הצליל) לקריינות מהענן.
+// המשפט המדויק לבדיקת הסאונד בעת לחיצה על שם של אחד הקולות בהגדרות
+const GIHARI_VOICE_PREVIEW_TEXT = "בדיקת סאונד גיחרי אחת שתיים אחת שתיים";
+
+// ---------- סגנונות קול לג'יחרי (מייצגים זמרים וסגנונות ייחודיים) ----------
 const GIHARI_VOICE_PRESETS = {
-  classic: { label: "🎙️ ג'יחרי קלאסי", pitch: 0.82, rate: 1.08, playback: 0.92, flavor: "none" },
-  zohar: { label: "🎤 זוהר – עמוק ונוסטלגי", pitch: 0.6, rate: 0.9, playback: 0.82, flavor: "yemenite" },
-  margalit: { label: "💃 מרגלית – גבוה ורך", pitch: 1.4, rate: 0.98, playback: 1.14, flavor: "yemenite" },
-  ahuva: { label: "🌹 אהובה – חם ומתנגן", pitch: 1.15, rate: 0.9, playback: 1.05, flavor: "yemenite" },
-  teimani: { label: "😂 תימני מצחיק", pitch: 0.95, rate: 1.2, playback: 1.0, flavor: "yemenite-heavy" },
-  grandpa: { label: "👴 סבא עמוק", pitch: 0.4, rate: 0.85, playback: 0.74, flavor: "none" },
-  chipmunk: { label: "🐿️ סנאי מהיר", pitch: 1.9, rate: 1.25, playback: 1.35, flavor: "none" },
-  announcer: { label: "📻 קריין חדשות", pitch: 0.7, rate: 1.0, playback: 0.88, flavor: "none" }
+  zohar: {
+    label: "🎤 זוהר ארגוב (המלך)",
+    artist: "זוהר ארגוב",
+    pitch: 0.56,
+    rate: 0.86,
+    playback: 0.76,
+    flavor: "zohar",
+    motif: "zohar"
+  },
+  margalit: {
+    label: "💃 מרגלית צנעני (מרגול)",
+    artist: "מרגלית צנעני",
+    pitch: 1.42,
+    rate: 1.08,
+    playback: 1.20,
+    flavor: "margalit",
+    motif: "margalit"
+  },
+  ahuva: {
+    label: "🌹 אהובה עוזרי",
+    artist: "אהובה עוזרי",
+    pitch: 1.56,
+    rate: 0.90,
+    playback: 1.28,
+    flavor: "ahuva",
+    motif: "ahuva"
+  },
+  daklon: {
+    label: "🎸 דקלון (כרם התימנים)",
+    artist: "דקלון",
+    pitch: 0.72,
+    rate: 0.95,
+    playback: 0.85,
+    flavor: "daklon",
+    motif: "daklon"
+  },
+  teimani: {
+    label: "🌶️ תימני אסלי (ח׳ ו-ע׳)",
+    artist: "תימני אסלי",
+    pitch: 0.88,
+    rate: 1.15,
+    playback: 0.96,
+    flavor: "yemenite-heavy",
+    motif: "teimani"
+  },
+  classic: {
+    label: "🎙️ ג'יחרי קלאסי",
+    artist: "ג'יחרי קלאסי",
+    pitch: 0.82,
+    rate: 1.05,
+    playback: 0.91,
+    flavor: "none",
+    motif: "classic"
+  },
+  grandpa: {
+    label: "👴 סבא תימני עמוק",
+    artist: "סבא תימני",
+    pitch: 0.40,
+    rate: 0.80,
+    playback: 0.68,
+    flavor: "yemenite",
+    motif: "grandpa"
+  },
+  chipmunk: {
+    label: "🐿️ סנאי על טורבו",
+    artist: "סנאי",
+    pitch: 1.90,
+    rate: 1.32,
+    playback: 1.46,
+    flavor: "none",
+    motif: "chipmunk"
+  }
 };
 
 function getGihariVoiceKey() {
@@ -977,22 +1341,37 @@ function getGihariVoiceKey() {
     const k = state?.settings?.gihariVoice || localStorage.getItem("bnapp_gihari_voice");
     if (k && GIHARI_VOICE_PRESETS[k]) return k;
   } catch {}
-  return "classic";
+  return "zohar";
 }
 
-function getGihariVoicePreset() {
-  return GIHARI_VOICE_PRESETS[getGihariVoiceKey()] || GIHARI_VOICE_PRESETS.classic;
+function getGihariVoicePreset(overrideKey = null) {
+  const key = overrideKey && GIHARI_VOICE_PRESETS[overrideKey] ? overrideKey : getGihariVoiceKey();
+  return GIHARI_VOICE_PRESETS[key] || GIHARI_VOICE_PRESETS.zohar;
 }
 
-// נוסח תימני: ג' תימנית (ג'ימל), פתיחות וסיומות בטעם תימני
-function applyGihariFlavor(text, flavor) {
-  if (!text || !flavor || flavor === "none") return text;
+// נוסח תימני וזמרים: ג' תימנית, ח' ו-ע' מודגשות, ופתיחות אופייניות לזמר בהתראות אמת
+function applyGihariFlavor(text, flavor, isPreview = false) {
+  if (!text) return "";
+  if (isPreview) return String(text);
+  if (!flavor || flavor === "none") return String(text);
   let out = String(text).replace(/ג(?!['׳])/g, "ג'");
+  if (flavor === "zohar") {
+    return `יא חביבי, כאן המלך זוהר: ${out}, בדד אלך ובשעה טובה!`;
+  }
+  if (flavor === "margalit") {
+    return `וואלה נערי שובה אליי, מרגול על הקו: ${out}, חבל על הזמן!`;
+  }
+  if (flavor === "ahuva") {
+    return `צלצולי פעמונים בלב, אהובה מזכירה באהבה: ${out}, בשעה טובה!`;
+  }
+  if (flavor === "daklon") {
+    return `אהלן מכרם התימנים, דקלון מדווח: ${out}, יא סלאם!`;
+  }
   const intros = ["יא חביבי,", "וואלה יא אחי,", "אהלן ואהלן,", "בכבוד גדול,"];
   const outros = ["ח'לאס, יאללה!", "בשעה טובה!", "יא סלאם!", "ברוך השם!"];
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   if (flavor === "yemenite-heavy") {
-    return `${pick(intros)} ${out} ${pick(outros)} ${pick(outros)}`;
+    return `${pick(intros)} ${out} ${pick(outros)}`;
   }
   return `${pick(intros)} ${out}`;
 }
@@ -1001,61 +1380,174 @@ function pushGihariVoiceToNative() {
   if (!hasNativeAndroidBridge() || typeof window.AndroidBridge.setVoiceStyle !== "function") return;
   const p = getGihariVoicePreset();
   try {
-    window.AndroidBridge.setVoiceStyle(p.playback, p.rate, p.flavor !== "none");
+    window.AndroidBridge.setVoiceStyle(p.pitch, p.rate, p.flavor !== "none");
   } catch {}
 }
 
-function getCoolGihariAlertLine(titleText) {
+function getCoolGihariAlertLine(titleText, voiceKeyOverride = null) {
   const clean = (titleText || "אירוע ביומן").trim();
+  const preset = getGihariVoicePreset(voiceKeyOverride);
   const lines = [
-    `יאללה אחי, ג'יחרי על הקו – הגיע הזמן ל${clean}`,
-    `היי אחי, כאן ג'יחרי. תזכורת אש בשבילך: ${clean}`,
+    `ג'יחרי על הקו – הגיע הזמן ל${clean}`,
+    `כאן ג'יחרי, תזכורת בשבילך: ${clean}`,
     `ג'יחרי מדווח מהשטח: הגיע הזמן ל${clean}`
   ];
   const line = lines[Math.floor(Math.random() * lines.length)];
-  return applyGihariFlavor(line, getGihariVoicePreset().flavor);
+  return applyGihariFlavor(line, preset.flavor, false);
+}
+
+// ליווי ופתיח מוזיקלי אופייני לכל זמר (עוד מזרחי לזוהר, בולבול טרנג לאהובה, גרוב למרגלית, בוזוקי לדקלון)
+function playSingerSignatureMotif(presetKey) {
+  try {
+    const ctx = getSharedAudioCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const motifs = {
+      // זוהר ארגוב: סולם מינורי מזרחי ("הפרח בגני") עם ויברטו עמוק
+      zohar: { wave: "sawtooth", filterFreq: 950, notes: [[220, 0.16], [261.63, 0.16], [293.66, 0.16], [329.63, 0.22], [349.23, 0.18], [329.63, 0.35]], gain: 0.11 },
+      // מרגלית צנעני: קצב שמח ואנרגטי ("נערי שובה אליי")
+      margalit: { wave: "triangle", filterFreq: 1600, notes: [[392, 0.12], [440, 0.12], [523.25, 0.14], [587.33, 0.14], [659.25, 0.24], [587.33, 0.22]], gain: 0.13 },
+      // אהובה עוזרי: צליל בולבול טרנג מתכתי ומרגש ("צלצולי פעמונים")
+      ahuva: { wave: "sine", filterFreq: 2400, notes: [[659.25, 0.11], [698.46, 0.11], [830.61, 0.14], [880, 0.14], [830.61, 0.14], [698.46, 0.14], [659.25, 0.30]], gain: 0.13 },
+      // דקלון: בוזוקי כרם התימנים (סולם חיג'אז)
+      daklon: { wave: "triangle", filterFreq: 1200, notes: [[293.66, 0.13], [311.13, 0.13], [369.99, 0.15], [392.00, 0.18], [369.99, 0.15], [311.13, 0.15], [293.66, 0.28]], gain: 0.12 },
+      // תימני אסלי: פח תימני ועוּד
+      teimani: { wave: "sawtooth", filterFreq: 1100, notes: [[196, 0.12], [293.66, 0.12], [196, 0.12], [329.63, 0.16], [293.66, 0.24]], gain: 0.11 },
+      // סבא תימני: בס נמוך וחם
+      grandpa: { wave: "sine", filterFreq: 600, notes: [[130.81, 0.22], [146.83, 0.22], [164.81, 0.32]], gain: 0.14 },
+      // סנאי: ארפג'יו מהיר וגבוה
+      chipmunk: { wave: "square", filterFreq: 2800, notes: [[783.99, 0.08], [987.77, 0.08], [1174.66, 0.08], [1567.98, 0.16]], gain: 0.08 },
+      // קלאסי
+      classic: { wave: "sine", filterFreq: 1400, notes: [[329.63, 0.14], [392.00, 0.14], [523.25, 0.24]], gain: 0.10 }
+    };
+    const cfg = motifs[presetKey] || motifs.classic;
+    let offset = 0;
+    cfg.notes.forEach(([freq, dur]) => {
+      const osc = ctx.createOscillator();
+      const flt = ctx.createBiquadFilter();
+      const g = ctx.createGain();
+      osc.type = cfg.wave;
+      osc.frequency.setValueAtTime(freq, now + offset);
+      flt.type = "lowpass";
+      flt.frequency.setValueAtTime(cfg.filterFreq, now + offset);
+      g.gain.setValueAtTime(0.001, now + offset);
+      g.gain.linearRampToValueAtTime(cfg.gain, now + offset + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, now + offset + dur);
+      osc.connect(flt);
+      flt.connect(g);
+      g.connect(ctx.destination);
+      osc.start(now + offset);
+      osc.stop(now + offset + dur + 0.02);
+      offset += dur * 0.85;
+    });
+  } catch {}
+}
+
+// מנוע השמעת קול ג'יחרי המאוחד – פועל באופן זהה גם בבדיקת הסאונד בהגדרות וגם בהתראות אמת!
+function playGihariVoiceWithPreset(rawText, presetKey = null, opts = {}) {
+  const effectiveKey = presetKey && GIHARI_VOICE_PRESETS[presetKey] ? presetKey : getGihariVoiceKey();
+  const preset = getGihariVoicePreset(effectiveKey);
+  const isPreview = Boolean(opts.isPreview);
+  const onEnded = typeof opts.onEnded === "function" ? opts.onEnded : null;
+  const spokenText = isPreview ? String(rawText) : applyGihariFlavor(rawText, preset.flavor, false);
+
+  if (!isPreview && typeof getEffectiveSoundMode === "function" && getEffectiveSoundMode() !== "ring") {
+    if (onEnded) onEnded();
+    return;
+  }
+
+  // ניגון פתיח מוזיקלי קצר בסגנון הזמר הנבחר
+  playSingerSignatureMotif(effectiveKey);
+
+  const speakFallback = () => {
+    try {
+      if ("speechSynthesis" in window) {
+        speechSynthesis.cancel();
+        speechSynthesis.resume();
+        const utter = new SpeechSynthesisUtterance(spokenText);
+        utter.lang = "he-IL";
+        utter.rate = preset.rate;
+        utter.pitch = preset.pitch;
+        utter.volume = 1.0;
+        if (gihariVoice) utter.voice = gihariVoice;
+        utter.onend = () => { if (onEnded) onEnded(); };
+        utter.onerror = () => { if (onEnded) onEnded(); };
+        speechSynthesis.speak(utter);
+        return;
+      }
+    } catch {}
+    if (onEnded) setTimeout(onEnded, 3000);
+  };
+
+  try {
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+  } catch {}
+
+  try {
+    const audio = getBgAudioPlayer();
+    audio.pause();
+    audio.referrerPolicy = "no-referrer";
+    const ttsUrl = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=he&q=${encodeURIComponent(spokenText)}`;
+
+    // חשוב: הגדרת playbackRate ו-preservesPitch=false חייבת להתבצע *אחרי* השמת audio.src וגם ב-onloadedmetadata/onplay!
+    const applyVoiceTransform = () => {
+      try {
+        audio.preservesPitch = false;
+        audio.mozPreservesPitch = false;
+        audio.webkitPreservesPitch = false;
+        audio.defaultPlaybackRate = preset.playback;
+        audio.playbackRate = preset.playback;
+      } catch {}
+    };
+
+    audio.onended = () => {
+      if (onEnded) onEnded();
+    };
+    audio.onerror = () => {
+      speakFallback();
+    };
+    audio.src = ttsUrl;
+    audio.volume = 1.0;
+    applyVoiceTransform();
+    audio.onloadedmetadata = applyVoiceTransform;
+    audio.onplay = applyVoiceTransform;
+
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.then === "function") {
+      playPromise.then(applyVoiceTransform).catch(() => {
+        speakFallback();
+      });
+    }
+  } catch {
+    speakFallback();
+  }
+}
+
+function stopGihariVoicePreview() {
+  try {
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+  } catch {}
+  try {
+    if (_bgAudioEl && !_isAlarmRinging) {
+      _bgAudioEl.onended = null;
+      _bgAudioEl.onerror = null;
+      _bgAudioEl.pause();
+      _bgAudioEl.removeAttribute("src");
+      try { _bgAudioEl.load(); } catch {}
+    }
+  } catch {}
 }
 
 function gihariSpeak(text) {
-  if (!("speechSynthesis" in window) || !text) return;
+  if (!text) return;
   if (typeof getEffectiveSoundMode === "function" && getEffectiveSoundMode() !== "ring") return;
-  try {
-    speechSynthesis.cancel();
-    const preset = getGihariVoicePreset();
-    const utter = new SpeechSynthesisUtterance(applyGihariFlavor(text, preset.flavor));
-    utter.lang = "he-IL";
-    utter.rate = preset.rate;
-    utter.pitch = preset.pitch;
-    utter.volume = 1.0;
-    if (gihariVoice) utter.voice = gihariVoice;
-    speechSynthesis.speak(utter);
-  } catch {}
+  playGihariVoiceWithPreset(text, getGihariVoiceKey(), { isPreview: false });
 }
 
-// שמיעת דוגמה של הקול שנבחר (בענן עם גובה צליל לפי הסגנון, ואם נכשל – מנוע הדיבור של המכשיר)
+// שמיעת דוגמה של הקול שנבחר: אומר בדיוק "בדיקת סאונד גיחרי אחת שתיים אחת שתיים" בקול הזמר הנבחר!
 function previewGihariVoice(key) {
-  const preset = GIHARI_VOICE_PRESETS[key] || getGihariVoicePreset();
-  const text = applyGihariFlavor("שלום, אני ג'יחרי. כך אני נשמע בתזכורות שלך", preset.flavor);
-  try {
-    const url = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=he&q=${encodeURIComponent(text)}`;
-    const a = new Audio(url);
-    a.preservesPitch = false;
-    a.mozPreservesPitch = false;
-    a.webkitPreservesPitch = false;
-    a.playbackRate = preset.playback;
-    a.volume = 1;
-    a.play().catch(() => {
-      if ("speechSynthesis" in window) {
-        speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = "he-IL";
-        u.rate = preset.rate;
-        u.pitch = preset.pitch;
-        if (gihariVoice) u.voice = gihariVoice;
-        speechSynthesis.speak(u);
-      }
-    });
-  } catch {}
+  const effectiveKey = key && GIHARI_VOICE_PRESETS[key] ? key : getGihariVoiceKey();
+  playGihariVoiceWithPreset(GIHARI_VOICE_PREVIEW_TEXT, effectiveKey, { isPreview: true });
 }
 
 function renderGihariVoiceSelector() {
@@ -1074,11 +1566,13 @@ function renderGihariVoiceSelector() {
       pushGihariVoiceToNative();
       previewGihariVoice(key);
       try { await update(ref(db, "settings"), { gihariVoice: key }); } catch {}
-      showToast(`🎙️ הקול הוחלף: ${GIHARI_VOICE_PRESETS[key].label}`);
+      showToast(`🎙️ נבחר קול: ${GIHARI_VOICE_PRESETS[key].label} – משמיע טעימה!`);
     };
   });
   const prev = el("btnGihariVoicePreview");
   if (prev) prev.onclick = () => previewGihariVoice(getGihariVoiceKey());
+  const stopBtn = el("btnGihariVoiceStop");
+  if (stopBtn) stopBtn.onclick = () => stopAlarmLoop();
 }
 
 function wrapGihariHumor(html) {
@@ -1305,7 +1799,9 @@ function isSelsEvent(ev) {
 }
 
 function shouldHideRecurringParentOnDate(ev, id, dateKey, dayEventsObj) {
-  if (!ev || !ev.isRecurringParent) return false;
+  if (!ev) return false;
+  if (shouldSuppressEventOnDate(ev, dateKey)) return true;
+  if (!ev.isRecurringParent) return false;
   const eventsOnDay = dayEventsObj || state.cache.events?.[dateKey] || {};
   if (eventsOnDay[`${id}_${dateKey}`]) return true;
   if (Array.isArray(ev.excludedDates) && ev.excludedDates.includes(dateKey)) return true;
@@ -1532,6 +2028,12 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
     header.appendChild(hebEl);
     cell.appendChild(header);
 
+    // סיווג היום וצביעת רקע התא בצבע מיוחד (שישי / שבת / ערב חג / חג / חול המועד)
+    const dayCls = getDaySacredClassification(cellDate);
+    if (dayCls.bgClass) {
+      cell.classList.add(dayCls.bgClass);
+    }
+
     // כניסת/יציאת שבת וחג – שורה קומפקטית שתמיד נכנסת בתוך התא (לפני שם החג)
     const sacredDay = isSacredDay(cellDate);
     if (sacredDay) cell.classList.add("day-sacred");
@@ -1551,6 +2053,11 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
     timesStack.className = "day-times-stack";
     const refreshTimesStack = () => {
       timesStack.innerHTML = "";
+      // בחול המועד (שאינו שישי או שבת) לא מציגים זמני כניסה ויציאה כי מותר לבצע מלאכות
+      if (dayCls.isCholHamoed && !dayCls.isFriday && !dayCls.isShabbat) {
+        timesStack.style.display = "none";
+        return;
+      }
       const candleT = getCandleTimeForDate(cellDate);
       const havT = getHavdalahForDate(cellDate);
       if (candleT) {
@@ -1576,11 +2083,16 @@ const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
       ensureShabbatForWeek(fridayForTimes).then(() => refreshTimesStack());
     }
 
-    if (holiday) {
+    if (holiday || dayCls.isErevChag) {
       const holidayEl = document.createElement("div");
-      holidayEl.className = "day-holiday" + (holiday.yomtov ? " yomtov" : "");
-      holidayEl.textContent = holiday.name;
-      cell.title = holiday.names ? holiday.names.join(" • ") : holiday.name;
+      const hName = holiday ? holiday.name : "ערב חג";
+      holidayEl.className =
+        "day-holiday" +
+        (dayCls.isChag ? " yomtov" : "") +
+        (dayCls.isCholHamoed ? " chol-hamoed" : "") +
+        (dayCls.isErevChag ? " erev-chag" : "");
+      holidayEl.textContent = hName;
+      cell.title = holiday?.names ? holiday.names.join(" • ") : hName;
       cell.appendChild(holidayEl);
     }
 
@@ -1834,6 +2346,7 @@ function getPastUncompletedItemsForUser(typeFilter = "all") {
     Object.entries(dayMap || {}).forEach(([id, ev]) => {
       if (!ev) return;
       if (isDefaultEvent(ev) || isRoutineStatEvent(ev)) return;
+      if (shouldSuppressEventOnDate(ev, dk)) return;
       if (ev.completed || ev.completedAt) return;
       if (ev.isRecurringParent && ev.recurring && ev.recurring !== "none") return;
       if (!isEventRelevantForUser(ev, state.currentUser)) return;
@@ -1988,6 +2501,7 @@ function getUncompletedItemsOfDay(dk) {
   const res = [];
   Object.entries(state.cache.events?.[dk] || {}).forEach(([id, ev]) => {
     if (!ev || isDefaultEvent(ev) || isRoutineStatEvent(ev)) return;
+    if (shouldSuppressEventOnDate(ev, dk)) return;
     if (ev.completed || ev.completedAt) return;
     if (ev.isRecurringParent && ev.recurring && ev.recurring !== "none") return;
     if (ev.isRecurringInstance) return; // מופע חוזר – יופיע שוב ממילא
@@ -2323,6 +2837,11 @@ function renderTasks(filter = "undated") {
         ev.parentId
       );
 
+      // הסתרת משימות לא רלוונטיות ביום ספציפי (למשל "לצאת" בערב חג/חג/שבת ו-"להניח" בחג/חול המועד/שבת)
+      if (!isRecurringItem && dateKey && dateKey !== "undated" && shouldSuppressEventOnDate(ev, dateKey)) {
+        return;
+      }
+
       if (isRecurringItem) {
         const normTitle = (ev.title || "").trim();
         const itemType = ev.type || "event";
@@ -2620,6 +3139,33 @@ try {
 
   const dateKey = dateKeyFromDate(date);
   state.ui.openDayKey = dateKey;
+
+  const badgeEl = el("dayModalHolidayBadge");
+  if (badgeEl) {
+    const cls = getDaySacredClassification(date);
+    const hName = cls.holidayInfo?.name || "";
+    badgeEl.className = "day-modal-holiday-badge hidden";
+    if (cls.isChag) {
+      badgeEl.textContent = `🍷 ${hName || "חג (יום טוב)"} • כמו שבת (ללא עבודה, ללא לצאת וללא להניח תפילין)`;
+      badgeEl.className = "day-modal-holiday-badge badge-chag";
+    } else if (cls.isErevChag) {
+      badgeEl.textContent = `🌅 ${hName || "ערב חג"} • לא עובדים (ללא משימת לצאת)`;
+      badgeEl.className = "day-modal-holiday-badge badge-erev-chag";
+    } else if (cls.isCholHamoed) {
+      badgeEl.textContent = `🌿 ${hName || "חול המועד"} • מותר במלאכה (ללא זמני כניסה/יציאה וללא תפילין)`;
+      badgeEl.className = "day-modal-holiday-badge badge-chol-hamoed";
+    } else if (cls.isShabbat) {
+      badgeEl.textContent = `✨ שבת קודש${hName ? " • " + hName : ""}`;
+      badgeEl.className = "day-modal-holiday-badge badge-shabbat";
+    } else if (cls.isFriday) {
+      badgeEl.textContent = `🕯️ יום שישי – ערב שבת${hName ? " • " + hName : ""}`;
+      badgeEl.className = "day-modal-holiday-badge badge-friday";
+    } else if (hName) {
+      badgeEl.textContent = `🎉 ${hName}`;
+      badgeEl.className = "day-modal-holiday-badge";
+    }
+  }
+
   ensureDefaultDayEvents(date).then(() => {
     renderDayEvents(dateKey);
     updateDayRolloverButton(dateKey);
@@ -4191,12 +4737,20 @@ async function migrateDefaultsOnce() {
   for (const [dk, items] of Object.entries(all)) {
     if (!dk || dk === "undated" || !/^\d{4}-\d{2}-\d{2}$/.test(dk)) continue;
     const day = parseDateKey(dk).getDay();
-    const specs = getDailyRoutineSpecsForDay(day);
+    const specs = getDailyRoutineSpecsForDay(day, dk);
     const specKeys = new Set(specs.map((s) => s.key));
 
     for (const [id, ev] of Object.entries(items || {})) {
       if (!ev) continue;
       if (isDefaultEvent(ev) && !specKeys.has(id)) {
+        delete items[id];
+        if (shouldWriteDb) {
+          dbUpdates[`${dk}/${id}`] = null;
+        }
+        continue;
+      }
+      // ניקוי אוטומטי של מופעים חוזרים ("לצאת" בערב חג/חג/שבת, "להניח" בחג/חול המועד/שבת) שנוצרו בעבר
+      if ((ev.isRecurringInstance || ev.parentId) && shouldSuppressEventOnDate(ev, dk)) {
         delete items[id];
         if (shouldWriteDb) {
           dbUpdates[`${dk}/${id}`] = null;
@@ -4327,6 +4881,12 @@ function initFirebaseListeners() {
       state.settings.gihariVoice = settings.gihariVoice;
       try { localStorage.setItem("bnapp_gihari_voice", settings.gihariVoice); } catch {}
       try { renderGihariVoiceSelector(); pushGihariVoiceToNative(); } catch {}
+    }
+
+    if (settings.alarmChime && ALARM_CHIME_PRESETS[settings.alarmChime]) {
+      state.settings.alarmChime = settings.alarmChime;
+      try { localStorage.setItem("bnapp_alarm_chime", settings.alarmChime); } catch {}
+      try { renderGihariChimeSelector(); } catch {}
     }
 
     state.targets = settings.targets || state.targets;
@@ -4703,14 +5263,135 @@ function getKeepAliveWavUrl() {
   return _keepAliveWavUrl;
 }
 
-// מנגינת צלצול רגועה ונעימה במשך 8 שניות מלאות (לפני שג'יחרי מתחיל לדבר)
-function getAlarmMelodyWavUrl() {
-  if (_alarmMelodyWavUrl) return _alarmMelodyWavUrl;
+// ===================================================
+// 12 סוגי צלצולים לבחירה (8 שניות לפני שג'יחרי מתחיל לדבר)
+// ===================================================
+const ALARM_CHIME_PRESETS = {
+  zen_harp: {
+    label: "🎐 פעמוני זן ונבל",
+    desc: "צליל נבל ופעמוני רוח מרגיעים",
+    wave: "sine",
+    harmonics: [1, 0.22, 0.08],
+    decay: 2.0,
+    notes: [261.63, 329.63, 392.00, 493.88, 523.25, 392.00, 329.63, 523.25]
+  },
+  yemen_oud: {
+    label: "🪕 עוד תימני אסלי",
+    desc: "פריטת עוד מזרחית חמה בסולם חיג'אז",
+    wave: "triangle",
+    harmonics: [1, 0.45, 0.25],
+    decay: 3.4,
+    notes: [220.00, 233.08, 277.18, 293.66, 329.63, 349.23, 277.18, 220.00, 277.18, 329.63, 293.66, 220.00]
+  },
+  zohar_guitar: {
+    label: "🎸 סולו גיטרה של המלך (זוהר)",
+    desc: "ריף גיטרה ים-תיכוני מרגש בסגנון הפרח בגני",
+    wave: "sawtooth",
+    harmonics: [0.85, 0.4, 0.2],
+    decay: 2.8,
+    notes: [329.63, 349.23, 415.30, 440.00, 493.88, 440.00, 415.30, 349.23, 329.63, 415.30, 440.00, 329.63]
+  },
+  ahuva_bulbul: {
+    label: "🎶 בולבול טרנג (אהובה עוזרי)",
+    desc: "צליל מיתרים נוסטלגי ומרגש עם וויברטו",
+    wave: "triangle",
+    harmonics: [0.9, 0.5, 0.3],
+    decay: 2.3,
+    vibrato: true,
+    notes: [293.66, 349.23, 392.00, 440.00, 466.16, 440.00, 392.00, 349.23, 392.00, 293.66]
+  },
+  darbuka_hafla: {
+    label: "🥁 חפלה תימנית ופח זיתים",
+    desc: "קצב שמח ומקפיץ של פח תימני ודרבוקה",
+    wave: "triangle",
+    harmonics: [1, 0.35, 0.15],
+    decay: 4.5,
+    percussive: true,
+    notes: [146.83, 293.66, 220.00, 146.83, 329.63, 293.66, 146.83, 349.23, 329.63, 293.66, 220.00, 293.66, 146.83, 293.66, 329.63, 293.66]
+  },
+  crystal_bells: {
+    label: "🔔 פעמוני קריסטל יוקרתיים",
+    desc: "פעמוני בדולח צלולים וזוהרים",
+    wave: "sine",
+    harmonics: [1, 0.35, 0.2],
+    decay: 1.8,
+    notes: [523.25, 659.25, 783.99, 1046.50, 783.99, 659.25, 1046.50, 1318.51]
+  },
+  warm_marimba: {
+    label: "🪵 מרימבה חמה (בוקר טרופי)",
+    desc: "הקשות עץ חמות ונעימות כמו בשעון יוקרתי",
+    wave: "sine",
+    harmonics: [1, 0.12, 0.03],
+    decay: 4.2,
+    notes: [261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 293.66, 349.23, 440.00, 587.33, 440.00, 523.25]
+  },
+  morning_piano: {
+    label: "🎹 פסנתר בוקר קלאסי",
+    desc: "אקורדים מלטפים של פסנתר כנף",
+    wave: "triangle",
+    harmonics: [0.95, 0.3, 0.1],
+    decay: 2.2,
+    notes: [261.63, 329.63, 392.00, 493.88, 440.00, 349.23, 392.00, 523.25]
+  },
+  royal_fanfare: {
+    label: "🎺 תרועת המלך החגיגית",
+    desc: "חצוצרות מלכותיות שקוראות לך להתעורר",
+    wave: "sawtooth",
+    harmonics: [0.8, 0.5, 0.25],
+    decay: 2.5,
+    notes: [261.63, 261.63, 392.00, 523.25, 392.00, 523.25, 659.25, 523.25, 659.25, 783.99]
+  },
+  cosmic_synth: {
+    label: "🌌 סינתיסייזר חללי (Ambient)",
+    desc: "גלי סאונד עתידניים ומרחפים",
+    wave: "sine",
+    harmonics: [0.85, 0.4, 0.15],
+    decay: 1.4,
+    vibrato: true,
+    notes: [220.00, 277.18, 329.63, 440.00, 329.63, 493.88, 440.00, 659.25]
+  },
+  retro_arcade: {
+    label: "🕹️ רטרו ארקייד (8-Bit)",
+    desc: "מנגינת גיימינג נוסטלגית ומגניבה",
+    wave: "square",
+    harmonics: [0.7, 0.25, 0.1],
+    decay: 3.8,
+    notes: [330, 392, 659, 523, 587, 784, 523, 392, 330, 440, 494, 523, 659, 784, 659, 523]
+  },
+  tropical_kalimba: {
+    label: "🌴 קלימבה אפריקאית",
+    desc: "תיבת נגינה קסומה ומרגיעה",
+    wave: "sine",
+    harmonics: [1, 0.28, 0.05],
+    decay: 3.2,
+    notes: [349.23, 440.00, 523.25, 698.46, 587.33, 523.25, 440.00, 523.25, 698.46, 880.00]
+  }
+};
+
+const _alarmMelodyWavCache = {};
+
+function getSelectedAlarmChimeKey() {
+  const k = state.settings?.alarmChime || localStorage.getItem("bnapp_alarm_chime") || "zen_harp";
+  return ALARM_CHIME_PRESETS[k] ? k : "zen_harp";
+}
+
+function getAlarmChimePreset(keyOverride = null) {
+  const k = keyOverride && ALARM_CHIME_PRESETS[keyOverride] ? keyOverride : getSelectedAlarmChimeKey();
+  return ALARM_CHIME_PRESETS[k] || ALARM_CHIME_PRESETS.zen_harp;
+}
+
+// מנגינת צלצול מותאמת אישית במשך 8 שניות מלאות (לפני שג'יחרי מתחיל לדבר)
+function getAlarmMelodyWavUrl(chimeKeyOverride = null) {
+  const chimeKey = chimeKeyOverride && ALARM_CHIME_PRESETS[chimeKeyOverride]
+    ? chimeKeyOverride
+    : getSelectedAlarmChimeKey();
+  if (_alarmMelodyWavCache[chimeKey]) return _alarmMelodyWavCache[chimeKey];
+
+  const preset = getAlarmChimePreset(chimeKey);
   const sampleRate = 22050;
-  // תווים חמים ורגועים (C4 -> E4 -> G4 -> B4 -> C5 -> G4) הפרוסים בנחת על פני 8 שניות
-  const notes = [261.63, 329.63, 392.00, 493.88, 523.25, 392.00];
-  const noteDur = 1.32;
+  const notes = preset.notes || [261.63, 329.63, 392.00, 493.88, 523.25, 392.00];
   const totalSec = 8.0;
+  const noteDur = totalSec / notes.length;
   const numSamples = Math.floor(sampleRate * totalSec);
   const buffer = new ArrayBuffer(44 + numSamples * 2);
   const view = new DataView(buffer);
@@ -4731,29 +5412,35 @@ function getAlarmMelodyWavUrl() {
   writeStr(36, "data");
   view.setUint32(40, numSamples * 2, true);
 
+  const [h1, h2, h3] = preset.harmonics || [0.78, 0.16, 0.06];
+  const decayRate = preset.decay || 2.1;
+
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
-    const noteIdx = Math.floor(t / noteDur);
-    let sample = 0;
-    if (noteIdx < notes.length) {
-      const localT = t - noteIdx * noteDur;
-      const freq = notes[noteIdx];
-      // כניסה רכה (fade-in של 80ms) ודעיכה איטית ורגועה כמו פעמון זן/נבל
-      const attack = Math.min(1, localT / 0.08);
-      const decay = Math.exp(-localT * 2.1);
-      const env = attack * decay;
-      sample =
-        (Math.sin(2 * Math.PI * freq * localT) * 0.78 +
-          Math.sin(4 * Math.PI * freq * localT) * 0.16 +
-          Math.sin(3 * Math.PI * freq * localT) * 0.06) *
-        env;
+    const noteIdx = Math.min(notes.length - 1, Math.floor(t / noteDur));
+    const localT = t - noteIdx * noteDur;
+    let freq = notes[noteIdx];
+    if (preset.vibrato) {
+      freq *= 1 + 0.008 * Math.sin(2 * Math.PI * 6.0 * localT);
+    }
+    const attack = Math.min(1, localT / (preset.percussive ? 0.015 : 0.05));
+    const decay = Math.exp(-localT * decayRate);
+    const env = attack * decay;
+    let sample =
+      (Math.sin(2 * Math.PI * freq * localT) * h1 +
+        Math.sin(4 * Math.PI * freq * localT) * h2 +
+        Math.sin(6 * Math.PI * freq * localT) * h3) *
+      env;
+    if (preset.percussive && localT < 0.04) {
+      sample += Math.sin(2 * Math.PI * 110 * localT) * (1 - localT / 0.04) * 0.35;
     }
     const pcm = Math.max(-32767, Math.min(32767, Math.floor(sample * 13500)));
     view.setInt16(44 + i * 2, pcm, true);
   }
   const blob = new Blob([buffer], { type: "audio/wav" });
-  _alarmMelodyWavUrl = URL.createObjectURL(blob);
-  return _alarmMelodyWavUrl;
+  _alarmMelodyWavCache[chimeKey] = URL.createObjectURL(blob);
+  _alarmMelodyWavUrl = _alarmMelodyWavCache[chimeKey];
+  return _alarmMelodyWavCache[chimeKey];
 }
 
 function getBgAudioPlayer() {
@@ -4833,7 +5520,7 @@ function playConfirmTick() {
   } catch {}
 }
 
-function playReminderSound() {
+function playReminderSound(chimeKeyOverride = null, maxDurationSec = 8.0) {
   const mode = getEffectiveSoundMode();
   if (mode === "silent") return;
   if (mode === "vibrate") {
@@ -4845,25 +5532,91 @@ function playReminderSound() {
   try {
     const ctx = getSharedAudioCtx();
     if (!ctx) return;
-    // צליל פעמונים רך ונעים (Sine wave) במשך 8 השניות הראשונות
-    const notes = [261.63, 329.63, 392.00, 493.88, 523.25, 392.00];
+    const preset = getAlarmChimePreset(chimeKeyOverride);
+    const notes = preset.notes || [261.63, 329.63, 392.00, 493.88, 523.25, 392.00];
+    const stepDur = maxDurationSec / notes.length;
     notes.forEach((freq, i) => {
-      const startAt = ctx.currentTime + i * 1.3;
+      const startAt = ctx.currentTime + i * stepDur;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = freq;
+      osc.type = preset.wave || "sine";
+      osc.frequency.setValueAtTime(freq, startAt);
+      if (preset.vibrato) {
+        osc.frequency.linearRampToValueAtTime(freq * 1.012, startAt + stepDur * 0.5);
+        osc.frequency.linearRampToValueAtTime(freq, startAt + stepDur * 0.9);
+      }
       gain.gain.setValueAtTime(0.001, startAt);
-      gain.gain.linearRampToValueAtTime(0.16, startAt + 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 1.2);
+      gain.gain.linearRampToValueAtTime(0.14, startAt + Math.min(0.06, stepDur * 0.2));
+      gain.gain.exponentialRampToValueAtTime(0.001, startAt + stepDur * 0.92);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(startAt);
-      osc.stop(startAt + 1.25);
+      osc.stop(startAt + stepDur * 0.95);
     });
-    setTimeout(releaseAudioFocusIfIdle, 8200);
+    setTimeout(releaseAudioFocusIfIdle, Math.ceil(maxDurationSec * 1000) + 250);
   } catch (e) {
     console.warn("Audio reminder failed:", e);
+  }
+}
+
+function previewAlarmChime(chimeKeyOverride = null) {
+  const key = chimeKeyOverride && ALARM_CHIME_PRESETS[chimeKeyOverride]
+    ? chimeKeyOverride
+    : getSelectedAlarmChimeKey();
+  const preset = getAlarmChimePreset(key);
+  stopGihariVoicePreview();
+  showToast(`🔔 משמיע דוגמת צלצול: ${preset.label}`, 3000);
+  try {
+    const audio = getBgAudioPlayer();
+    const wavUrl = getAlarmMelodyWavUrl(key);
+    audio.onended = () => releaseAudioFocusIfIdle();
+    audio.onerror = () => {};
+    audio.src = wavUrl;
+    audio.defaultPlaybackRate = 1.0;
+    audio.playbackRate = 1.0;
+    audio.volume = 0.9;
+    audio.play().catch(() => {
+      playReminderSound(key, 4.0);
+    });
+  } catch {
+    playReminderSound(key, 4.0);
+  }
+}
+
+function renderGihariChimeSelector() {
+  const box = el("gihariChimeSelector");
+  if (!box) return;
+  const cur = getSelectedAlarmChimeKey();
+  box.innerHTML = Object.entries(ALARM_CHIME_PRESETS)
+    .map(
+      ([k, p]) => `
+      <button type="button" class="voice-preset-btn chime-preset-btn${k === cur ? " active" : ""}" data-chime="${k}">
+        <span class="vp-label">${p.label}</span>
+        <span class="vp-desc">${p.desc}</span>
+      </button>`
+    )
+    .join("");
+  box.querySelectorAll("[data-chime]").forEach((btn) => {
+    btn.onclick = async () => {
+      const k = btn.dataset.chime;
+      if (!ALARM_CHIME_PRESETS[k]) return;
+      state.settings.alarmChime = k;
+      try { localStorage.setItem("bnapp_alarm_chime", k); } catch {}
+      renderGihariChimeSelector();
+      previewAlarmChime(k);
+      try { await update(ref(db, "settings"), { alarmChime: k }); } catch {}
+    };
+  });
+  const prevBtn = el("btnGihariChimePreview");
+  if (prevBtn) {
+    prevBtn.onclick = () => previewAlarmChime(getSelectedAlarmChimeKey());
+  }
+  const stopBtn = el("btnGihariChimeStop");
+  if (stopBtn) {
+    stopBtn.onclick = () => {
+      stopGihariVoicePreview();
+      showToast("⏹️ השמעת הצלצול הופסקה", 1800);
+    };
   }
 }
 
@@ -5002,11 +5755,14 @@ function startAlarmLoop(titleText = "אירוע ביומן") {
   }
 
   // מצב צלצול רגיל ("ring"):
-  // שלב 1: במשך 8 שניות מלאות מושמע רק צלצול רגוע ונעים.
-  // שלב 2: רק לאחר 8 שניות, אם ההתראה לא הושתקה, ג'יחרי מתחיל לדבר בקול המגניב שלו!
+  // שלב 1: במשך 8 שניות מלאות מושמע הצלצול שנבחר בהגדרות.
+  // שלב 2: רק לאחר 8 שניות, אם ההתראה לא הושתקה, ג'יחרי מתחיל לדבר בקול הזמר שנבחר!
   const speechText = getCoolGihariAlertLine(titleText);
-  const ttsUrl = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=he&q=${encodeURIComponent(speechText)}`;
-  const alarmUrl = getAlarmMelodyWavUrl();
+  const selectedChimeKey = getSelectedAlarmChimeKey();
+  const selectedChimePreset = getAlarmChimePreset(selectedChimeKey);
+  const selectedVoiceKey = getGihariVoiceKey();
+  const selectedVoicePreset = getGihariVoicePreset(selectedVoiceKey);
+  const alarmUrl = getAlarmMelodyWavUrl(selectedChimeKey);
   const audio = getBgAudioPlayer();
 
   audio.loop = false;
@@ -5016,7 +5772,7 @@ function startAlarmLoop(titleText = "אירוע ביומן") {
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: `🔔 תזכורת: ${titleText}`,
-        artist: "ג'יחרי – BNAPP",
+        artist: `${selectedVoicePreset.label} – BNAPP`,
         album: "BNAPP"
       });
       navigator.mediaSession.playbackState = "playing";
@@ -5033,8 +5789,12 @@ function startAlarmLoop(titleText = "אירוע ביומן") {
     }
     _alarmCycleIndex++;
 
+    const curChimeKey = getSelectedAlarmChimeKey();
+    const curChimePreset = getAlarmChimePreset(curChimeKey);
+    const curAlarmUrl = getAlarmMelodyWavUrl(curChimeKey);
+
     let secsLeft = 8;
-    updateReminderStageBadge(`🎶 צלצול רגוע... ג'יחרי ידבר בעוד ${secsLeft} שניות (אם לא יושתק)`);
+    updateReminderStageBadge(`🎶 ${curChimePreset.label}... ג'יחרי ידבר בעוד ${secsLeft} שניות (אם לא יושתק)`);
     if (window._alarmCountdownInterval) clearInterval(window._alarmCountdownInterval);
     window._alarmCountdownInterval = setInterval(() => {
       if (!_isAlarmRinging || _alarmMuted) {
@@ -5044,22 +5804,25 @@ function startAlarmLoop(titleText = "אירוע ביומן") {
       }
       secsLeft = Math.max(0, secsLeft - 1);
       if (secsLeft > 0) {
-        updateReminderStageBadge(`🎶 צלצול רגוע... ג'יחרי ידבר בעוד ${secsLeft} שניות (אם לא יושתק)`);
+        updateReminderStageBadge(`🎶 ${curChimePreset.label}... ג'יחרי ידבר בעוד ${secsLeft} שניות (אם לא יושתק)`);
       }
     }, 1000);
 
-    playReminderSound();
+    playReminderSound(curChimeKey, 8.0);
     try {
       if (navigator.vibrate) navigator.vibrate([250, 150, 250]);
     } catch {}
 
     audio.onended = null;
     audio.onerror = null;
+    audio.onloadedmetadata = null;
+    audio.onplay = null;
+    audio.src = curAlarmUrl;
     try {
       audio.preservesPitch = true;
+      audio.defaultPlaybackRate = 1.0;
       audio.playbackRate = 1.0;
     } catch {}
-    audio.src = alarmUrl;
     audio.volume = 0.85;
     audio.play().catch(() => {});
 
@@ -5077,30 +5840,18 @@ function startAlarmLoop(titleText = "אירוע ביומן") {
 
   const startGihariVoicePhase = () => {
     if (!_isAlarmRinging || _alarmMuted || getEffectiveSoundMode() !== "ring") return;
-    updateReminderStageBadge("🎙️ ג'יחרי מדבר עכשיו... (לחץ על השתק להפסקה)");
+    const activeVoiceKey = getGihariVoiceKey();
+    const activeVoicePreset = getGihariVoicePreset(activeVoiceKey);
+    const activeSpeechText = getCoolGihariAlertLine(titleText);
+    updateReminderStageBadge(`🎙️ ג'יחרי מדבר (${activeVoicePreset.label})... לחץ על השתק להפסקה`);
 
-    // מפעיל קריינות בקול העמוק והמגניב של ג'יחרי
-    audio.onended = () => {
-      if (!_isAlarmRinging || _alarmMuted) return;
-      window._alarmStepTimer = setTimeout(() => startCalm8SecChimePhase(), 1500);
-    };
-    audio.onerror = () => {
-      if (!_isAlarmRinging || _alarmMuted) return;
-      speakGihariLoud(speechText);
-      window._alarmStepTimer = setTimeout(() => startCalm8SecChimePhase(), 4000);
-    };
-    try {
-      audio.preservesPitch = false;
-      audio.mozPreservesPitch = false;
-      audio.webkitPreservesPitch = false;
-      audio.playbackRate = getGihariVoicePreset().playback;
-    } catch {}
-    audio.src = ttsUrl;
-    audio.volume = 1.0;
-    audio.play().catch(() => {
-      if (!_isAlarmRinging || _alarmMuted) return;
-      speakGihariLoud(speechText);
-      window._alarmStepTimer = setTimeout(() => startCalm8SecChimePhase(), 4000);
+    // מפעיל את הקול שנבחר בהגדרות (עם שימור pitch/playbackRate גם לאחר טעינת ה-src!)
+    playGihariVoiceWithPreset(activeSpeechText, activeVoiceKey, {
+      isPreview: false,
+      onEnded: () => {
+        if (!_isAlarmRinging || _alarmMuted) return;
+        window._alarmStepTimer = setTimeout(() => startCalm8SecChimePhase(), 1500);
+      }
     });
   };
 
@@ -5423,8 +6174,8 @@ function fireDirectReminder(key) {
   const cachedEv = state.cache.events?.[dateKey]?.[id];
   const effectiveEv = cachedEv || { title, startTime, owner: owner || "shared", _id: id, dateKey };
 
-  // בדיקה כפולה שהתזכורת אכן מיועדת למשתמש הפעיל במכשיר זה
-  if (id !== "test" && id !== "test-manual" && !shouldRemindCurrentUser(effectiveEv)) {
+  // בדיקה כפולה שהתזכורת אכן מיועדת למשתמש הפעיל במכשיר זה ושאינה מוסתרת בחג/שבת/חול המועד
+  if (id !== "test" && id !== "test-manual" && (!shouldRemindCurrentUser(effectiveEv) || shouldSuppressEventOnDate(effectiveEv, dateKey))) {
     return;
   }
 
@@ -5499,12 +6250,8 @@ function triggerReminderAlert(item) {
   const notifBody = timeInfo ? `${titleText} • ${timeInfo}` : titleText;
   const snoozeMins = getSnoozeMinutes();
 
-  // אם מדובר בבדיקה ידנית בתוך אפליקציית האנדרואיד המעודכנת – נפעיל גם את חלונית השעון המעורר העליונה של אנדרואיד
-  if ((id === "test" || id === "test-manual") && isUpdatedNativeApk() && typeof window.AndroidBridge.triggerAlarmNow === "function") {
-    try {
-      window.AndroidBridge.triggerAlarmNow("test_alarm", titleText, notifBody);
-    } catch {}
-  } else if (hasNativeAndroidBridge() && !isUpdatedNativeApk()) {
+  // כשהאפליקציה פתוחה על המסך – עוצרים את הסאונד הישן של ה-APK כדי שיושמע בדיוק הצלצול שנבחר (מתוך 12 הצלצולים) וקול הזמר של ג'יחרי!
+  if (hasNativeAndroidBridge()) {
     try {
       window.AndroidBridge.stopAlarm();
     } catch {}
@@ -5638,6 +6385,7 @@ function checkDueReminders() {
   Object.entries(allEvents).forEach(([dateKey, dayItems]) => {
     Object.entries(dayItems || {}).forEach(([id, ev]) => {
       if (!ev || ev.completed === true) return;
+      if (shouldSuppressEventOnDate(ev, dateKey)) return;
 
       const key = `${dateKey}/${id}`;
 
@@ -6400,7 +7148,7 @@ function computeStatsForDatesList(dates, user) {
       for (let m = 0; m < 420; m++) dayTimeline[m] = "שינה";
       addBreakdownItem("שינה", { _id: "def_sleep", title: "שינה", dateKey: dk, startTime: "00:00", endTime: "07:00", owner: "nana", type: "event" }, 420, true);
     } else {
-      const routineSpecs = getDailyRoutineSpecsForDay(day);
+      const routineSpecs = getDailyRoutineSpecsForDay(day, dk);
       routineSpecs.forEach((spec) => {
         if (spec.owner === "binyamin" && user !== "binyamin") return;
         const sMin = Math.max(0, Math.min(1439, timeToMinutes(spec.startTime)));
@@ -6452,6 +7200,7 @@ function computeStatsForDatesList(dates, user) {
       if (!ev) return;
       if (!isEventRelevantForUser(ev, user)) return;
       if (isDefaultEvent(ev)) return;
+      if (ev.dateKey && ev.dateKey !== "undated" && shouldSuppressEventOnDate(ev, ev.dateKey)) return;
 
       const isRoutine = isRoutineStatEvent(ev);
       const isDone = Boolean(ev.completed || ev.completedAt);
@@ -7486,6 +8235,7 @@ async function materializeRecurringTask(task) {
 
   for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
     const dk = dateKeyFromDate(d);
+    if (shouldSuppressEventOnDate(cleanTask, dk)) continue;
 
     // daily = כל יום, ללא סינון
     if (cleanTask.recurring === "weekly" && d.getDay() !== start.getDay()) continue;
@@ -8820,6 +9570,9 @@ if (userSel) {
   if (el("btnLiveAutoUpdate")) {
     el("btnLiveAutoUpdate").onclick = forceLiveAutoUpdateNow;
   }
+  if (el("btnSettingsForceUpdate")) {
+    el("btnSettingsForceUpdate").onclick = forceLiveAutoUpdateNow;
+  }
   syncTopCalWidgetVisibility();
   syncWidgetDataAndPreview(true);
   setInterval(() => syncWidgetDataAndPreview(false), 60000);
@@ -8843,8 +9596,9 @@ if (userSel) {
   scheduleDailySummaryAlarm();
   scheduleMotzeiShabbatGoalsAlarm();
 
-  // קול ג'יחרי (בחירה בהגדרות) + תכנון שבוע ידני
+  // קול ג'יחרי + צלצול התראה (בחירה בהגדרות) + תכנון שבוע ידני
   renderGihariVoiceSelector();
+  renderGihariChimeSelector();
   pushGihariVoiceToNative();
   if (el("btnStartWeeklyPlanning")) {
     el("btnStartWeeklyPlanning").onclick = () => startWeeklyPlanningFlow();
@@ -9246,6 +10000,7 @@ function getUnfinishedTasksForReview(dateKeys) {
     Object.entries(dayObj).forEach(([id, ev]) => {
       if (!ev || ev.type !== "task") return;
       if (isDefaultEvent(ev) || isRoutineStatEvent(ev)) return;
+      if (shouldSuppressEventOnDate(ev, dk)) return;
       if (ev.completed || ev.completedAt || ev.reviewIgnored) return;
       // משימות חוזרות לא נשאלות (הן מופיעות מחדש מעצמן)
       if (ev.isRecurringParent || ev.isRecurringInstance || ev.parentId) return;
@@ -9415,7 +10170,7 @@ function getPlanningTimeline(date, user) {
   if (user === "nana" && day === 2) {
     fill(0, 420);
   } else {
-    getDailyRoutineSpecsForDay(day).forEach((spec) => {
+    getDailyRoutineSpecsForDay(day, dk).forEach((spec) => {
       if (spec.owner === "binyamin" && user !== "binyamin") return;
       fill(timeToMinutes(spec.startTime), timeToMinutes(spec.endTime));
     });

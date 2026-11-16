@@ -1935,7 +1935,7 @@ body.dark .day-holiday.yomtov { color: #fcd34d !important; }
 .ft-meta { font-size: 0.76rem; opacity: 0.85; }
 
 /* ===================================================
-   בחירת קול ג'יחרי
+   בחירת קול ג'יחרי + צלצולי התראה + צבעי חגים ושבת בלוח
    =================================================== */
 .gihari-voice-grid {
   display: grid;
@@ -1949,7 +1949,137 @@ body.dark .day-holiday.yomtov { color: #fcd34d !important; }
   line-height: 1.2;
 }
 .gihari-voice-grid .ghost-pill.active {
-  background: linear-gradient(135deg, #0ea5e9, #6366f1);
-  color: #fff;
-  border-color: transparent;
+  background: linear-gradient(135deg, #0ea5e9, #6366f1) !important;
+  color: #fff !important;
+  border-color: transparent !important;
 }
+
+.calendar-colors-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 4px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.cal-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.64rem;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+}
+.cal-legend-chip i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+}
+.cal-legend-chip.leg-friday i { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+.cal-legend-chip.leg-shabbat i { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+.cal-legend-chip.leg-erev-chag i { background: linear-gradient(135deg, #fb923c, #f43f5e); }
+.cal-legend-chip.leg-chag i { background: linear-gradient(135deg, #ec4899, #a855f7); }
+.cal-legend-chip.leg-chol-hamoed i { background: linear-gradient(135deg, #10b981, #06b6d4); }
+
+/* 5 צבעי רקע ייחודיים לימי שישי, שבת, ערב חג, חג וחול המועד */
+.day-cell.day-bg-friday {
+  background: linear-gradient(145deg, #fef3c7 0%, #fde68a 100%) !important;
+  border: 1.5px solid rgba(245, 158, 11, 0.75) !important;
+}
+.day-cell.day-bg-shabbat {
+  background: linear-gradient(145deg, #e0e7ff 0%, #ddd6fe 100%) !important;
+  border: 1.5px solid rgba(99, 102, 241, 0.78) !important;
+}
+.day-cell.day-bg-erev-chag {
+  background: linear-gradient(145deg, #ffedd5 0%, #fecdd3 100%) !important;
+  border: 1.5px solid rgba(249, 115, 22, 0.78) !important;
+}
+.day-cell.day-bg-chag {
+  background: linear-gradient(145deg, #fce7f3 0%, #f5d0fe 100%) !important;
+  border: 1.5px solid rgba(236, 72, 153, 0.82) !important;
+}
+.day-cell.day-bg-chol-hamoed {
+  background: linear-gradient(145deg, #d1fae5 0%, #cffafe 100%) !important;
+  border: 1.5px solid rgba(16, 185, 129, 0.78) !important;
+}
+
+body.dark .day-cell.day-bg-friday {
+  background: linear-gradient(145deg, rgba(217, 119, 6, 0.44) 0%, rgba(146, 64, 14, 0.48) 100%) !important;
+  border: 1.5px solid rgba(251, 191, 36, 0.7) !important;
+}
+body.dark .day-cell.day-bg-shabbat {
+  background: linear-gradient(145deg, rgba(79, 70, 229, 0.48) 0%, rgba(109, 40, 217, 0.50) 100%) !important;
+  border: 1.5px solid rgba(129, 140, 248, 0.75) !important;
+}
+body.dark .day-cell.day-bg-erev-chag {
+  background: linear-gradient(145deg, rgba(234, 88, 12, 0.48) 0%, rgba(225, 29, 72, 0.44) 100%) !important;
+  border: 1.5px solid rgba(251, 146, 60, 0.78) !important;
+}
+body.dark .day-cell.day-bg-chag {
+  background: linear-gradient(145deg, rgba(219, 39, 119, 0.50) 0%, rgba(147, 51, 234, 0.48) 100%) !important;
+  border: 1.5px solid rgba(244, 114, 182, 0.82) !important;
+}
+body.dark .day-cell.day-bg-chol-hamoed {
+  background: linear-gradient(145deg, rgba(5, 150, 105, 0.46) 0%, rgba(8, 145, 178, 0.46) 100%) !important;
+  border: 1.5px solid rgba(52, 211, 153, 0.78) !important;
+}
+
+.voice-preset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.voice-preset-btn .vp-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.voice-preset-btn .vp-desc {
+  font-size: 0.64rem;
+  opacity: 0.78;
+  line-height: 1.15;
+}
+.voice-preset-btn.active {
+  background: linear-gradient(135deg, #0ea5e9, #6366f1) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.32);
+}
+
+.settings-update-card {
+  border: 1.5px solid rgba(14, 165, 233, 0.55) !important;
+  background: linear-gradient(145deg, rgba(14, 165, 233, 0.14), rgba(99, 102, 241, 0.12)) !important;
+}
+
+.day-modal-holiday-badge {
+  margin-top: 5px;
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
+}
+.day-modal-holiday-badge.badge-friday { background: linear-gradient(135deg, #d97706, #f59e0b); }
+.day-modal-holiday-badge.badge-shabbat { background: linear-gradient(135deg, #4f46e5, #7c3aed); }
+.day-modal-holiday-badge.badge-erev-chag { background: linear-gradient(135deg, #ea580c, #e11d48); }
+.day-modal-holiday-badge.badge-chag { background: linear-gradient(135deg, #db2777, #9333ea); }
+.day-modal-holiday-badge.badge-chol-hamoed { background: linear-gradient(135deg, #059669, #0891b2); }
